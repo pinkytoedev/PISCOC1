@@ -51,7 +51,7 @@ async function airtableRequest(
   data?: any
 ) {
   const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
-
+  
   const options: RequestInit = {
     method,
     headers: {
@@ -59,18 +59,18 @@ async function airtableRequest(
       "Content-Type": "application/json"
     }
   };
-
+  
   if (data && (method === "POST" || method === "PATCH")) {
     options.body = JSON.stringify(data);
   }
-
+  
   const response = await fetch(url, options);
-
+  
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
   }
-
+  
   return response.json();
 }
 
@@ -81,7 +81,7 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-
+      
       const settings = await storage.getIntegrationSettings("airtable");
       res.json(settings);
     } catch (error) {
@@ -95,23 +95,23 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-
+      
       const { key, value, enabled } = req.body;
-
+      
       if (!key || !value) {
         return res.status(400).json({ message: "Key and value are required" });
       }
-
+      
       // Check if setting already exists
       const existingSetting = await storage.getIntegrationSettingByKey("airtable", key);
-
+      
       if (existingSetting) {
         // Update existing setting
         const updatedSetting = await storage.updateIntegrationSetting(existingSetting.id, {
           value,
           enabled: enabled !== undefined ? enabled : existingSetting.enabled
         });
-
+        
         return res.json(updatedSetting);
       } else {
         // Create new setting
@@ -121,7 +121,7 @@ export function setupAirtableRoutes(app: Express) {
           value,
           enabled: enabled !== undefined ? enabled : true
         });
-
+        
         return res.status(201).json(newSetting);
       }
     } catch (error) {
@@ -135,59 +135,59 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-
+      
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
+      
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-
+      
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-
+      
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-
+      
       // Fetch articles from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
-
+      
       const syncResults = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-
+      
       // Process each article
       for (const record of response.records) {
         try {
           const fields = record.fields;
-
+          
           // Check for required fields with more detailed error messages
           if (!fields.title && !fields.content) {
             syncResults.errors++;
             syncResults.details.push(`Skipped record ${record.id}: Missing both title and content fields`);
             continue;
           }
-
+          
           // Provide default values for required fields if missing
           if (!fields.title) {
             fields.title = `Untitled Article (ID: ${record.id})`;
             syncResults.details.push(`Record ${record.id}: Missing title, using default`);
           }
-
+          
           if (!fields.content) {
             fields.content = "This article content is not available.";
             syncResults.details.push(`Record ${record.id}: Missing content, using default`);
           }
-
+          
           // Check if article already exists
           const existingArticle = await storage.getArticleByExternalId(record.id);
-
+          
           const articleData: InsertArticle = {
             title: fields.title,
             description: fields.description || "",
@@ -207,7 +207,7 @@ export function setupAirtableRoutes(app: Express) {
             externalId: record.id,
             source: "airtable"
           };
-
+          
           if (existingArticle) {
             // Update existing article
             await storage.updateArticle(existingArticle.id, articleData);
@@ -225,7 +225,7 @@ export function setupAirtableRoutes(app: Express) {
           syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
         }
       }
-
+      
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -236,7 +236,7 @@ export function setupAirtableRoutes(app: Express) {
           results: syncResults
         }
       });
-
+      
       res.json({
         message: "Articles synced from Airtable",
         results: syncResults
@@ -253,63 +253,63 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-
+      
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "team_members_table");
-
+      
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-
+      
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-
+      
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-
+      
       // Fetch team members from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableTeamMember>;
-
+      
       const syncResults = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-
+      
       // Process each team member
       for (const record of response.records) {
         try {
           const fields = record.fields;
-
+          
           // Check for missing required fields, but provide defaults
           let missingFields = [];
-
+          
           if (!fields.name) {
             fields.name = `Team Member (ID: ${record.id})`;
             missingFields.push("name");
           }
-
+          
           if (!fields.role) {
             fields.role = "Team Member";
             missingFields.push("role");
           }
-
+          
           if (!fields.bio) {
             fields.bio = "Bio information not available.";
             missingFields.push("bio");
           }
-
+          
           if (missingFields.length > 0) {
             syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
-
+          
           // Check if team member already exists
           const existingMember = await storage.getTeamMemberByExternalId(record.id);
-
+          
           const memberData: InsertTeamMember = {
             name: fields.name,
             role: fields.role,
@@ -319,7 +319,7 @@ export function setupAirtableRoutes(app: Express) {
             imagePath: null,
             externalId: record.id
           };
-
+          
           if (existingMember) {
             // Update existing team member
             await storage.updateTeamMember(existingMember.id, memberData);
@@ -337,7 +337,7 @@ export function setupAirtableRoutes(app: Express) {
           syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
         }
       }
-
+      
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -348,7 +348,7 @@ export function setupAirtableRoutes(app: Express) {
           results: syncResults
         }
       });
-
+      
       res.json({
         message: "Team members synced from Airtable",
         results: syncResults
@@ -365,65 +365,65 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-
+      
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
-
+      
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-
+      
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-
+      
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-
+      
       // Fetch carousel quotes from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableCarouselQuote>;
-
+      
       const syncResults = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-
+      
       // Process each carousel quote
       for (const record of response.records) {
         try {
           const fields = record.fields;
-
+          
           // Check for missing required fields, but provide defaults
           let missingFields = [];
-
+          
           if (!fields.carousel) {
             fields.carousel = "default";
             missingFields.push("carousel");
           }
-
+          
           if (!fields.quote) {
             fields.quote = "Quote information not available.";
             missingFields.push("quote");
           }
-
+          
           if (missingFields.length > 0) {
             syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
-
+          
           // Get all quotes to check if this one exists
           const allQuotes = await storage.getCarouselQuotes();
           const existingQuote = allQuotes.find(q => q.externalId === record.id);
-
+          
           const quoteData: InsertCarouselQuote = {
             carousel: fields.carousel,
             quote: fields.quote,
             externalId: record.id
           };
-
+          
           if (existingQuote) {
             // Update existing quote
             await storage.updateCarouselQuote(existingQuote.id, quoteData);
@@ -441,7 +441,7 @@ export function setupAirtableRoutes(app: Express) {
           syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
         }
       }
-
+      
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -452,7 +452,7 @@ export function setupAirtableRoutes(app: Express) {
           results: syncResults
         }
       });
-
+      
       res.json({
         message: "Carousel quotes synced from Airtable",
         results: syncResults
@@ -469,30 +469,30 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-
+      
       const articleId = parseInt(req.params.id);
       const article = await storage.getArticle(articleId);
-
+      
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-
+      
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
+      
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-
+      
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-
+      
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-
+      
       // Prepare the data for Airtable
       const fields: any = {
         title: article.title,
@@ -504,16 +504,16 @@ export function setupAirtableRoutes(app: Express) {
         author: article.author,
         status: article.status
       };
-
+      
       // Add optional fields if they exist
       if (article.excerpt) fields.excerpt = article.excerpt;
       if (article.publishedAt) fields.publishedAt = article.publishedAt.toISOString();
       if (article.photo) fields.photo = article.photo;
       if (article.photoCredit) fields.photoCredit = article.photoCredit;
       if (article.hashtags) fields.hashtags = article.hashtags;
-
+      
       let response;
-
+      
       // If the article has an external ID, update it
       if (article.externalId) {
         response = await airtableRequest(
@@ -530,7 +530,7 @@ export function setupAirtableRoutes(app: Express) {
             ]
           }
         );
-
+        
         // Log the activity
         await storage.createActivityLog({
           userId: req.user?.id,
@@ -557,15 +557,15 @@ export function setupAirtableRoutes(app: Express) {
             ]
           }
         );
-
+        
         // Get the Airtable ID
         const airtableId = response.records[0].id;
-
+        
         // Update the article with the Airtable ID
         await storage.updateArticle(articleId, {
           externalId: airtableId
         });
-
+        
         // Log the activity
         await storage.createActivityLog({
           userId: req.user?.id,
@@ -579,7 +579,7 @@ export function setupAirtableRoutes(app: Express) {
           }
         });
       }
-
+      
       res.json({
         message: "Article pushed to Airtable successfully",
         response
