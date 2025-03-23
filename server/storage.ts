@@ -12,7 +12,7 @@ import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
-import { client } from './db';
+import { pgPool } from './db';
 
 const PostgresSessionStore = connectPg(session);
 
@@ -76,7 +76,7 @@ export class DatabaseStorage implements IStorage {
 
   constructor() {
     this.sessionStore = new PostgresSessionStore({ 
-      pool: client,
+      pool: pgPool,
       createTableIfMissing: true 
     });
   }
@@ -143,10 +143,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteTeamMember(id: number): Promise<boolean> {
-    const result = await db
+    const deleted = await db
       .delete(teamMembers)
-      .where(eq(teamMembers.id, id));
-    return result.rowCount > 0;
+      .where(eq(teamMembers.id, id))
+      .returning();
+    return deleted.length > 0;
   }
 
   // Article operations
@@ -188,10 +189,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteArticle(id: number): Promise<boolean> {
-    const result = await db
+    const deleted = await db
       .delete(articles)
-      .where(eq(articles.id, id));
-    return result.rowCount > 0;
+      .where(eq(articles.id, id))
+      .returning();
+    return deleted.length > 0;
   }
   
   async getFeaturedArticles(): Promise<Article[]> {
@@ -236,10 +238,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCarouselQuote(id: number): Promise<boolean> {
-    const result = await db
+    const deleted = await db
       .delete(carouselQuotes)
-      .where(eq(carouselQuotes.id, id));
-    return result.rowCount > 0;
+      .where(eq(carouselQuotes.id, id))
+      .returning();
+    return deleted.length > 0;
   }
   
   async getQuotesByCarousel(carousel: string): Promise<CarouselQuote[]> {
@@ -271,10 +274,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteImageAsset(id: number): Promise<boolean> {
-    const result = await db
+    const deleted = await db
       .delete(imageAssets)
-      .where(eq(imageAssets.id, id));
-    return result.rowCount > 0;
+      .where(eq(imageAssets.id, id))
+      .returning();
+    return deleted.length > 0;
   }
 
   // Integration settings operations
@@ -322,10 +326,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteIntegrationSetting(id: number): Promise<boolean> {
-    const result = await db
+    const deleted = await db
       .delete(integrationSettings)
-      .where(eq(integrationSettings.id, id));
-    return result.rowCount > 0;
+      .where(eq(integrationSettings.id, id))
+      .returning();
+    return deleted.length > 0;
   }
 
   // Activity log operations
