@@ -76,7 +76,7 @@ export function setupAuth(app: Express) {
   });
 
   // Secure register route - Only authenticated admin users can create new accounts
-  app.post("/api/register", (req, res, next) => {
+  app.post("/api/register", async (req, res, next) => {
     // Check if user is authenticated
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Authentication required to create new users" });
@@ -88,31 +88,28 @@ export function setupAuth(app: Express) {
     }
     
     try {
-      // Proceed with user creation
-      const existingUser = async () => {
-        const user = await storage.getUserByUsername(req.body.username);
-        if (user) {
-          return res.status(400).json({ message: "Username already exists" });
-        }
+      // Check if the username already exists
+      const existingUser = await storage.getUserByUsername(req.body.username);
+      if (existingUser) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
 
-        const newUser = await storage.createUser({
-          ...req.body,
-          password: await hashPassword(req.body.password),
-        });
-        
-        // Log the registration activity
-        storage.createActivityLog({
-          userId: req.user.id, // Log the admin who created this user
-          action: "create_user",
-          resourceType: "user",
-          resourceId: newUser.id.toString(),
-          details: { username: newUser.username, createdBy: req.user.username }
-        });
-        
-        res.status(201).json(newUser);
-      };
+      // Create the new user
+      const newUser = await storage.createUser({
+        ...req.body,
+        password: await hashPassword(req.body.password),
+      });
       
-      existingUser();
+      // Log the registration activity
+      await storage.createActivityLog({
+        userId: req.user.id, // Log the admin who created this user
+        action: "create_user",
+        resourceType: "user",
+        resourceId: newUser.id.toString(),
+        details: { username: newUser.username, createdBy: req.user.username }
+      });
+      
+      res.status(201).json(newUser);
     } catch (error) {
       next(error);
     }
