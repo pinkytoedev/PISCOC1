@@ -7,12 +7,16 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  isAdmin: boolean("is_admin").notNull().default(false),
   lastLogin: timestamp("last_login"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  isAdmin: true,
+}).extend({
+  isAdmin: z.boolean().default(false),
 });
 
 // Team Members table
@@ -182,5 +186,6 @@ export const adminSchema = z.object({
   id: z.number(),
   username: z.string(),
   password: z.string(),
+  isAdmin: z.boolean().default(true),
   lastLogin: z.date().optional(),
 });
