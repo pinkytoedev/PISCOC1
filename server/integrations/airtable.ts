@@ -167,11 +167,22 @@ export function setupAirtableRoutes(app: Express) {
         try {
           const fields = record.fields;
           
-          // Skip records without required fields
-          if (!fields.title || !fields.content) {
+          // Check for required fields with more detailed error messages
+          if (!fields.title && !fields.content) {
             syncResults.errors++;
-            syncResults.details.push(`Skipped record ${record.id}: Missing required fields`);
+            syncResults.details.push(`Skipped record ${record.id}: Missing both title and content fields`);
             continue;
+          }
+          
+          // Provide default values for required fields if missing
+          if (!fields.title) {
+            fields.title = `Untitled Article (ID: ${record.id})`;
+            syncResults.details.push(`Record ${record.id}: Missing title, using default`);
+          }
+          
+          if (!fields.content) {
+            fields.content = "This article content is not available.";
+            syncResults.details.push(`Record ${record.id}: Missing content, using default`);
           }
           
           // Check if article already exists
@@ -274,11 +285,26 @@ export function setupAirtableRoutes(app: Express) {
         try {
           const fields = record.fields;
           
-          // Skip records without required fields
-          if (!fields.name || !fields.role || !fields.bio) {
-            syncResults.errors++;
-            syncResults.details.push(`Skipped record ${record.id}: Missing required fields`);
-            continue;
+          // Check for missing required fields, but provide defaults
+          let missingFields = [];
+          
+          if (!fields.name) {
+            fields.name = `Team Member (ID: ${record.id})`;
+            missingFields.push("name");
+          }
+          
+          if (!fields.role) {
+            fields.role = "Team Member";
+            missingFields.push("role");
+          }
+          
+          if (!fields.bio) {
+            fields.bio = "Bio information not available.";
+            missingFields.push("bio");
+          }
+          
+          if (missingFields.length > 0) {
+            syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
           
           // Check if team member already exists
@@ -371,11 +397,21 @@ export function setupAirtableRoutes(app: Express) {
         try {
           const fields = record.fields;
           
-          // Skip records without required fields
-          if (!fields.carousel || !fields.quote) {
-            syncResults.errors++;
-            syncResults.details.push(`Skipped record ${record.id}: Missing required fields`);
-            continue;
+          // Check for missing required fields, but provide defaults
+          let missingFields = [];
+          
+          if (!fields.carousel) {
+            fields.carousel = "default";
+            missingFields.push("carousel");
+          }
+          
+          if (!fields.quote) {
+            fields.quote = "Quote information not available.";
+            missingFields.push("quote");
+          }
+          
+          if (missingFields.length > 0) {
+            syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
           
           // Get all quotes to check if this one exists
