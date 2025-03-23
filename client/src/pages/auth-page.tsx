@@ -22,12 +22,6 @@ export default function AuthPage() {
   const [location, navigate] = useLocation();
   const { user, loginMutation } = useAuth();
   
-  if (user) {
-    // Using setTimeout to defer the navigation to the next event loop tick
-    setTimeout(() => navigate("/"), 0);
-    return null; // Return empty component when logged in
-  }
-
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -35,11 +29,23 @@ export default function AuthPage() {
       password: "",
     },
   });
+  
+  // Use useEffect for navigation instead of early return
+  useEffect(() => {
+    if (user) {
+      navigate("/");
+    }
+  }, [user, navigate]);
 
   const onLoginSubmit = (data: LoginFormValues) => {
     loginMutation.mutate(data);
   };
 
+  // Don't render login form if user is already logged in
+  if (user) {
+    return null;
+  }
+  
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
