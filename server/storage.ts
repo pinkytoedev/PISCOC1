@@ -1,9 +1,20 @@
-import { users, teamMembers, articles, carouselQuotes, imageAssets, integrationSettings, activityLogs } from "@shared/schema";
-import type { User, InsertUser, TeamMember, InsertTeamMember, Article, InsertArticle, CarouselQuote, InsertCarouselQuote, ImageAsset, InsertImageAsset, IntegrationSetting, InsertIntegrationSetting, ActivityLog, InsertActivityLog } from "@shared/schema";
+import { 
+  users, teamMembers, articles, carouselQuotes, 
+  imageAssets, integrationSettings, activityLogs 
+} from "@shared/schema";
+import type { 
+  User, InsertUser, TeamMember, InsertTeamMember, 
+  Article, InsertArticle, CarouselQuote, InsertCarouselQuote, 
+  ImageAsset, InsertImageAsset, IntegrationSetting, 
+  InsertIntegrationSetting, ActivityLog, InsertActivityLog 
+} from "@shared/schema";
 import session from "express-session";
-import createMemoryStore from "memorystore";
+import connectPg from "connect-pg-simple";
+import { db } from "./db";
+import { eq, and } from "drizzle-orm";
+import { client } from './db';
 
-const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User operations
@@ -57,241 +68,281 @@ export interface IStorage {
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: session.Store;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private teamMembers: Map<number, TeamMember>;
-  private articles: Map<number, Article>;
-  private carouselQuotes: Map<number, CarouselQuote>;
-  private imageAssets: Map<number, ImageAsset>;
-  private integrationSettings: Map<number, IntegrationSetting>;
-  private activityLogs: Map<number, ActivityLog>;
-  
-  sessionStore: session.SessionStore;
-  
-  // ID counters
-  private userIdCounter: number = 1;
-  private teamMemberIdCounter: number = 1;
-  private articleIdCounter: number = 1;
-  private carouselQuoteIdCounter: number = 1;
-  private imageAssetIdCounter: number = 1;
-  private integrationSettingIdCounter: number = 1;
-  private activityLogIdCounter: number = 1;
+export class DatabaseStorage implements IStorage {
+  sessionStore: session.Store;
 
   constructor() {
-    this.users = new Map();
-    this.teamMembers = new Map();
-    this.articles = new Map();
-    this.carouselQuotes = new Map();
-    this.imageAssets = new Map();
-    this.integrationSettings = new Map();
-    this.activityLogs = new Map();
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000 // prune expired entries every 24h
+    this.sessionStore = new PostgresSessionStore({ 
+      pool: client,
+      createTableIfMissing: true 
     });
   }
 
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.username === username);
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const id = this.userIdCounter++;
-    const newUser: User = { ...user, id, lastLogin: null };
-    this.users.set(id, newUser);
+    const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
   
   async updateUserLastLogin(id: number): Promise<User | undefined> {
-    const user = await this.getUser(id);
-    if (!user) return undefined;
-    
-    const updatedUser = { ...user, lastLogin: new Date() };
-    this.users.set(id, updatedUser);
+    const lastLogin = new Date();
+    const [updatedUser] = await db
+      .update(users)
+      .set({ lastLogin })
+      .where(eq(users.id, id))
+      .returning();
     return updatedUser;
   }
 
   // Team member operations
   async getTeamMembers(): Promise<TeamMember[]> {
-    return Array.from(this.teamMembers.values());
+    return await db.select().from(teamMembers);
   }
 
   async getTeamMember(id: number): Promise<TeamMember | undefined> {
-    return this.teamMembers.get(id);
+    const [member] = await db.select().from(teamMembers).where(eq(teamMembers.id, id));
+    return member;
   }
   
   async getTeamMemberByExternalId(externalId: string): Promise<TeamMember | undefined> {
-    return Array.from(this.teamMembers.values()).find(member => member.externalId === externalId);
+    const [member] = await db
+      .select()
+      .from(teamMembers)
+      .where(eq(teamMembers.externalId, externalId));
+    return member;
   }
 
   async createTeamMember(teamMember: InsertTeamMember): Promise<TeamMember> {
-    const id = this.teamMemberIdCounter++;
-    const newTeamMember: TeamMember = { ...teamMember, id };
-    this.teamMembers.set(id, newTeamMember);
-    return newTeamMember;
+    const [newMember] = await db
+      .insert(teamMembers)
+      .values(teamMember)
+      .returning();
+    return newMember;
   }
 
   async updateTeamMember(id: number, teamMember: Partial<InsertTeamMember>): Promise<TeamMember | undefined> {
-    const existingMember = await this.getTeamMember(id);
-    if (!existingMember) return undefined;
-    
-    const updatedMember = { ...existingMember, ...teamMember };
-    this.teamMembers.set(id, updatedMember);
+    const [updatedMember] = await db
+      .update(teamMembers)
+      .set(teamMember)
+      .where(eq(teamMembers.id, id))
+      .returning();
     return updatedMember;
   }
 
   async deleteTeamMember(id: number): Promise<boolean> {
-    return this.teamMembers.delete(id);
+    const result = await db
+      .delete(teamMembers)
+      .where(eq(teamMembers.id, id));
+    return result.rowCount > 0;
   }
 
   // Article operations
   async getArticles(): Promise<Article[]> {
-    return Array.from(this.articles.values());
+    return await db.select().from(articles);
   }
 
   async getArticle(id: number): Promise<Article | undefined> {
-    return this.articles.get(id);
+    const [article] = await db.select().from(articles).where(eq(articles.id, id));
+    return article;
   }
   
   async getArticleByExternalId(externalId: string): Promise<Article | undefined> {
-    return Array.from(this.articles.values()).find(article => article.externalId === externalId);
+    const [article] = await db
+      .select()
+      .from(articles)
+      .where(eq(articles.externalId, externalId));
+    return article;
   }
 
   async createArticle(article: InsertArticle): Promise<Article> {
-    const id = this.articleIdCounter++;
-    const now = new Date();
-    const newArticle: Article = { ...article, id, createdAt: now };
-    this.articles.set(id, newArticle);
+    const [newArticle] = await db
+      .insert(articles)
+      .values({
+        ...article,
+        createdAt: new Date()
+      })
+      .returning();
     return newArticle;
   }
 
   async updateArticle(id: number, article: Partial<InsertArticle>): Promise<Article | undefined> {
-    const existingArticle = await this.getArticle(id);
-    if (!existingArticle) return undefined;
-    
-    const updatedArticle = { ...existingArticle, ...article };
-    this.articles.set(id, updatedArticle);
+    const [updatedArticle] = await db
+      .update(articles)
+      .set(article)
+      .where(eq(articles.id, id))
+      .returning();
     return updatedArticle;
   }
 
   async deleteArticle(id: number): Promise<boolean> {
-    return this.articles.delete(id);
+    const result = await db
+      .delete(articles)
+      .where(eq(articles.id, id));
+    return result.rowCount > 0;
   }
   
   async getFeaturedArticles(): Promise<Article[]> {
-    return Array.from(this.articles.values()).filter(article => article.featured === 'yes');
+    return await db
+      .select()
+      .from(articles)
+      .where(eq(articles.featured, 'yes'));
   }
   
   async getArticlesByStatus(status: string): Promise<Article[]> {
-    return Array.from(this.articles.values()).filter(article => article.status === status);
+    return await db
+      .select()
+      .from(articles)
+      .where(eq(articles.status, status));
   }
 
   // Carousel quote operations
   async getCarouselQuotes(): Promise<CarouselQuote[]> {
-    return Array.from(this.carouselQuotes.values());
+    return await db.select().from(carouselQuotes);
   }
 
   async getCarouselQuote(id: number): Promise<CarouselQuote | undefined> {
-    return this.carouselQuotes.get(id);
+    const [quote] = await db.select().from(carouselQuotes).where(eq(carouselQuotes.id, id));
+    return quote;
   }
 
   async createCarouselQuote(quote: InsertCarouselQuote): Promise<CarouselQuote> {
-    const id = this.carouselQuoteIdCounter++;
-    const newQuote: CarouselQuote = { ...quote, id };
-    this.carouselQuotes.set(id, newQuote);
+    const [newQuote] = await db
+      .insert(carouselQuotes)
+      .values(quote)
+      .returning();
     return newQuote;
   }
 
   async updateCarouselQuote(id: number, quote: Partial<InsertCarouselQuote>): Promise<CarouselQuote | undefined> {
-    const existingQuote = await this.getCarouselQuote(id);
-    if (!existingQuote) return undefined;
-    
-    const updatedQuote = { ...existingQuote, ...quote };
-    this.carouselQuotes.set(id, updatedQuote);
+    const [updatedQuote] = await db
+      .update(carouselQuotes)
+      .set(quote)
+      .where(eq(carouselQuotes.id, id))
+      .returning();
     return updatedQuote;
   }
 
   async deleteCarouselQuote(id: number): Promise<boolean> {
-    return this.carouselQuotes.delete(id);
+    const result = await db
+      .delete(carouselQuotes)
+      .where(eq(carouselQuotes.id, id));
+    return result.rowCount > 0;
   }
   
   async getQuotesByCarousel(carousel: string): Promise<CarouselQuote[]> {
-    return Array.from(this.carouselQuotes.values()).filter(quote => quote.carousel === carousel);
+    return await db
+      .select()
+      .from(carouselQuotes)
+      .where(eq(carouselQuotes.carousel, carousel));
   }
 
   // Image asset operations
   async getImageAssets(): Promise<ImageAsset[]> {
-    return Array.from(this.imageAssets.values());
+    return await db.select().from(imageAssets);
   }
 
   async getImageAsset(id: number): Promise<ImageAsset | undefined> {
-    return this.imageAssets.get(id);
+    const [asset] = await db.select().from(imageAssets).where(eq(imageAssets.id, id));
+    return asset;
   }
 
   async createImageAsset(asset: InsertImageAsset): Promise<ImageAsset> {
-    const id = this.imageAssetIdCounter++;
-    const now = new Date();
-    const newAsset: ImageAsset = { ...asset, id, createdAt: now };
-    this.imageAssets.set(id, newAsset);
+    const [newAsset] = await db
+      .insert(imageAssets)
+      .values({
+        ...asset,
+        createdAt: new Date()
+      })
+      .returning();
     return newAsset;
   }
 
   async deleteImageAsset(id: number): Promise<boolean> {
-    return this.imageAssets.delete(id);
+    const result = await db
+      .delete(imageAssets)
+      .where(eq(imageAssets.id, id));
+    return result.rowCount > 0;
   }
 
   // Integration settings operations
   async getIntegrationSettings(service: string): Promise<IntegrationSetting[]> {
-    return Array.from(this.integrationSettings.values()).filter(setting => setting.service === service);
+    return await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.service, service));
   }
 
   async getIntegrationSetting(id: number): Promise<IntegrationSetting | undefined> {
-    return this.integrationSettings.get(id);
+    const [setting] = await db
+      .select()
+      .from(integrationSettings)
+      .where(eq(integrationSettings.id, id));
+    return setting;
   }
   
   async getIntegrationSettingByKey(service: string, key: string): Promise<IntegrationSetting | undefined> {
-    return Array.from(this.integrationSettings.values()).find(setting => setting.service === service && setting.key === key);
+    const [setting] = await db
+      .select()
+      .from(integrationSettings)
+      .where(and(
+        eq(integrationSettings.service, service),
+        eq(integrationSettings.key, key)
+      ));
+    return setting;
   }
 
   async createIntegrationSetting(setting: InsertIntegrationSetting): Promise<IntegrationSetting> {
-    const id = this.integrationSettingIdCounter++;
-    const newSetting: IntegrationSetting = { ...setting, id };
-    this.integrationSettings.set(id, newSetting);
+    const [newSetting] = await db
+      .insert(integrationSettings)
+      .values(setting)
+      .returning();
     return newSetting;
   }
 
   async updateIntegrationSetting(id: number, setting: Partial<InsertIntegrationSetting>): Promise<IntegrationSetting | undefined> {
-    const existingSetting = await this.getIntegrationSetting(id);
-    if (!existingSetting) return undefined;
-    
-    const updatedSetting = { ...existingSetting, ...setting };
-    this.integrationSettings.set(id, updatedSetting);
+    const [updatedSetting] = await db
+      .update(integrationSettings)
+      .set(setting)
+      .where(eq(integrationSettings.id, id))
+      .returning();
     return updatedSetting;
   }
 
   async deleteIntegrationSetting(id: number): Promise<boolean> {
-    return this.integrationSettings.delete(id);
+    const result = await db
+      .delete(integrationSettings)
+      .where(eq(integrationSettings.id, id));
+    return result.rowCount > 0;
   }
 
   // Activity log operations
   async getActivityLogs(): Promise<ActivityLog[]> {
-    return Array.from(this.activityLogs.values());
+    return await db.select().from(activityLogs);
   }
 
   async createActivityLog(log: InsertActivityLog): Promise<ActivityLog> {
-    const id = this.activityLogIdCounter++;
-    const now = new Date();
-    const newLog: ActivityLog = { ...log, id, timestamp: now };
-    this.activityLogs.set(id, newLog);
+    const [newLog] = await db
+      .insert(activityLogs)
+      .values({
+        ...log,
+        timestamp: new Date()
+      })
+      .returning();
     return newLog;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
