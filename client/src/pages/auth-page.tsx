@@ -2,6 +2,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useEffect } from "react";
 import { z } from "zod";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -20,11 +21,11 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function AuthPage() {
   const [location, navigate] = useLocation();
   const { user, loginMutation } = useAuth();
-
-  // Redirect if already logged in
+  
   if (user) {
-    navigate("/");
-    return null;
+    // Using setTimeout to defer the navigation to the next event loop tick
+    setTimeout(() => navigate("/"), 0);
+    return null; // Return empty component when logged in
   }
 
   const loginForm = useForm<LoginFormValues>({

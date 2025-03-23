@@ -11,6 +11,7 @@ import Dashboard from "@/pages/dashboard";
 import ArticlesPage from "@/pages/articles-page";
 import TeamMembersPage from "@/pages/team-members-page";
 import CarouselQuotesPage from "@/pages/carousel-quotes-page";
+import UserManagementPage from "@/pages/user-management-page";
 import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
@@ -24,6 +25,7 @@ function Router() {
       <ProtectedRoute path="/articles" component={ArticlesPage} />
       <ProtectedRoute path="/team-members" component={TeamMembersPage} />
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
+      <ProtectedRoute path="/users" component={UserManagementPage} />
       <ProtectedRoute path="/integrations/discord" component={DiscordPage} />
       <ProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <ProtectedRoute path="/integrations/instagram" component={InstagramPage} />
