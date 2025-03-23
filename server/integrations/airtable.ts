@@ -15,17 +15,17 @@ interface AirtableResponse<T> {
 }
 
 interface AirtableArticle {
-  title: string;
+  Name: string;
   description: string;
-  excerpt?: string;
+  Body: string;
   content: string;
   contentFormat?: string;
-  imageUrl: string;
+  mainImage: UrlObject;
   featured?: string;
   publishedAt?: string;
-  author: string;
-  photo?: string;
-  photoCredit?: string;
+  Name (from Author); string
+  Name (from Photo)?: string;
+  featured?: string;
   status?: string;
   hashtags?: string;
 }
@@ -38,8 +38,8 @@ interface AirtableTeamMember {
 }
 
 interface AirtableCarouselQuote {
-  carousel: string;
-  quote: string;
+  main: string;
+  philo: string;
 }
 
 // Helper function to make Airtable API requests
