@@ -20,19 +20,18 @@ interface UrlObject {
 }
 
 interface AirtableArticle {
-  title: string;
+  Name: string;
   description: string;
   content: string;
   contentFormat?: string;
   imageUrl?: string;
-  excerpt?: string;
   featured?: string;
   publishedAt?: string;
-  author: string;
-  photo?: string;
+  "Name (from Author)": string;
+  "Name (from Photo)"?: string;
   photoCredit?: string;
-  status?: string;
   hashtags?: string;
+  Date?: string; // ISO 24-hour date format
 }
 
 interface AirtableTeamMember {
@@ -183,9 +182,9 @@ export function setupAirtableRoutes(app: Express) {
           const defaultAuthor = "Unknown Author";
           
           // Apply defaults for missing fields and log what we're doing
-          if (!fields.title) {
-            fields.title = defaultTitle;
-            syncResults.details.push(`Record ${record.id}: Missing title, using default`);
+          if (!fields.Name) {
+            fields.Name = defaultTitle;
+            syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
           }
           
           if (!fields.content) {
@@ -203,29 +202,29 @@ export function setupAirtableRoutes(app: Express) {
             syncResults.details.push(`Record ${record.id}: Missing imageUrl, using default`);
           }
           
-          if (!fields.author) {
-            fields.author = defaultAuthor;
-            syncResults.details.push(`Record ${record.id}: Missing author, using default`);
+          if (!fields["Name (from Author)"]) {
+            fields["Name (from Author)"] = defaultAuthor;
+            syncResults.details.push(`Record ${record.id}: Missing Name (from Author), using default`);
           }
           
           // Check if article already exists
           const existingArticle = await storage.getArticleByExternalId(record.id);
           
           const articleData: InsertArticle = {
-            title: fields.title,
+            title: fields.Name,
             description: fields.description || "",
-            excerpt: fields.excerpt || null,
+            excerpt: null, // Removed as requested
             content: fields.content,
             contentFormat: fields.contentFormat || "plaintext",
             imageUrl: fields.imageUrl || "",
             imageType: "url",
             imagePath: null,
             featured: fields.featured || "no",
-            publishedAt: fields.publishedAt ? new Date(fields.publishedAt) : null,
-            author: fields.author,
-            photo: fields.photo || "",
+            publishedAt: fields.Date ? new Date(fields.Date) : (fields.publishedAt ? new Date(fields.publishedAt) : null),
+            author: fields["Name (from Author)"],
+            photo: fields["Name (from Photo)"] || "",
             photoCredit: fields.photoCredit || null,
-            status: fields.status || "draft",
+            status: "draft", // Default status since removed from schema
             hashtags: fields.hashtags || null,
             externalId: record.id,
             source: "airtable"
@@ -235,12 +234,12 @@ export function setupAirtableRoutes(app: Express) {
             // Update existing article
             await storage.updateArticle(existingArticle.id, articleData);
             syncResults.updated++;
-            syncResults.details.push(`Updated article: ${fields.title}`);
+            syncResults.details.push(`Updated article: ${fields.Name}`);
           } else {
             // Create new article
             await storage.createArticle(articleData);
             syncResults.created++;
-            syncResults.details.push(`Created article: ${fields.title}`);
+            syncResults.details.push(`Created article: ${fields.Name}`);
           }
         } catch (error) {
           console.error("Error processing Airtable record:", error);
@@ -518,20 +517,18 @@ export function setupAirtableRoutes(app: Express) {
       
       // Prepare the data for Airtable
       const fields: any = {
-        title: article.title,
+        Name: article.title,
         description: article.description,
         content: article.content,
         contentFormat: article.contentFormat,
         imageUrl: article.imageUrl,
         featured: article.featured,
-        author: article.author,
-        status: article.status
+        "Name (from Author)": article.author
       };
       
       // Add optional fields if they exist
-      if (article.excerpt) fields.excerpt = article.excerpt;
-      if (article.publishedAt) fields.publishedAt = article.publishedAt.toISOString();
-      if (article.photo) fields.photo = article.photo;
+      if (article.publishedAt) fields.Date = article.publishedAt.toISOString();
+      if (article.photo) fields["Name (from Photo)"] = article.photo;
       if (article.photoCredit) fields.photoCredit = article.photoCredit;
       if (article.hashtags) fields.hashtags = article.hashtags;
       
