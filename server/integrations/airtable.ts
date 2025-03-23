@@ -43,8 +43,8 @@ interface AirtableTeamMember {
 }
 
 interface AirtableCarouselQuote {
-  carousel: string;
-  quote: string;
+  main: string;
+  philo: string;
 }
 
 // Helper function to make Airtable API requests
@@ -423,14 +423,14 @@ export function setupAirtableRoutes(app: Express) {
           // Check for missing required fields, but provide defaults
           let missingFields = [];
           
-          if (!fields.carousel) {
-            fields.carousel = "default";
-            missingFields.push("carousel");
+          if (!fields.main) {
+            fields.main = "default";
+            missingFields.push("main");
           }
           
-          if (!fields.quote) {
-            fields.quote = "Quote information not available.";
-            missingFields.push("quote");
+          if (!fields.philo) {
+            fields.philo = "Quote information not available.";
+            missingFields.push("philo");
           }
           
           if (missingFields.length > 0) {
@@ -442,8 +442,8 @@ export function setupAirtableRoutes(app: Express) {
           const existingQuote = allQuotes.find(q => q.externalId === record.id);
           
           const quoteData: InsertCarouselQuote = {
-            carousel: fields.carousel,
-            quote: fields.quote,
+            carousel: fields.main,
+            quote: fields.philo,
             externalId: record.id
           };
           
@@ -451,12 +451,12 @@ export function setupAirtableRoutes(app: Express) {
             // Update existing quote
             await storage.updateCarouselQuote(existingQuote.id, quoteData);
             syncResults.updated++;
-            syncResults.details.push(`Updated carousel quote for: ${fields.carousel}`);
+            syncResults.details.push(`Updated carousel quote for: ${fields.main}`);
           } else {
             // Create new quote
             await storage.createCarouselQuote(quoteData);
             syncResults.created++;
-            syncResults.details.push(`Created carousel quote for: ${fields.carousel}`);
+            syncResults.details.push(`Created carousel quote for: ${fields.main}`);
           }
         } catch (error) {
           console.error("Error processing Airtable record:", error);
