@@ -75,32 +75,44 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/register", async (req, res, next) => {
+  // Secure register route - Only authenticated admin users can create new accounts
+  app.post("/api/register", (req, res, next) => {
+    // Check if user is authenticated
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Authentication required to create new users" });
+    }
+    
+    // Only allow admin users to create new accounts
+    if (!req.user?.isAdmin) {
+      return res.status(403).json({ message: "Admin privileges required to create new users" });
+    }
+    
     try {
-      const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
+      // Proceed with user creation
+      const existingUser = async () => {
+        const user = await storage.getUserByUsername(req.body.username);
+        if (user) {
+          return res.status(400).json({ message: "Username already exists" });
+        }
 
-      const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
-      });
-
-      req.login(user, (err) => {
-        if (err) return next(err);
+        const newUser = await storage.createUser({
+          ...req.body,
+          password: await hashPassword(req.body.password),
+        });
         
         // Log the registration activity
         storage.createActivityLog({
-          userId: user.id,
-          action: "register",
+          userId: req.user.id, // Log the admin who created this user
+          action: "create_user",
           resourceType: "user",
-          resourceId: user.id.toString(),
-          details: { username: user.username }
+          resourceId: newUser.id.toString(),
+          details: { username: newUser.username, createdBy: req.user.username }
         });
         
-        res.status(201).json(user);
-      });
+        res.status(201).json(newUser);
+      };
+      
+      existingUser();
     } catch (error) {
       next(error);
     }
