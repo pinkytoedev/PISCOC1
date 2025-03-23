@@ -167,22 +167,40 @@ export function setupAirtableRoutes(app: Express) {
         try {
           const fields = record.fields;
           
-          // Check for required fields with more detailed error messages
-          if (!fields.title && !fields.content) {
-            syncResults.errors++;
-            syncResults.details.push(`Skipped record ${record.id}: Missing both title and content fields`);
-            continue;
-          }
+          // Debug log to see what fields we're actually receiving from Airtable
+          console.log(`Processing Airtable record ${record.id}, fields:`, JSON.stringify(fields));
           
-          // Provide default values for required fields if missing
+          // Create default values for all required fields
+          const defaultTitle = `Untitled Article (ID: ${record.id})`;
+          const defaultContent = "This article content is not available.";
+          const defaultDescription = "No description provided.";
+          const defaultImageUrl = "https://placehold.co/600x400?text=No+Image"; 
+          const defaultAuthor = "Unknown Author";
+          
+          // Apply defaults for missing fields and log what we're doing
           if (!fields.title) {
-            fields.title = `Untitled Article (ID: ${record.id})`;
+            fields.title = defaultTitle;
             syncResults.details.push(`Record ${record.id}: Missing title, using default`);
           }
           
           if (!fields.content) {
-            fields.content = "This article content is not available.";
+            fields.content = defaultContent;
             syncResults.details.push(`Record ${record.id}: Missing content, using default`);
+          }
+          
+          if (!fields.description) {
+            fields.description = defaultDescription;
+            syncResults.details.push(`Record ${record.id}: Missing description, using default`);
+          }
+          
+          if (!fields.imageUrl) {
+            fields.imageUrl = defaultImageUrl;
+            syncResults.details.push(`Record ${record.id}: Missing imageUrl, using default`);
+          }
+          
+          if (!fields.author) {
+            fields.author = defaultAuthor;
+            syncResults.details.push(`Record ${record.id}: Missing author, using default`);
           }
           
           // Check if article already exists
@@ -191,7 +209,7 @@ export function setupAirtableRoutes(app: Express) {
           const articleData: InsertArticle = {
             title: fields.title,
             description: fields.description || "",
-            excerpt: fields.excerpt,
+            excerpt: fields.excerpt || null,
             content: fields.content,
             contentFormat: fields.contentFormat || "plaintext",
             imageUrl: fields.imageUrl || "",
@@ -201,9 +219,9 @@ export function setupAirtableRoutes(app: Express) {
             publishedAt: fields.publishedAt ? new Date(fields.publishedAt) : null,
             author: fields.author,
             photo: fields.photo || "",
-            photoCredit: fields.photoCredit,
+            photoCredit: fields.photoCredit || null,
             status: fields.status || "draft",
-            hashtags: fields.hashtags,
+            hashtags: fields.hashtags || null,
             externalId: record.id,
             source: "airtable"
           };
