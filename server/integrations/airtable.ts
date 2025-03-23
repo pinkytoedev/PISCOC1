@@ -15,23 +15,43 @@ interface AirtableResponse<T> {
 }
 
 // Interface for URL objects from Airtable
+interface Attachment {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  type: string;
+  width?: number;
+  height?: number;
+  thumbnails?: {
+    small: { url: string; width: number; height: number };
+    large: { url: string; width: number; height: number };
+    full: { url: string; width: number; height: number };
+  };
+}
+
 interface UrlObject {
   url: string;
 }
 
 interface AirtableArticle {
-  Name: string;
-  description: string;
-  content: string;
-  contentFormat?: string;
-  imageUrl?: string;
-  featured?: string;
-  publishedAt?: string;
-  "Name (from Author)": string;
-  "Name (from Photo)"?: string;
-  photoCredit?: string;
-  hashtags?: string;
-  Date?: string; // ISO 24-hour date format
+  Name: string;                    // Long text
+  _createdTime?: string;           // Date
+  _publishedTime?: string;         // Date
+  _updatedTime?: string;           // Date
+  Author?: string[];               // Link to another record (array of IDs)
+  Body: string;                    // Long text (content)
+  Date?: string;                   // Date
+  Description?: string;            // Long text
+  Featured?: boolean;              // Checkbox
+  Finished?: boolean;              // Checkbox
+  Hashtags?: string;               // Long text
+  instaPhoto?: Attachment[];       // Attachment
+  MainImage?: Attachment[];        // Attachment
+  message_sent?: boolean;          // Checkbox
+  "Name (from Author)"?: string[]; // Lookup
+  "Name (from Photo)"?: string[];  // Lookup
+  Photo?: string[];                // Link to another record (array of IDs)
 }
 
 interface AirtableTeamMember {
@@ -187,24 +207,36 @@ export function setupAirtableRoutes(app: Express) {
             syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
           }
           
-          if (!fields.content) {
-            fields.content = defaultContent;
-            syncResults.details.push(`Record ${record.id}: Missing content, using default`);
+          if (!fields.Body) {
+            fields.Body = defaultContent;
+            syncResults.details.push(`Record ${record.id}: Missing Body, using default`);
           }
           
-          if (!fields.description) {
-            fields.description = defaultDescription;
-            syncResults.details.push(`Record ${record.id}: Missing description, using default`);
+          if (!fields.Description) {
+            fields.Description = defaultDescription;
+            syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
           }
           
-          if (!fields.imageUrl) {
-            fields.imageUrl = defaultImageUrl;
-            syncResults.details.push(`Record ${record.id}: Missing imageUrl, using default`);
+          // Get the image URL from MainImage attachment if it exists
+          let imageUrl = defaultImageUrl;
+          if (fields.MainImage && fields.MainImage.length > 0) {
+            imageUrl = fields.MainImage[0].url;
+          } else if (fields.instaPhoto && fields.instaPhoto.length > 0) {
+            // Use instaPhoto as fallback if MainImage is not available
+            imageUrl = fields.instaPhoto[0].url;
+            syncResults.details.push(`Record ${record.id}: Using instaPhoto as MainImage is not available`);
           }
           
-          if (!fields["Name (from Author)"]) {
-            fields["Name (from Author)"] = defaultAuthor;
-            syncResults.details.push(`Record ${record.id}: Missing Name (from Author), using default`);
+          // Get the author name as a string (first one if it's an array)
+          let authorName = defaultAuthor;
+          if (fields["Name (from Author)"] && fields["Name (from Author)"].length > 0) {
+            authorName = fields["Name (from Author)"][0];
+          }
+          
+          // Get the photo name as a string (first one if it's an array)
+          let photoName = "";
+          if (fields["Name (from Photo)"] && fields["Name (from Photo)"].length > 0) {
+            photoName = fields["Name (from Photo)"][0];
           }
           
           // Check if article already exists
@@ -212,20 +244,20 @@ export function setupAirtableRoutes(app: Express) {
           
           const articleData: InsertArticle = {
             title: fields.Name,
-            description: fields.description || "",
+            description: fields.Description || "",
             excerpt: null, // Removed as requested
-            content: fields.content,
-            contentFormat: fields.contentFormat || "plaintext",
-            imageUrl: fields.imageUrl || "",
+            content: fields.Body,
+            contentFormat: "html", // Most Airtable content is rich text
+            imageUrl: imageUrl,
             imageType: "url",
             imagePath: null,
-            featured: fields.featured || "no",
-            publishedAt: fields.Date ? new Date(fields.Date) : (fields.publishedAt ? new Date(fields.publishedAt) : null),
-            author: fields["Name (from Author)"],
-            photo: fields["Name (from Photo)"] || "",
-            photoCredit: fields.photoCredit || null,
-            status: "draft", // Default status since removed from schema
-            hashtags: fields.hashtags || null,
+            featured: fields.Featured ? "yes" : "no",
+            publishedAt: fields.Date ? new Date(fields.Date) : null,
+            author: authorName,
+            photo: photoName,
+            photoCredit: null, // Not available in new schema
+            status: fields.Finished ? "published" : "draft",
+            hashtags: fields.Hashtags || null,
             externalId: record.id,
             source: "airtable"
           };
@@ -518,19 +550,27 @@ export function setupAirtableRoutes(app: Express) {
       // Prepare the data for Airtable
       const fields: any = {
         Name: article.title,
-        description: article.description,
-        content: article.content,
-        contentFormat: article.contentFormat,
-        imageUrl: article.imageUrl,
-        featured: article.featured,
-        "Name (from Author)": article.author
+        Description: article.description,
+        Body: article.content,
+        // Convert featured from "yes"/"no" to boolean
+        Featured: article.featured === "yes" ? true : false,
+        // Convert status to Finished field
+        Finished: article.status === "published" ? true : false
       };
       
       // Add optional fields if they exist
       if (article.publishedAt) fields.Date = article.publishedAt.toISOString();
-      if (article.photo) fields["Name (from Photo)"] = article.photo;
-      if (article.photoCredit) fields.photoCredit = article.photoCredit;
-      if (article.hashtags) fields.hashtags = article.hashtags;
+      if (article.hashtags) fields.Hashtags = article.hashtags;
+      
+      // Handle author relationship
+      // Note: this doesn't actually create the relationship in Airtable
+      // but we store the author name for reference
+      if (article.author) {
+        // We don't set Author directly as it's a linked record - 
+        // this would require creating/finding the author record first
+        // Just log that this would need proper linking
+        console.log(`Author ${article.author} would need to be linked in Airtable`);
+      }
       
       let response;
       
