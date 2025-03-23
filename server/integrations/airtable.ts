@@ -14,18 +14,23 @@ interface AirtableResponse<T> {
   offset?: string;
 }
 
+// Interface for URL objects from Airtable
+interface UrlObject {
+  url: string;
+}
+
 interface AirtableArticle {
-  Name: string;
+  title: string;
   description: string;
-  Body: string;
   content: string;
   contentFormat?: string;
-  mainImage: UrlObject;
+  imageUrl?: string;
+  excerpt?: string;
   featured?: string;
   publishedAt?: string;
-  Name (from Author); string
-  Name (from Photo)?: string;
-  featured?: string;
+  author: string;
+  photo?: string;
+  photoCredit?: string;
   status?: string;
   hashtags?: string;
 }
@@ -38,8 +43,8 @@ interface AirtableTeamMember {
 }
 
 interface AirtableCarouselQuote {
-  main: string;
-  philo: string;
+  carousel: string;
+  quote: string;
 }
 
 // Helper function to make Airtable API requests
