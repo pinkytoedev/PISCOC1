@@ -174,6 +174,7 @@ export default function ArticlesPage() {
             {/* Articles Table */}
             <ArticleTable 
               filter={statusFilter || undefined}
+              sort={sortBy}
               onEdit={handleEditClick}
               onView={handleViewClick}
             />
