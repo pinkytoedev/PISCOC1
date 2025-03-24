@@ -28,9 +28,54 @@ import {
 export default function AirtablePage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("settings");
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    success?: boolean;
+    message?: string;
+    base?: { id: string; name: string; permissionLevel: string };
+    error?: string;
+  } | null>(null);
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/airtable/settings'],
+  });
+  
+  const testConnectionMutation = useMutation({
+    mutationFn: async () => {
+      setTestingConnection(true);
+      setConnectionStatus(null);
+      const res = await apiRequest("GET", "/api/airtable/test-connection");
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      setConnectionStatus(data);
+      if (data.success) {
+        toast({
+          title: "Connection successful",
+          description: `Successfully connected to Airtable base: ${data.base?.name}`,
+        });
+      } else {
+        toast({
+          title: "Connection failed",
+          description: data.message || "Failed to connect to Airtable.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error) => {
+      setConnectionStatus({
+        success: false,
+        message: error.message || "Failed to test connection to Airtable."
+      });
+      toast({
+        title: "Connection test failed",
+        description: error.message || "Failed to test connection to Airtable.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setTestingConnection(false);
+    }
   });
   
   const updateSettingMutation = useMutation({
@@ -104,7 +149,10 @@ export default function AirtablePage() {
   // Check if core settings are configured
   const hasApiKey = !!getSettingValue('api_key');
   const hasBaseId = !!getSettingValue('base_id');
-  const isConfigured = hasApiKey && hasBaseId;
+  const hasBasicConfig = hasApiKey && hasBaseId;
+  
+  // Determine connection status based on test results and config
+  const isConfigured = connectionStatus?.success === true || hasBasicConfig;
   
   return (
     <div className="flex flex-col min-h-screen">
@@ -243,6 +291,63 @@ export default function AirtablePage() {
                           </p>
                         </div>
                       </CardContent>
+                      <CardFooter className="flex flex-col items-start gap-4">
+                        <div className="w-full">
+                          <Button 
+                            onClick={() => testConnectionMutation.mutate()}
+                            disabled={testingConnection || !hasApiKey || !hasBaseId}
+                            variant="outline"
+                            className="w-full sm:w-auto"
+                          >
+                            {testingConnection ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Testing Connection...
+                              </>
+                            ) : (
+                              <>
+                                <Server className="mr-2 h-4 w-4" />
+                                Test Connection
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        
+                        {connectionStatus && (
+                          <div className={`w-full p-4 rounded-md border ${
+                            connectionStatus.success 
+                              ? 'bg-green-50 border-green-200 text-green-700' 
+                              : 'bg-red-50 border-red-200 text-red-700'
+                          }`}>
+                            <div className="flex items-center">
+                              {connectionStatus.success ? (
+                                <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
+                              ) : (
+                                <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+                              )}
+                              <h5 className="text-sm font-medium">
+                                {connectionStatus.success 
+                                  ? 'Connection Successful' 
+                                  : 'Connection Failed'}
+                              </h5>
+                            </div>
+                            <p className="text-sm mt-1">
+                              {connectionStatus.message}
+                            </p>
+                            {connectionStatus.success && connectionStatus.base && (
+                              <div className="mt-2 text-xs">
+                                <div><strong>Base Name:</strong> {connectionStatus.base.name}</div>
+                                <div><strong>Permission Level:</strong> {connectionStatus.base.permissionLevel}</div>
+                              </div>
+                            )}
+                            {connectionStatus.error && (
+                              <div className="mt-2 text-xs bg-red-100 p-2 rounded">
+                                <strong>Error Details:</strong> {connectionStatus.error}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardFooter>
                     </Card>
                     
                     {/* Table Configuration */}
@@ -335,7 +440,7 @@ export default function AirtablePage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-6">
-                        {!isConfigured ? (
+                        {!hasBasicConfig ? (
                           <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800">
                             <div className="flex items-center">
                               <AlertCircle className="h-5 w-5 mr-2" />
@@ -343,6 +448,16 @@ export default function AirtablePage() {
                             </div>
                             <p className="mt-1 text-sm">
                               Please configure your Airtable API key and Base ID in the Settings tab before syncing data.
+                            </p>
+                          </div>
+                        ) : connectionStatus?.success === false ? (
+                          <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-800">
+                            <div className="flex items-center">
+                              <AlertCircle className="h-5 w-5 mr-2" />
+                              <span className="font-medium">Connection Failed</span>
+                            </div>
+                            <p className="mt-1 text-sm">
+                              Please check your Airtable credentials and test the connection in the Settings tab before syncing data.
                             </p>
                           </div>
                         ) : (
