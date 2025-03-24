@@ -92,10 +92,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       // Sort by oldest first
       return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
     } else if (sort === 'chronological') {
-      // Sort by the article date field (if available)
-      // This is specifically for Airtable articles that have a Date field
-      const dateA = a.date ? new Date(a.date).getTime() : 0;
-      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      // Sort by the article publishedAt field (from Airtable's Date field)
+      const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
@@ -299,8 +298,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                   Loading articles...
                 </td>
               </tr>
-            ) : filteredArticles && filteredArticles.length > 0 ? (
-              filteredArticles.map((article) => (
+            ) : sortedArticles && sortedArticles.length > 0 ? (
+              sortedArticles.map((article) => (
                 <tr key={article.id} className={article.source === 'airtable' ? 'bg-blue-50/30' : ''}>
                   <td className="px-6 py-4">
                     <div className="flex items-start">
