@@ -144,8 +144,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     }
     
     // Always set the Airtable date field from publishedAt if it exists
+    // Use full ISO format with timezone for Airtable
     if (submissionData.publishedAt instanceof Date) {
-      submissionData.date = submissionData.publishedAt.toISOString().split('T')[0]; // YYYY-MM-DD format
+      // Set the complete ISO string for Airtable which expects timestamps
+      submissionData.date = submissionData.publishedAt.toISOString();
+      console.log("Preserving Airtable date format for article from Airtable source");
     }
     
     // Set the finished field based on status

@@ -60,9 +60,17 @@ export const articles = pgTable("articles", {
   source: text("source").default("manual"), // Could be 'discord', 'airtable', 'instagram', or 'manual'
 });
 
+// Custom schema for article insert/update with publishedAt handling
 export const insertArticleSchema = createInsertSchema(articles).omit({
   id: true,
   createdAt: true,
+}).extend({
+  // Override the publishedAt field to handle string or Date values
+  publishedAt: z.union([
+    z.string().transform((val) => new Date(val)),
+    z.date(),
+    z.null()
+  ]).optional(),
 });
 
 // Carousel quotes table

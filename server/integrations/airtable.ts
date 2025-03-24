@@ -133,13 +133,16 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   };
   
   // Handle date mapping - Use the specific date field if available, fallback to publishedAt
-  // Airtable expects date in ISO format
+  // Airtable expects date in full ISO format with time
   if (article.date) {
     // If we have a direct date field, use it (this is the preferred field)
+    // This should already be in ISO format from our updated form handling
     airtableData.Date = article.date;
   } else if (article.publishedAt) {
     // Fall back to publishedAt if date not available
-    airtableData.Date = new Date(article.publishedAt).toISOString().split('T')[0];
+    // Make sure it's a complete ISO string with time
+    const date = new Date(article.publishedAt);
+    airtableData.Date = date.toISOString();
   }
   
   // Add author reference if we found one
@@ -809,10 +812,12 @@ export function setupAirtableRoutes(app: Express) {
       // Date handling: prioritize the date field from Airtable
       if (article.date) {
         // Use the direct date field if available (preferred)
+        // Keep the full ISO format for Airtable which expects timestamps
         fields.Date = article.date;
       } else if (article.publishedAt) {
         // Fall back to publishedAt if date not available
-        fields.Date = new Date(article.publishedAt).toISOString().split('T')[0];
+        // Use the full ISO string with time for Airtable (not just YYYY-MM-DD)
+        fields.Date = new Date(article.publishedAt).toISOString();
       }
       
       // Add hashtags if they exist
