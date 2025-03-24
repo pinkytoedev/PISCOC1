@@ -7,7 +7,7 @@ import { ArticleTable } from "@/components/dashboard/article-table";
 import { CreateArticleModal } from "@/components/modals/create-article-modal";
 import { Button } from "@/components/ui/button";
 import { Article } from "@shared/schema";
-import { Plus, Filter } from "lucide-react";
+import { Plus, Filter, ArrowUpDown, CalendarClock } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,9 +20,11 @@ export default function ArticlesPage() {
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
   const statusFilter = searchParams.get('status');
+  const sortParam = searchParams.get('sort');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editArticle, setEditArticle] = useState<Article | null>(null);
+  const [sortBy, setSortBy] = useState<string>(sortParam || "newest");
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
@@ -44,11 +46,40 @@ export default function ArticlesPage() {
   };
   
   const handleFilterClick = (status: string | null) => {
+    const newSearchParams = new URLSearchParams(search);
+    
     if (status) {
-      setLocation(`/articles?status=${status}`);
+      newSearchParams.set('status', status);
     } else {
-      setLocation('/articles');
+      newSearchParams.delete('status');
     }
+    
+    // Preserve sort parameter if it exists
+    if (sortBy && sortBy !== 'newest') {
+      newSearchParams.set('sort', sortBy);
+    }
+    
+    const queryString = newSearchParams.toString();
+    setLocation(queryString ? `/articles?${queryString}` : '/articles');
+  };
+  
+  const handleSortClick = (sort: string) => {
+    setSortBy(sort);
+    
+    const newSearchParams = new URLSearchParams(search);
+    if (sort !== 'newest') {
+      newSearchParams.set('sort', sort);
+    } else {
+      newSearchParams.delete('sort');
+    }
+    
+    // Preserve status filter if it exists
+    if (statusFilter) {
+      newSearchParams.set('status', statusFilter);
+    }
+    
+    const queryString = newSearchParams.toString();
+    setLocation(queryString ? `/articles?${queryString}` : '/articles');
   };
   
   return (
@@ -82,6 +113,34 @@ export default function ArticlesPage() {
                 </p>
               </div>
               <div className="flex space-x-3">
+                {/* Sort dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline">
+                      <ArrowUpDown className="mr-2 h-4 w-4" />
+                      {sortBy === "newest" 
+                        ? "Sort: Newest" 
+                        : sortBy === "oldest" 
+                          ? "Sort: Oldest" 
+                          : sortBy === "chronological" 
+                            ? "Sort: Chronological" 
+                            : "Sort"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleSortClick("newest")}>
+                      <CalendarClock className="mr-2 h-4 w-4" /> Newest First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSortClick("oldest")}>
+                      <CalendarClock className="mr-2 h-4 w-4 rotate-180" /> Oldest First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleSortClick("chronological")}>
+                      <CalendarClock className="mr-2 h-4 w-4" /> Chronological (by Date field)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                
+                {/* Filter dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline">
