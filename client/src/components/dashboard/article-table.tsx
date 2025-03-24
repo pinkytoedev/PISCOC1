@@ -340,20 +340,12 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         )}
                       </div>
                       <div className="ml-4 max-w-xs">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
-                                {truncateText(article.title, 35)}
-                              </div>
-                            </TooltipTrigger>
-                            {article.title.length > 35 && (
-                              <TooltipContent>
-                                <p className="max-w-xs">{article.title}</p>
-                              </TooltipContent>
-                            )}
-                          </Tooltip>
-                        </TooltipProvider>
+                        <div 
+                          className="text-sm font-medium text-gray-900 truncate max-w-[200px]"
+                          title={article.title.length > 35 ? article.title : undefined}
+                        >
+                          {truncateText(article.title, 35)}
+                        </div>
                         
                         {article.description && (
                           <TooltipProvider>
@@ -378,24 +370,14 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                               </Badge>
                             ))}
                             {formatTags(article.hashtags).length > 3 && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Badge variant="outline" className="mr-1 mb-1 text-xs py-0">
-                                      +{formatTags(article.hashtags).length - 3}
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <div className="flex flex-wrap gap-1 max-w-xs">
-                                      {formatTags(article.hashtags).slice(3).map((tag, index) => (
-                                        <Badge key={index} variant="outline" className="text-xs py-0">
-                                          {tag}
-                                        </Badge>
-                                      ))}
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+                              <div 
+                                className="mr-1 mb-1 text-xs py-0 cursor-pointer"
+                                title={formatTags(article.hashtags).slice(3).join(", ")}
+                              >
+                                <Badge variant="outline" className="text-xs py-0">
+                                  +{formatTags(article.hashtags).length - 3}
+                                </Badge>
+                              </div>
                             )}
                           </div>
                         )}
@@ -441,28 +423,20 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         <Eye className="h-4 w-4" />
                       </Button>
                       {article.source === 'airtable' && article.externalId && (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => updateAirtableMutation.mutate(article.id)}
-                                className="text-blue-600 hover:text-blue-800"
-                                disabled={updateAirtableMutation.isPending}
-                              >
-                                {updateAirtableMutation.isPending ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <RefreshCw className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Update in Airtable</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => updateAirtableMutation.mutate(article.id)}
+                          className="text-blue-600 hover:text-blue-800"
+                          disabled={updateAirtableMutation.isPending}
+                          title="Update in Airtable"
+                        >
+                          {updateAirtableMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                        </Button>
                       )}
                       <Button
                         variant="ghost"
