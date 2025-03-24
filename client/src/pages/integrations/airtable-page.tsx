@@ -123,6 +123,27 @@ export default function AirtablePage() {
     },
   });
   
+  const updateApiKeyFromEnvMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/airtable/update-api-key");
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/airtable/settings'] });
+      toast({
+        title: "API Key Updated",
+        description: "Successfully updated Airtable API key from environment variable",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to update API Key",
+        description: error.message || "Could not update Airtable API key from environment variable",
+        variant: "destructive",
+      });
+    },
+  });
+  
   const getSettingValue = (key: string): string => {
     const setting = settings?.find(s => s.key === key);
     return setting?.value || "";
@@ -260,9 +281,30 @@ export default function AirtablePage() {
                               </span>
                             </div>
                           </div>
-                          <p className="text-xs text-gray-500">
-                            You can find your API key in your Airtable account settings.
-                          </p>
+                          <div className="flex justify-between items-center">
+                            <p className="text-xs text-gray-500">
+                              You can find your API key in your Airtable account settings.
+                            </p>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-xs"
+                              onClick={() => updateApiKeyFromEnvMutation.mutate()}
+                              disabled={updateApiKeyFromEnvMutation.isPending}
+                            >
+                              {updateApiKeyFromEnvMutation.isPending ? (
+                                <>
+                                  <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                                  Updating...
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="mr-2 h-3 w-3" />
+                                  Update from ENV
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </div>
                         
                         <div className="grid gap-2">
