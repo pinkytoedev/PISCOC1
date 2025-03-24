@@ -55,10 +55,22 @@ interface AirtableArticle {
 }
 
 interface AirtableTeamMember {
-  name: string;
-  role: string;
-  bio: string;
-  imageUrl: string;
+  Name: string;                   // Long text
+  AuthorSub?: string[];           // Link to another record
+  Bio?: string;                   // Long text
+  "Collection ID"?: number;       // Number
+  "Created On"?: string;          // Date
+  DiscordID?: string;             // Single line text
+  First?: string[];               // Link to another record
+  "First 2"?: string[];           // Link to another record
+  image_url?: Attachment[];       // Attachment
+  "Item ID"?: string;             // Long text
+  PhotoSub?: string[];            // Link to another record
+  "Published On"?: string;        // Date
+  Role?: string;                  // Long text
+  "Secret Page?"?: boolean;       // Checkbox
+  Slug?: string;                  // Long text
+  "Updated On"?: string;          // Date
 }
 
 interface AirtableCarouselQuote {
@@ -339,36 +351,51 @@ export function setupAirtableRoutes(app: Express) {
         try {
           const fields = record.fields;
           
+          // Debug log to see what fields we're actually receiving from Airtable
+          console.log(`Processing Airtable team member record ${record.id}, fields:`, JSON.stringify(fields));
+          
           // Check for missing required fields, but provide defaults
           let missingFields = [];
           
-          if (!fields.name) {
-            fields.name = `Team Member (ID: ${record.id})`;
-            missingFields.push("name");
+          // Default values
+          const defaultName = `Team Member (ID: ${record.id})`;
+          const defaultRole = "Team Member";
+          const defaultBio = "Bio information not available.";
+          const defaultImageUrl = "https://placehold.co/600x400?text=No+Image";
+          
+          if (!fields.Name) {
+            fields.Name = defaultName;
+            missingFields.push("Name");
           }
           
-          if (!fields.role) {
-            fields.role = "Team Member";
-            missingFields.push("role");
+          if (!fields.Role) {
+            fields.Role = defaultRole;
+            missingFields.push("Role");
           }
           
-          if (!fields.bio) {
-            fields.bio = "Bio information not available.";
-            missingFields.push("bio");
+          if (!fields.Bio) {
+            fields.Bio = defaultBio;
+            missingFields.push("Bio");
           }
           
           if (missingFields.length > 0) {
             syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
           
+          // Get the image URL from image_url attachment if it exists
+          let imageUrl = defaultImageUrl;
+          if (fields.image_url && fields.image_url.length > 0) {
+            imageUrl = fields.image_url[0].url;
+          }
+          
           // Check if team member already exists
           const existingMember = await storage.getTeamMemberByExternalId(record.id);
           
           const memberData: InsertTeamMember = {
-            name: fields.name,
-            role: fields.role,
-            bio: fields.bio,
-            imageUrl: fields.imageUrl || "",
+            name: fields.Name,
+            role: fields.Role || defaultRole,
+            bio: fields.Bio || defaultBio,
+            imageUrl: imageUrl,
             imageType: "url",
             imagePath: null,
             externalId: record.id
@@ -378,12 +405,12 @@ export function setupAirtableRoutes(app: Express) {
             // Update existing team member
             await storage.updateTeamMember(existingMember.id, memberData);
             syncResults.updated++;
-            syncResults.details.push(`Updated team member: ${fields.name}`);
+            syncResults.details.push(`Updated team member: ${fields.Name}`);
           } else {
             // Create new team member
             await storage.createTeamMember(memberData);
             syncResults.created++;
-            syncResults.details.push(`Created team member: ${fields.name}`);
+            syncResults.details.push(`Created team member: ${fields.Name}`);
           }
         } catch (error) {
           console.error("Error processing Airtable record:", error);

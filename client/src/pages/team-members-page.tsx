@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
-import { Plus, Edit, Trash2, Loader2 } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function TeamMembersPage() {
@@ -254,6 +254,18 @@ export default function TeamMembersPage() {
                       : "Fill in the information to add a new team member."}
                   </DialogDescription>
                 </DialogHeader>
+                
+                {editMember?.externalId && (
+                  <div className="mb-4 p-4 border border-blue-200 bg-blue-50 rounded-md">
+                    <div className="flex items-center">
+                      <AlertCircle className="h-4 w-4 text-blue-500 mr-2" />
+                      <h5 className="text-sm font-medium text-blue-700">Airtable Source</h5>
+                    </div>
+                    <p className="text-sm text-blue-600 mt-1">
+                      This team member was imported from Airtable. Updates may be synchronized with Airtable during the next sync operation.
+                    </p>
+                  </div>
+                )}
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">

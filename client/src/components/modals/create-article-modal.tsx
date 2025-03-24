@@ -124,13 +124,15 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         </DialogHeader>
 
         {isFromAirtable && (
-          <Alert variant="info" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Airtable Source</AlertTitle>
-            <AlertDescription>
+          <div className="mb-4 p-4 border border-blue-200 bg-blue-50 rounded-md">
+            <div className="flex items-center">
+              <AlertCircle className="h-4 w-4 text-blue-500 mr-2" />
+              <h5 className="text-sm font-medium text-blue-700">Airtable Source</h5>
+            </div>
+            <p className="text-sm text-blue-600 mt-1">
               This article was imported from Airtable. Updates may be synchronized with Airtable during the next sync operation.
-            </AlertDescription>
-          </Alert>
+            </p>
+          </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
