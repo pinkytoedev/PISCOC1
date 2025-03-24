@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2, Info } from "lucide-react";
+import { Edit, Eye, Trash2, Info, RefreshCw, Loader2 } from "lucide-react";
 import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
 import { 
   DropdownMenu,
@@ -440,6 +440,30 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      {article.source === 'airtable' && article.externalId && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => updateAirtableMutation.mutate(article.id)}
+                                className="text-blue-600 hover:text-blue-800"
+                                disabled={updateAirtableMutation.isPending}
+                              >
+                                {updateAirtableMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Update in Airtable</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"
