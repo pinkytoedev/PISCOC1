@@ -24,12 +24,13 @@ import { Badge } from "@/components/ui/badge";
 
 interface ArticleTableProps {
   filter?: string;
+  sort?: string;
   onEdit?: (article: Article) => void;
   onView?: (article: Article) => void;
   onDelete?: (article: Article) => void;
 }
 
-export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableProps) {
+export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: ArticleTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -67,6 +68,7 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
     }
   };
   
+  // Filter articles first
   const filteredArticles = articles?.filter(article => {
     // Filter by search query
     if (searchQuery && !article.title.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -80,6 +82,36 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
     
     return true;
   });
+  
+  // Then sort articles based on sort parameter
+  const sortedArticles = filteredArticles ? [...filteredArticles].sort((a, b) => {
+    if (!sort || sort === 'newest') {
+      // Sort by newest first (created/updated date)
+      return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+    } else if (sort === 'oldest') {
+      // Sort by oldest first
+      return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
+    } else if (sort === 'chronological') {
+      // Sort by the article date field (if available)
+      // This is specifically for Airtable articles that have a Date field
+      const dateA = a.date ? new Date(a.date).getTime() : 0;
+      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      
+      // If both have dates, sort by those dates
+      if (dateA && dateB) {
+        return dateB - dateA; // Most recent dates first
+      }
+      
+      // If only one has a date, prioritize the one with a date
+      if (dateA && !dateB) return -1;
+      if (!dateA && dateB) return 1;
+      
+      // If neither has a date, fall back to createdAt
+      return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+    }
+    
+    return 0;
+  }) : [];
   
   // Function to truncate text with ellipsis
   const truncateText = (text: string, maxLength: number) => {
