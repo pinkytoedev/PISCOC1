@@ -290,6 +290,50 @@ export function setupAirtableRoutes(app: Express) {
     }
   });
 
+  // Update Airtable API key from environment variable
+  app.post("/api/airtable/update-api-key", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Check for API key in environment
+      const apiKey = process.env.AIRTABLE_API_KEY;
+      
+      if (!apiKey) {
+        return res.status(400).json({ message: "AIRTABLE_API_KEY environment variable not set" });
+      }
+      
+      // Get the current API key setting
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      
+      if (apiKeySetting) {
+        // Update existing setting
+        await storage.updateIntegrationSetting(apiKeySetting.id, {
+          value: apiKey,
+          enabled: true
+        });
+        
+        console.log("Updated Airtable API key from environment variable");
+      } else {
+        // Create new setting if it doesn't exist
+        await storage.createIntegrationSetting({
+          service: "airtable",
+          key: "api_key",
+          value: apiKey,
+          enabled: true
+        });
+        
+        console.log("Created Airtable API key from environment variable");
+      }
+      
+      return res.json({ message: "Airtable API key updated successfully", success: true });
+    } catch (error) {
+      console.error("Error updating Airtable API key:", error);
+      return res.status(500).json({ message: "Error updating Airtable API key", success: false });
+    }
+  });
+
   // Sync articles from Airtable
   app.post("/api/airtable/sync/articles", async (req, res) => {
     try {
