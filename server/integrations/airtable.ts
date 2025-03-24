@@ -128,13 +128,18 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     Body: article.content,
     Description: article.description || "",
     Featured: article.featured === "yes",
-    Finished: article.status === "published",
+    Finished: article.finished || article.status === "published", // Use either finished field or derive from status
     Hashtags: article.hashtags || ""
   };
   
-  // Handle date mapping - Date field is the source of truth for Airtable
-  if (article.publishedAt) {
-    airtableData.Date = new Date(article.publishedAt).toISOString();
+  // Handle date mapping - Use the specific date field if available, fallback to publishedAt
+  // Airtable expects date in ISO format
+  if (article.date) {
+    // If we have a direct date field, use it (this is the preferred field)
+    airtableData.Date = article.date;
+  } else if (article.publishedAt) {
+    // Fall back to publishedAt if date not available
+    airtableData.Date = new Date(article.publishedAt).toISOString().split('T')[0];
   }
   
   // Add author reference if we found one
@@ -382,6 +387,8 @@ export function setupAirtableRoutes(app: Express) {
             imagePath: null,
             featured: fields.Featured ? "yes" : "no",
             publishedAt: fields.Date ? new Date(fields.Date) : null,
+            date: fields.Date || "", // Store the raw date string from Airtable
+            finished: !!fields.Finished, // Store the finished state directly
             author: authorName,
             photo: photoName,
             photoCredit: null, // Not available in new schema
@@ -795,12 +802,20 @@ export function setupAirtableRoutes(app: Express) {
         Body: article.content,
         // Convert featured from "yes"/"no" to boolean
         Featured: article.featured === "yes" ? true : false,
-        // Convert status to Finished field
-        Finished: article.status === "published" ? true : false
+        // Use the dedicated finished field or fall back to status
+        Finished: article.finished !== undefined ? article.finished : (article.status === "published")
       };
       
-      // Add optional fields if they exist
-      if (article.publishedAt) fields.Date = article.publishedAt.toISOString();
+      // Date handling: prioritize the date field from Airtable
+      if (article.date) {
+        // Use the direct date field if available (preferred)
+        fields.Date = article.date;
+      } else if (article.publishedAt) {
+        // Fall back to publishedAt if date not available
+        fields.Date = new Date(article.publishedAt).toISOString().split('T')[0];
+      }
+      
+      // Add hashtags if they exist
       if (article.hashtags) fields.Hashtags = article.hashtags;
       
       // Handle author relationship
