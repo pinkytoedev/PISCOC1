@@ -105,12 +105,21 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Set publication date if publishing
-    if (formData.status === "published" && !formData.publishedAt) {
-      formData.publishedAt = new Date();
+    // Create a copy of the form data to modify
+    const submissionData = { ...formData };
+    
+    // If we're editing an Airtable article, preserve the original date format
+    // by using the Date field from Airtable instead of publishedAt
+    if (isFromAirtable) {
+      console.log("Preserving Airtable date format for article from Airtable source");
+      // No need to modify, as we're keeping the original format
+    } 
+    // For new articles or non-Airtable articles being published
+    else if (submissionData.status === "published" && !submissionData.publishedAt) {
+      submissionData.publishedAt = new Date();
     }
     
-    createArticleMutation.mutate(formData as InsertArticle);
+    createArticleMutation.mutate(submissionData as InsertArticle);
   };
 
   return (

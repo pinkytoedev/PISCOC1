@@ -1,6 +1,6 @@
 import { Express } from "express";
 import { storage } from "../storage";
-import { InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
+import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
 
 // Type definitions for Airtable responses
 interface AirtableRecord<T> {
@@ -108,6 +108,41 @@ async function airtableRequest(
   }
   
   return response.json();
+}
+
+// Helper function to convert an Article to Airtable format
+async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticle>> {
+  // Get the team member for author reference (if applicable)
+  let authorRecord = null;
+  if (article.author && article.author !== "Anonymous") {
+    const teamMembers = await storage.getTeamMembers();
+    const authorMember = teamMembers.find(m => m.name === article.author);
+    if (authorMember && authorMember.externalId) {
+      authorRecord = [authorMember.externalId];
+    }
+  }
+  
+  // Convert to Airtable format
+  const airtableData: Partial<AirtableArticle> = {
+    Name: article.title,
+    Body: article.content,
+    Description: article.description || "",
+    Featured: article.featured === "yes",
+    Finished: article.status === "published",
+    Hashtags: article.hashtags || ""
+  };
+  
+  // Handle date mapping - Date field is the source of truth for Airtable
+  if (article.publishedAt) {
+    airtableData.Date = new Date(article.publishedAt).toISOString();
+  }
+  
+  // Add author reference if we found one
+  if (authorRecord) {
+    airtableData.Author = authorRecord;
+  }
+  
+  return airtableData;
 }
 
 export function setupAirtableRoutes(app: Express) {
@@ -437,6 +472,80 @@ export function setupAirtableRoutes(app: Express) {
     } catch (error) {
       console.error("Airtable sync error:", error);
       res.status(500).json({ message: "Failed to sync team members from Airtable" });
+    }
+  });
+
+  // Update an article in Airtable
+  app.post("/api/airtable/update/article/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const articleId = parseInt(req.params.id);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ message: "Invalid article ID" });
+      }
+      
+      // Get the article from the database
+      const article = await storage.getArticle(articleId);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      
+      // Check if this is an Airtable article
+      if (article.source !== "airtable" || !article.externalId) {
+        return res.status(400).json({ message: "This article is not from Airtable" });
+      }
+      
+      // Get Airtable settings
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+      
+      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+        return res.status(400).json({ message: "Airtable settings are not fully configured" });
+      }
+      
+      if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+        return res.status(400).json({ message: "Some Airtable settings are disabled" });
+      }
+      
+      const apiKey = apiKeySetting.value;
+      const baseId = baseIdSetting.value;
+      const tableName = tableNameSetting.value;
+      
+      // Convert article data to Airtable format
+      const airtableData = await convertToAirtableFormat(article);
+      
+      // Update the record in Airtable
+      const response = await airtableRequest(
+        apiKey,
+        baseId,
+        `${tableName}/${article.externalId}`,
+        "PATCH",
+        { fields: airtableData }
+      );
+      
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "update",
+        resourceType: "article",
+        resourceId: articleId.toString(),
+        details: { 
+          source: "airtable",
+          externalId: article.externalId
+        }
+      });
+      
+      res.json({
+        message: "Article updated in Airtable",
+        article: response
+      });
+    } catch (error) {
+      console.error("Airtable update error:", error);
+      res.status(500).json({ message: "Failed to update article in Airtable" });
     }
   });
 

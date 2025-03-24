@@ -58,6 +58,31 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     },
   });
   
+  // Add mutation for updating article in Airtable directly
+  const updateAirtableMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      const response = await apiRequest(
+        "POST", 
+        `/api/airtable/update/article/${articleId}`
+      );
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({
+        title: "Airtable updated",
+        description: "The article was successfully updated in Airtable.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Airtable update failed",
+        description: error.message || "Failed to update article in Airtable.",
+        variant: "destructive",
+      });
+    },
+  });
+  
   const handleDelete = (article: Article) => {
     if (onDelete) {
       onDelete(article);
