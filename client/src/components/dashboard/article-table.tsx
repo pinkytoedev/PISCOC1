@@ -98,7 +98,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
-        return dateA - dateB; // Chronological order (oldest Date field first)
+        return dateB - dateA; // Most recent dates first
       }
       
       // If only one has a date, prioritize the one with a date
@@ -106,7 +106,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       if (!dateA && dateB) return 1;
       
       // If neither has a date, fall back to createdAt
-      return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
+      return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
     }
     
     return 0;
