@@ -48,6 +48,8 @@ export const articles = pgTable("articles", {
   imagePath: text("image_path"),
   featured: text("featured").notNull().default("no"),
   publishedAt: timestamp("published_at"),
+  date: text("date"), // Airtable Date field (stored as string)
+  finished: boolean("finished").default(false), // Maps to Airtable's Finished checkbox
   author: text("author").notNull(),
   photo: text("photo"),
   photoCredit: text("photo_credit"),
@@ -167,7 +169,9 @@ export const articleSchema = z.object({
   imageType: z.enum(["url", "file"]),
   imagePath: z.string().nullable(),
   featured: z.string(),
-  publishedAt: z.date(),
+  publishedAt: z.date().optional(),
+  date: z.string().optional(), // Airtable Date field
+  finished: z.boolean().optional(), // Airtable Finished field
   author: z.string(),
   photo: z.string(),
   photoCredit: z.string().optional(),
