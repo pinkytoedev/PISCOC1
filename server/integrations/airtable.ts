@@ -545,7 +545,30 @@ export function setupAirtableRoutes(app: Express) {
       });
     } catch (error) {
       console.error("Airtable update error:", error);
-      res.status(500).json({ message: "Failed to update article in Airtable" });
+      
+      let errorMessage = "Failed to update article in Airtable";
+      let statusCode = 500;
+      
+      // Check for specific error types to provide better error messages
+      if (error instanceof Error) {
+        const errorText = error.message;
+        
+        if (errorText.includes("403")) {
+          errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
+          statusCode = 403;
+        } else if (errorText.includes("404")) {
+          errorMessage = "Record not found in Airtable. The record may have been deleted or the table structure changed.";
+          statusCode = 404;
+        } else if (errorText.includes("422")) {
+          errorMessage = "Invalid data format for Airtable. Please check the field mappings.";
+          statusCode = 422;
+        }
+      }
+      
+      res.status(statusCode).json({ 
+        message: errorMessage,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
