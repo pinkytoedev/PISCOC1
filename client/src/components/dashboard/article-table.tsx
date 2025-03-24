@@ -1,18 +1,26 @@
 import { useState } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2 } from "lucide-react";
+import { Edit, Eye, Trash2, Info } from "lucide-react";
 import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
 import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Badge } from "@/components/ui/badge";
 
 interface ArticleTableProps {
   filter?: string;
@@ -73,7 +81,24 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
     return true;
   });
   
-  const getSourceIcon = (source: string) => {
+  // Function to truncate text with ellipsis
+  const truncateText = (text: string, maxLength: number) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    return text.slice(0, maxLength) + '...';
+  };
+  
+  // Function to format tags nicely
+  const formatTags = (hashtags: string | null) => {
+    if (!hashtags) return [];
+    return hashtags.split(' ')
+      .filter(tag => tag.trim() !== '')
+      .map(tag => tag.startsWith('#') ? tag : `#${tag}`);
+  };
+  
+  const getSourceIcon = (source: string | null) => {
+    if (!source) return null;
+    
     if (source.includes('discord')) {
       return <SiDiscord className="text-[#5865F2] mr-1" />;
     } else if (source.includes('airtable')) {
@@ -83,6 +108,111 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
     } else {
       return null;
     }
+  };
+  
+  const getArticleDetails = (article: Article) => {
+    if (article.source === 'airtable') {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="ml-1">
+              <Info className="h-4 w-4 text-gray-400" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-96 max-w-[95vw]">
+            <div className="px-2 py-1.5 text-sm font-semibold">Airtable Details</div>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-sm space-y-2 max-h-[60vh] overflow-y-auto">
+              {/* Core Details */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">External ID:</div>
+                <div className="col-span-2 font-mono text-xs bg-gray-100 p-1 rounded break-all">
+                  {article.externalId || 'N/A'}
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">Format:</div>
+                <div className="col-span-2">{article.contentFormat || 'N/A'}</div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">Featured:</div>
+                <div className="col-span-2">{article.featured === 'yes' ? 'Yes' : 'No'}</div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">Status:</div>
+                <div className="col-span-2">
+                  <StatusBadge status={article.status || 'draft'} />
+                </div>
+              </div>
+              
+              {/* Publication Details */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">Published:</div>
+                <div className="col-span-2">
+                  {article.publishedAt 
+                    ? new Date(article.publishedAt).toLocaleString() 
+                    : 'Not published'}
+                </div>
+              </div>
+              
+              {/* Meta Details */}
+              {article.author && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-1 text-muted-foreground">Author:</div>
+                  <div className="col-span-2 truncate">{article.author}</div>
+                </div>
+              )}
+              
+              {article.photo && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-1 text-muted-foreground">Photo:</div>
+                  <div className="col-span-2 truncate">{article.photo}</div>
+                </div>
+              )}
+              
+              {/* Hashtags */}
+              {article.hashtags && (
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-1 text-muted-foreground">Tags:</div>
+                  <div className="col-span-2 flex flex-wrap gap-1">
+                    {formatTags(article.hashtags).map((tag, index) => (
+                      <Badge key={index} variant="outline" className="text-xs py-0">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Content Preview */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">Description:</div>
+                <div className="col-span-2 text-xs line-clamp-2">{article.description || 'N/A'}</div>
+              </div>
+              
+              <div className="mt-2 border-t pt-2">
+                <div className="text-xs text-gray-500 mb-1">Content Preview:</div>
+                <div className="text-xs bg-gray-50 p-2 rounded-md max-h-[100px] overflow-y-auto">
+                  {article.content ? (
+                    article.contentFormat === 'html' ? (
+                      <div className="prose prose-sm max-w-none">
+                        {truncateText(article.content.replace(/<[^>]*>/g, ' '), 300)}
+                      </div>
+                    ) : (
+                      truncateText(article.content, 300)
+                    )
+                  ) : 'No content available'}
+                </div>
+              </div>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+    return null;
   };
   
   return (
@@ -139,9 +269,9 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
               </tr>
             ) : filteredArticles && filteredArticles.length > 0 ? (
               filteredArticles.map((article) => (
-                <tr key={article.id}>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
+                <tr key={article.id} className={article.source === 'airtable' ? 'bg-blue-50/30' : ''}>
+                  <td className="px-6 py-4">
+                    <div className="flex items-start">
                       <div className="h-10 w-10 flex-shrink-0">
                         {article.imageUrl ? (
                           <img className="h-10 w-10 rounded object-cover" src={article.imageUrl} alt="" />
@@ -153,20 +283,73 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
                           </div>
                         )}
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{article.title}</div>
+                      <div className="ml-4 max-w-xs">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="text-sm font-medium text-gray-900 truncate max-w-[200px]">
+                                {truncateText(article.title, 35)}
+                              </div>
+                            </TooltipTrigger>
+                            {article.title.length > 35 && (
+                              <TooltipContent>
+                                <p className="max-w-xs">{article.title}</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                        
+                        {article.description && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="text-xs text-gray-500 truncate max-w-[200px] mt-1">
+                                  {truncateText(article.description, 40)}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="max-w-sm">{article.description}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                        
                         {article.hashtags && (
-                          <div className="text-sm text-gray-500">
-                            {article.hashtags.split(' ').map((tag, index) => (
-                              <span key={index} className="mr-2">{tag}</span>
+                          <div className="text-xs text-gray-500 mt-1 flex flex-wrap">
+                            {formatTags(article.hashtags).slice(0, 3).map((tag, index) => (
+                              <Badge key={index} variant="outline" className="mr-1 mb-1 text-xs py-0">
+                                {tag}
+                              </Badge>
                             ))}
+                            {formatTags(article.hashtags).length > 3 && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge variant="outline" className="mr-1 mb-1 text-xs py-0">
+                                      +{formatTags(article.hashtags).length - 3}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <div className="flex flex-wrap gap-1 max-w-xs">
+                                      {formatTags(article.hashtags).slice(3).map((tag, index) => (
+                                        <Badge key={index} variant="outline" className="text-xs py-0">
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{article.author}</div>
+                    <div className="text-sm text-gray-900 truncate max-w-[120px]" title={article.author}>
+                      {article.author}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <StatusBadge status={article.status || 'draft'} />
@@ -175,10 +358,13 @@ export function ArticleTable({ filter, onEdit, onView, onDelete }: ArticleTableP
                     {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : '--'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span className="flex items-center">
-                      {getSourceIcon(article.source)}
-                      {article.source.charAt(0).toUpperCase() + article.source.slice(1)}
-                    </span>
+                    <div className="flex items-center">
+                      <span className="flex items-center">
+                        {getSourceIcon(article.source)}
+                        {article.source ? article.source.charAt(0).toUpperCase() + article.source.slice(1) : 'Unknown'}
+                      </span>
+                      {getArticleDetails(article)}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { InsertArticle, TeamMember } from "@shared/schema";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface CreateArticleModalProps {
   isOpen: boolean;
@@ -20,25 +22,36 @@ interface CreateArticleModalProps {
 export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArticleModalProps) {
   const { toast } = useToast();
   const isEditing = !!editArticle;
+  const isFromAirtable = editArticle?.source === 'airtable';
+  
+  // Default values for new article
+  const defaultForm: Partial<InsertArticle> = {
+    title: "",
+    description: "",
+    excerpt: null, // Changed to null as it's not used in Airtable
+    content: "",
+    contentFormat: "html", // Default to HTML as that's what Airtable uses
+    imageUrl: "",
+    imageType: "url",
+    imagePath: null,
+    featured: "no",
+    author: "",
+    photo: "",
+    photoCredit: null, // Changed to null as it's not used in Airtable schema
+    status: "draft",
+    hashtags: "",
+  };
   
   const [formData, setFormData] = useState<Partial<InsertArticle>>(
-    editArticle || {
-      title: "",
-      description: "",
-      excerpt: "",
-      content: "",
-      contentFormat: "markdown",
-      imageUrl: "",
-      imageType: "url",
-      imagePath: null,
-      featured: "no",
-      author: "",
-      photo: "",
-      photoCredit: "",
-      status: "draft",
-      hashtags: "",
-    }
+    editArticle || defaultForm
   );
+  
+  // Reset form when modal opens/closes or article changes
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(editArticle || defaultForm);
+    }
+  }, [isOpen, editArticle]);
 
   const { data: teamMembers, isLoading: isLoadingTeamMembers } = useQuery<TeamMember[]>({
     queryKey: ['/api/team-members'],
@@ -80,6 +93,14 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+  
+  const handleCheckboxChange = (name: string, checked: boolean) => {
+    if (name === "featured") {
+      setFormData((prev) => ({ ...prev, [name]: checked ? "yes" : "no" }));
+    } else if (name === "status") {
+      setFormData((prev) => ({ ...prev, [name]: checked ? "published" : "draft" }));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +122,16 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             Fill in the details below to {isEditing ? "update the" : "create a new"} article. You can {isEditing ? "change" : "edit"} content after creation.
           </DialogDescription>
         </DialogHeader>
+
+        {isFromAirtable && (
+          <Alert variant="info" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Airtable Source</AlertTitle>
+            <AlertDescription>
+              This article was imported from Airtable. Updates may be synchronized with Airtable during the next sync operation.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -134,7 +165,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <Textarea
                 id="excerpt"
                 name="excerpt"
-                value={formData.excerpt}
+                value={formData.excerpt || ''}
                 onChange={handleInputChange}
                 placeholder="Short excerpt or summary"
                 rows={2}
@@ -222,7 +253,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <Input
                 id="photoCredit"
                 name="photoCredit"
-                value={formData.photoCredit}
+                value={formData.photoCredit || ''}
                 onChange={handleInputChange}
                 placeholder="Credit for the photo"
               />
@@ -233,7 +264,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <Input
                 id="hashtags"
                 name="hashtags"
-                value={formData.hashtags}
+                value={formData.hashtags || ''}
                 onChange={handleInputChange}
                 placeholder="#development #tutorial"
               />
