@@ -92,9 +92,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       // Sort by oldest first
       return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
     } else if (sort === 'chronological') {
-      // Sort by the article Date field from Airtable
-      const dateA = a.date ? new Date(a.date).getTime() : 0;
-      const dateB = b.date ? new Date(b.date).getTime() : 0;
+      // Sort by the article Date field from Airtable (stored in publishedAt)
+      const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+      const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
@@ -386,7 +386,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                     <StatusBadge status={article.status || 'draft'} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {article.date ? new Date(article.date).toLocaleDateString() : '--'}
+                    {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : '--'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">

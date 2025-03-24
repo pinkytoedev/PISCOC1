@@ -154,25 +154,14 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <Textarea
                 id="description"
                 name="description"
-                value={formData.description}
+                value={formData.description || ''}
                 onChange={handleInputChange}
                 placeholder="Brief description for article listing and previews"
                 rows={2}
-                required
               />
             </div>
 
-            <div className="col-span-2">
-              <Label htmlFor="excerpt">Excerpt</Label>
-              <Textarea
-                id="excerpt"
-                name="excerpt"
-                value={formData.excerpt || ''}
-                onChange={handleInputChange}
-                placeholder="Short excerpt or summary"
-                rows={1}
-              />
-            </div>
+
 
             <div>
               <Label htmlFor="author">Author</Label>
