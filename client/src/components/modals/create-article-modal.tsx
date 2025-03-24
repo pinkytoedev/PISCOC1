@@ -122,30 +122,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     createArticleMutation.mutate(submissionData as InsertArticle);
   };
 
-  // Add mutation for updating article in Airtable directly
-  const updateAirtableMutation = useMutation({
-    mutationFn: async (articleId: number) => {
-      const response = await apiRequest(
-        "POST", 
-        `/api/airtable/update/article/${articleId}`
-      );
-      return await response.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
-      toast({
-        title: "Airtable updated",
-        description: "The article was successfully updated in Airtable.",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Airtable update failed",
-        description: error.message || "Failed to update article in Airtable.",
-        variant: "destructive",
-      });
-    },
-  });
+  // We've removed the updateAirtableMutation from here to prevent redundancy
+  // Now the Airtable updates are only handled from the article table list view
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -164,34 +142,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <h5 className="text-sm font-medium text-blue-700">Airtable Source</h5>
             </div>
             <p className="text-sm text-blue-600 mt-1">
-              This article was imported from Airtable. Your changes will update the local copy, 
-              but you need to manually sync back to Airtable.
+              This article was imported from Airtable. Your changes will update the local copy.
+              To push changes back to Airtable, use the "Update in Airtable" button in the article list after saving.
             </p>
-            <div className="flex items-center gap-2 mt-3">
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm" 
-                onClick={() => updateAirtableMutation.mutate(editArticle.id)}
-                disabled={updateAirtableMutation.isPending}
-                className="h-8 bg-white"
-              >
-                {updateAirtableMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Update in Airtable
-                  </>
-                )}
-              </Button>
-              <span className="text-xs text-blue-600 ml-2">
-                External ID: <code className="px-1 py-0.5 bg-white rounded text-xs font-mono">{editArticle.externalId}</code>
-              </span>
-            </div>
+            <span className="text-xs text-blue-600 mt-3 block">
+              <span className="font-semibold">Airtable ID:</span> <code className="px-1 py-0.5 bg-white rounded text-xs font-mono">{editArticle.externalId}</code>
+            </span>
           </div>
         )}
 
