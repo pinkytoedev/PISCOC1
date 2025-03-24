@@ -146,6 +146,88 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
 }
 
 export function setupAirtableRoutes(app: Express) {
+  // Test Airtable API connection
+  app.get("/api/airtable/test-connection", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Get Airtable settings
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      
+      if (!apiKeySetting?.value || !baseIdSetting?.value) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Airtable settings are not fully configured",
+          missing: [
+            !apiKeySetting?.value ? "API Key" : null,
+            !baseIdSetting?.value ? "Base ID" : null
+          ].filter(Boolean)
+        });
+      }
+      
+      // Test the connection by fetching base metadata
+      try {
+        const url = `https://api.airtable.com/v0/meta/bases/${baseIdSetting.value}`;
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${apiKeySetting.value}`,
+            "Content-Type": "application/json"
+          }
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          
+          if (response.status === 403) {
+            return res.status(403).json({
+              success: false,
+              message: "Authentication failed with Airtable. Please check your API key and permissions.",
+              error: errorText
+            });
+          } else if (response.status === 404) {
+            return res.status(404).json({
+              success: false,
+              message: "Base not found in Airtable. Please check your Base ID.",
+              error: errorText
+            });
+          }
+          
+          throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
+        }
+        
+        const baseData = await response.json();
+        
+        // Return success with some base data
+        return res.json({
+          success: true,
+          message: "Successfully connected to Airtable",
+          base: {
+            id: baseData.id,
+            name: baseData.name,
+            permissionLevel: baseData.permissionLevel
+          }
+        });
+      } catch (error) {
+        console.error("Airtable connection test error:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to connect to Airtable API",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    } catch (error) {
+      console.error("Airtable connection test error:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to test Airtable connection" 
+      });
+    }
+  });
+  
   // Get Airtable integration settings
   app.get("/api/airtable/settings", async (req, res) => {
     try {
