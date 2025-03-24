@@ -51,7 +51,17 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   // Reset form when modal opens/closes or article changes
   useEffect(() => {
     if (isOpen) {
-      setFormData(editArticle || defaultForm);
+      let formDataToUse = editArticle ? { ...editArticle } : defaultForm;
+      
+      // Convert publishedAt to a Date object if it exists and is a string
+      if (formDataToUse.publishedAt && typeof formDataToUse.publishedAt === 'string') {
+        formDataToUse = {
+          ...formDataToUse,
+          publishedAt: new Date(formDataToUse.publishedAt)
+        };
+      }
+      
+      setFormData(formDataToUse);
     }
   }, [isOpen, editArticle]);
 
@@ -110,20 +120,32 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     // Create a copy of the form data to modify
     const submissionData = { ...formData };
     
-    // Ensure publishedAt is a Date object if it exists
+    // Handle publishedAt field for validation
+    // Always ensure publishedAt is a proper Date object or null
     if (submissionData.publishedAt) {
+      // If publishedAt is a string (from JSON or form input), convert it to a Date
       if (typeof submissionData.publishedAt === 'string') {
-        submissionData.publishedAt = new Date(submissionData.publishedAt);
+        try {
+          submissionData.publishedAt = new Date(submissionData.publishedAt);
+          // Check for invalid date
+          if (isNaN(submissionData.publishedAt.getTime())) {
+            // If date is invalid, set it to current date
+            submissionData.publishedAt = new Date();
+          }
+        } catch (error) {
+          // If date parsing fails completely, set to current date
+          submissionData.publishedAt = new Date();
+        }
       }
     } 
-    // For new articles being published
+    // For articles being published without a date, set to current date
     else if (submissionData.status === "published") {
       submissionData.publishedAt = new Date();
     }
     
-    // Set the Airtable date field if publishedAt exists
-    if (submissionData.publishedAt) {
-      submissionData.date = new Date(submissionData.publishedAt).toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Always set the Airtable date field from publishedAt if it exists
+    if (submissionData.publishedAt instanceof Date) {
+      submissionData.date = submissionData.publishedAt.toISOString().split('T')[0]; // YYYY-MM-DD format
     }
     
     // Set the finished field based on status
