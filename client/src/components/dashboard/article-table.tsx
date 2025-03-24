@@ -348,18 +348,12 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         </div>
                         
                         {article.description && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="text-xs text-gray-500 truncate max-w-[200px] mt-1">
-                                  {truncateText(article.description, 40)}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p className="max-w-sm">{article.description}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <div 
+                            className="text-xs text-gray-500 truncate max-w-[200px] mt-1"
+                            title={article.description.length > 40 ? article.description : undefined}
+                          >
+                            {truncateText(article.description, 40)}
+                          </div>
                         )}
                         
                         {article.hashtags && (
