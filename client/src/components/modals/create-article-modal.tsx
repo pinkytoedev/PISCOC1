@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { InsertArticle, TeamMember } from "@shared/schema";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -122,6 +122,31 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     createArticleMutation.mutate(submissionData as InsertArticle);
   };
 
+  // Add mutation for updating article in Airtable directly
+  const updateAirtableMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      const response = await apiRequest(
+        "POST", 
+        `/api/airtable/update/article/${articleId}`
+      );
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({
+        title: "Airtable updated",
+        description: "The article was successfully updated in Airtable.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Airtable update failed",
+        description: error.message || "Failed to update article in Airtable.",
+        variant: "destructive",
+      });
+    },
+  });
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -139,8 +164,34 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <h5 className="text-sm font-medium text-blue-700">Airtable Source</h5>
             </div>
             <p className="text-sm text-blue-600 mt-1">
-              This article was imported from Airtable. Updates may be synchronized with Airtable during the next sync operation.
+              This article was imported from Airtable. Your changes will update the local copy, 
+              but you need to manually sync back to Airtable.
             </p>
+            <div className="flex items-center gap-2 mt-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={() => updateAirtableMutation.mutate(editArticle.id)}
+                disabled={updateAirtableMutation.isPending}
+                className="h-8 bg-white"
+              >
+                {updateAirtableMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Update in Airtable
+                  </>
+                )}
+              </Button>
+              <span className="text-xs text-blue-600 ml-2">
+                External ID: <code className="px-1 py-0.5 bg-white rounded text-xs font-mono">{editArticle.externalId}</code>
+              </span>
+            </div>
           </div>
         )}
 
