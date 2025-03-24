@@ -115,7 +115,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Article" : "Create New Article"}</DialogTitle>
           <DialogDescription>
@@ -135,8 +135,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="col-span-2">
               <Label htmlFor="title">Title</Label>
               <Input
@@ -157,7 +157,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 value={formData.description}
                 onChange={handleInputChange}
                 placeholder="Brief description for article listing and previews"
-                rows={3}
+                rows={2}
                 required
               />
             </div>
@@ -170,7 +170,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 value={formData.excerpt || ''}
                 onChange={handleInputChange}
                 placeholder="Short excerpt or summary"
-                rows={2}
+                rows={1}
               />
             </div>
 
@@ -230,7 +230,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 value={formData.content}
                 onChange={handleInputChange}
                 placeholder="Article content"
-                rows={8}
+                rows={5}
                 className="font-mono"
                 required
               />
