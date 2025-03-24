@@ -40,6 +40,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     photoCredit: null, // Changed to null as it's not used in Airtable schema
     status: "draft",
     hashtags: "",
+    date: "", // Airtable Date field
+    finished: false, // Airtable Finished checkbox
   };
   
   const [formData, setFormData] = useState<Partial<InsertArticle>>(
@@ -119,7 +121,18 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       submissionData.publishedAt = new Date();
     }
     
+    // Set the Airtable date field if publishedAt exists
+    if (submissionData.publishedAt) {
+      submissionData.date = new Date(submissionData.publishedAt).toISOString().split('T')[0]; // YYYY-MM-DD format
+    }
+    
+    // Set the finished field based on status
+    submissionData.finished = submissionData.status === "published";
+    
     console.log("Submitting article with publishedAt:", submissionData.publishedAt);
+    console.log("Airtable date field:", submissionData.date);
+    console.log("Finished status:", submissionData.finished);
+    
     createArticleMutation.mutate(submissionData as InsertArticle);
   };
 
@@ -278,6 +291,21 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               />
               <p className="text-xs text-gray-500 mt-1">
                 Separate hashtags with spaces
+              </p>
+            </div>
+            
+            <div>
+              <Label htmlFor="date">Publication Date</Label>
+              <Input
+                id="date"
+                name="date"
+                type="date"
+                value={formData.date || ''}
+                onChange={handleInputChange}
+                placeholder="YYYY-MM-DD"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Used for Airtable chronological ordering
               </p>
             </div>
 
