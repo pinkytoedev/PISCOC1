@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { InsertArticle, TeamMember } from "@shared/schema";
-import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Upload, Image, Camera } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -23,6 +23,14 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const { toast } = useToast();
   const isEditing = !!editArticle;
   const isFromAirtable = editArticle?.source === 'airtable';
+  
+  // Refs for file inputs
+  const mainImageFileInputRef = useRef<HTMLInputElement>(null);
+  const instagramImageFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State for tracking uploads
+  const [mainImageUploading, setMainImageUploading] = useState(false);
+  const [instagramImageUploading, setInstagramImageUploading] = useState(false);
   
   // Default values for new article
   const defaultForm: Partial<InsertArticle> = {
