@@ -335,6 +335,32 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     // Set the finished field based on status
     submissionData.finished = submissionData.status === "published";
     
+    // If an image file is selected and we're creating/editing an article for Airtable
+    if (imageFile && isFromAirtable) {
+      // Store the file temporarily in localStorage for use when updating to Airtable
+      // We only save the filename and file size as a reference - the actual file object
+      // cannot be stored in localStorage but is kept in memory until page refresh
+      const articleId = isEditing ? editArticle.id : null;
+      
+      // Store a reference to the selected file in sessionStorage
+      // This will be used when clicking "Update in Airtable" button later
+      if (articleId) {
+        try {
+          window.sessionStorage.setItem(`article_image_${articleId}`, JSON.stringify({
+            name: imageFile.name,
+            size: imageFile.size,
+            type: imageFile.type,
+            lastModified: imageFile.lastModified,
+            selected: true,
+            timestamp: new Date().getTime()
+          }));
+          console.log(`Saved image reference for article ID ${articleId} in session storage`);
+        } catch (error) {
+          console.error("Failed to save image reference to session storage:", error);
+        }
+      }
+    }
+    
     console.log("Submitting article with publishedAt:", submissionData.publishedAt);
     console.log("Airtable date field:", submissionData.date);
     console.log("Finished status:", submissionData.finished);
