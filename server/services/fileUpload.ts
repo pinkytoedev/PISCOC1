@@ -60,20 +60,21 @@ export async function uploadImageToAirtable(
     const fileData = fs.readFileSync(filePath);
     const base64Data = fileData.toString('base64');
     
-    // Create the request body - using direct JSON instead of FormData
-    // This follows Airtable's API for updating records with attachments
+    // Create the request body according to Airtable's API documentation
+    // Airtable expects attachments in a specific format
     const requestBody = {
       fields: {
         [fieldName]: [
           {
-            filename: fileName,
-            type: mimeType,
-            content: base64Data
+            url: `data:${mimeType};base64,${base64Data}`,
+            filename: fileName
           }
         ]
       }
     };
 
+    console.log(`Uploading image to Airtable: ${fileName}`);
+    
     // Airtable API for record update
     const url = `https://api.airtable.com/v0/${baseId}/${tableId}/${recordId}`;
     
