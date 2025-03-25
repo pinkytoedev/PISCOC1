@@ -121,8 +121,11 @@ export function setupInstagramRoutes(app: Express) {
       
       const settings = await storage.getIntegrationSettings("instagram");
       res.json(settings);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch Instagram settings" });
+    } catch (error: any) {
+      res.status(500).json({ 
+        message: "Failed to fetch Instagram settings",
+        error: error.message 
+      });
     }
   });
 
@@ -161,8 +164,11 @@ export function setupInstagramRoutes(app: Express) {
         
         return res.status(201).json(newSetting);
       }
-    } catch (error) {
-      res.status(500).json({ message: "Failed to update Instagram settings" });
+    } catch (error: any) {
+      res.status(500).json({ 
+        message: "Failed to update Instagram settings",
+        error: error.message 
+      });
     }
   });
 
@@ -290,7 +296,7 @@ export function setupInstagramRoutes(app: Express) {
       
       // Redirect to the Instagram integration page
       res.redirect("/integrations/instagram?connected=true");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Instagram auth callback error:", error);
       res.status(500).json({ message: "Failed to process Instagram authorization", error: error.message });
     }
@@ -352,7 +358,7 @@ export function setupInstagramRoutes(app: Express) {
               profilePicture: response.profile_picture_url
             }
           });
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error verifying Instagram connection:", error);
           // If we can't connect, consider it disconnected
           return res.json({ connected: false, error: error.message });
@@ -429,9 +435,13 @@ ${article.hashtags || ''}`;
         );
         
         // Update the article with Instagram as source if needed
-        if (!article.source.includes("instagram")) {
+        if (article.source && !article.source.includes("instagram")) {
           await storage.updateArticle(articleId, {
             source: article.source === "manual" ? "instagram" : `${article.source},instagram`
+          });
+        } else if (!article.source) {
+          await storage.updateArticle(articleId, {
+            source: "instagram"
           });
         }
         
@@ -453,7 +463,7 @@ ${article.hashtags || ''}`;
           message: "Article published to Instagram successfully",
           mediaId: publishResponse.id
         });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error publishing to Instagram:", error);
         return res.status(500).json({ 
           message: "Failed to publish to Instagram", 
@@ -503,7 +513,7 @@ ${article.hashtags || ''}`;
         // If we get an API error, return a fallback of articles published to Instagram
         const allArticles = await storage.getArticles();
         const instagramArticles = allArticles.filter(article => 
-          article.source === "instagram" || article.source.includes("instagram")
+          article.source && (article.source === "instagram" || article.source.includes("instagram"))
         );
         
         // Convert to Instagram post format
