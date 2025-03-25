@@ -60,15 +60,18 @@ export async function uploadImageToAirtable(
     const form = new FormData();
     
     // Add metadata about the upload
-    const metadata = {
-      fields: {}
-    };
-    metadata.fields[fieldName] = [
-      {
-        filename: fileName,
-        type: mimeType
+    const metadata: {
+      fields: Record<string, Array<{filename: string, type: string}>>
+    } = {
+      fields: {
+        [fieldName]: [
+          {
+            filename: fileName,
+            type: mimeType
+          }
+        ]
       }
-    ];
+    };
     
     form.append('metadata', JSON.stringify(metadata));
     form.append('attachment', fileData, {
