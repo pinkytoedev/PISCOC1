@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting, Article } from "@shared/schema";
-import { SiInstagram } from "react-icons/si";
+import { SiInstagram, SiFacebook } from "react-icons/si";
 import { 
   CheckCircle, 
   AlertCircle, 
@@ -23,32 +23,110 @@ import {
   Info,
   Loader2,
   Grid,
-  RefreshCw
+  RefreshCw,
+  BarChart,
+  User,
+  Newspaper,
+  Coffee
 } from "lucide-react";
+
+// Interface for Instagram account info
+interface InstagramAccountInfo {
+  id: string;
+  username: string;
+  profilePicture?: string;
+}
+
+// Interface for Instagram connection status
+interface InstagramConnectionStatus {
+  connected: boolean;
+  accountInfo?: InstagramAccountInfo;
+  error?: string;
+}
+
+// Interface for Instagram post
+interface InstagramPost {
+  id: string;
+  caption?: string;
+  media_url?: string;
+  permalink?: string;
+  timestamp: string;
+  media_type: string;
+  username?: string;
+  fallback?: boolean;
+}
+
+// Interface for Instagram insights
+interface InstagramInsights {
+  data: {
+    name: string;
+    period: string;
+    values: Array<{
+      value: number;
+      end_time: string;
+    }>;
+    title: string;
+    description: string;
+    id: string;
+  }[];
+}
 
 export default function InstagramPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("settings");
   
+  // Get settings
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/instagram/settings'],
   });
   
-  const { data: connectionStatus } = useQuery<{ connected: boolean }>({
+  // Helper functions for settings
+  const getSettingValue = (key: string): string => {
+    const setting = settings?.find(s => s.key === key);
+    return setting?.value || "";
+  };
+  
+  const getSettingEnabled = (key: string): boolean => {
+    const setting = settings?.find(s => s.key === key);
+    return setting?.enabled ?? true;
+  };
+  
+  // Check if required settings are configured
+  const hasClientId = !!getSettingValue('client_id');
+  const hasClientSecret = !!getSettingValue('client_secret');
+  const hasRedirectUri = !!getSettingValue('redirect_uri');
+  const isConfigured = hasClientId && hasClientSecret && hasRedirectUri;
+  
+  // Get connection status
+  const { data: connectionStatus, isLoading: isLoadingStatus } = useQuery<InstagramConnectionStatus>({
     queryKey: ['/api/instagram/status'],
     enabled: !isLoading && hasClientId && hasClientSecret,
+    refetchInterval: connectionStatus?.connected ? 300000 : false, // Refresh every 5 minutes if connected
   });
   
-  const { data: recentPosts, isLoading: isLoadingPosts } = useQuery<{ data: any[] }>({
+  // Check connection status
+  const isConnected = connectionStatus?.connected === true;
+  
+  // Get recent posts
+  const { data: recentPostsData, isLoading: isLoadingPosts } = useQuery<{ data: InstagramPost[]; fallback?: boolean; error?: string }>({
     queryKey: ['/api/instagram/recent-posts'],
-    enabled: connectionStatus?.connected === true,
+    enabled: isConnected,
+    refetchInterval: 300000, // Refresh every 5 minutes
   });
   
+  // Get insights
+  const { data: insights, isLoading: isLoadingInsights } = useQuery<InstagramInsights>({
+    queryKey: ['/api/instagram/insights'],
+    enabled: isConnected && activeTab === "insights",
+  });
+  
+  // Get articles for publishing
   const { data: articles } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
     enabled: activeTab === "publish",
   });
   
+  // Settings update mutation
   const updateSettingMutation = useMutation({
     mutationFn: async ({ key, value, enabled }: { key: string; value: string; enabled?: boolean }) => {
       const res = await apiRequest("POST", "/api/instagram/settings", { key, value, enabled });
@@ -61,7 +139,7 @@ export default function InstagramPage() {
         description: "The Instagram integration settings have been updated successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error updating settings",
         description: error.message || "An error occurred. Please try again.",
@@ -70,19 +148,20 @@ export default function InstagramPage() {
     },
   });
   
+  // Publish article mutation
   const publishArticleMutation = useMutation({
     mutationFn: async (articleId: number) => {
       const res = await apiRequest("POST", `/api/instagram/publish/${articleId}`);
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/instagram/recent-posts'] });
       toast({
         title: "Article published",
         description: "The article has been published to Instagram successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       toast({
         title: "Error publishing article",
         description: error.message || "Failed to publish article to Instagram.",
@@ -91,21 +170,13 @@ export default function InstagramPage() {
     },
   });
   
+  // Auth URL query
   const { data: authUrl } = useQuery<{ authUrl: string }>({
     queryKey: ['/api/instagram/auth-url'],
     enabled: activeTab === "auth" && !isLoading && hasClientId && hasClientSecret && hasRedirectUri,
   });
   
-  const getSettingValue = (key: string): string => {
-    const setting = settings?.find(s => s.key === key);
-    return setting?.value || "";
-  };
-  
-  const getSettingEnabled = (key: string): boolean => {
-    const setting = settings?.find(s => s.key === key);
-    return setting?.enabled ?? true;
-  };
-  
+  // Event handlers
   const handleSettingChange = (key: string, value: string) => {
     updateSettingMutation.mutate({ key, value });
   };
@@ -119,19 +190,14 @@ export default function InstagramPage() {
     publishArticleMutation.mutate(articleId);
   };
   
-  // Check if required settings are configured
-  const hasClientId = !!getSettingValue('client_id');
-  const hasClientSecret = !!getSettingValue('client_secret');
-  const hasRedirectUri = !!getSettingValue('redirect_uri');
-  const isConfigured = hasClientId && hasClientSecret && hasRedirectUri;
-  
-  // Check if connected to Instagram
-  const isConnected = connectionStatus?.connected === true;
-  
   // Filter articles that have an image (required for Instagram)
   const publishableArticles = articles?.filter(article => 
     article.imageUrl && article.status === "published"
   ) || [];
+  
+  // Get recent posts
+  const recentPosts = recentPostsData?.data || [];
+  const isUsingFallback = recentPostsData?.fallback === true;
   
   return (
     <div className="flex flex-col min-h-screen">
@@ -168,7 +234,7 @@ export default function InstagramPage() {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">Instagram Integration</h1>
                   <p className="mt-1 text-sm text-gray-500">
-                    Publish content directly to your Instagram account.
+                    Publish content directly to your Instagram professional account.
                   </p>
                 </div>
               </div>
@@ -177,6 +243,11 @@ export default function InstagramPage() {
                   <div className="flex items-center text-green-600">
                     <CheckCircle className="h-5 w-5 mr-1" />
                     <span className="text-sm font-medium">Connected</span>
+                    {connectionStatus?.accountInfo?.username && (
+                      <span className="ml-2 text-xs text-gray-600">
+                        (@{connectionStatus.accountInfo.username})
+                      </span>
+                    )}
                   </div>
                 ) : isConfigured ? (
                   <div className="flex items-center text-amber-600">
@@ -208,29 +279,30 @@ export default function InstagramPage() {
             ) : (
               <div className="space-y-6">
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-3">
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="settings">Settings</TabsTrigger>
                     <TabsTrigger value="auth">Authentication</TabsTrigger>
                     <TabsTrigger value="publish">Publish Content</TabsTrigger>
+                    <TabsTrigger value="insights" disabled={!isConnected}>Insights</TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="settings" className="space-y-6 mt-6">
                     {/* Instagram API Configuration */}
                     <Card>
                       <CardHeader>
-                        <CardTitle>Instagram API Configuration</CardTitle>
+                        <CardTitle>Facebook/Instagram Graph API Configuration</CardTitle>
                         <CardDescription>
-                          Configure your Instagram API credentials to connect to your account.
+                          Configure your Facebook app credentials to connect to your Instagram professional account.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="grid gap-2">
-                          <Label htmlFor="client_id">Client ID</Label>
+                          <Label htmlFor="client_id">App/Client ID</Label>
                           <div className="flex gap-2">
                             <Input
                               id="client_id"
                               type="text"
-                              placeholder="Your Instagram app client ID"
+                              placeholder="Your Facebook app ID"
                               value={getSettingValue('client_id')}
                               onChange={(e) => handleSettingChange('client_id', e.target.value)}
                               className="flex-1"
@@ -246,17 +318,17 @@ export default function InstagramPage() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-500">
-                            You can find your client ID in the Facebook Developer Portal.
+                            You can find your app ID in the Facebook Developer Portal.
                           </p>
                         </div>
                         
                         <div className="grid gap-2">
-                          <Label htmlFor="client_secret">Client Secret</Label>
+                          <Label htmlFor="client_secret">App Secret</Label>
                           <div className="flex gap-2">
                             <Input
                               id="client_secret"
                               type="password"
-                              placeholder="Your Instagram app client secret"
+                              placeholder="Your Facebook app secret"
                               value={getSettingValue('client_secret')}
                               onChange={(e) => handleSettingChange('client_secret', e.target.value)}
                               className="flex-1"
@@ -272,7 +344,7 @@ export default function InstagramPage() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-500">
-                            Keep your client secret secure. Never share it publicly.
+                            Keep your app secret secure. Never share it publicly.
                           </p>
                         </div>
                         
@@ -298,7 +370,7 @@ export default function InstagramPage() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-500">
-                            Must match the redirect URI configured in your Facebook Developer account.
+                            Must match the redirect URI configured in your Facebook app's settings.
                           </p>
                         </div>
                       </CardContent>
@@ -314,7 +386,7 @@ export default function InstagramPage() {
                             >
                               Facebook Developer Portal
                             </a>{" "}
-                            and configure Instagram Basic Display.
+                            and configure Instagram Graph API with proper permissions.
                           </p>
                         </div>
                       </CardFooter>
@@ -323,9 +395,9 @@ export default function InstagramPage() {
                     {/* Instagram API Features */}
                     <Card>
                       <CardHeader>
-                        <CardTitle>API Features</CardTitle>
+                        <CardTitle>Instagram Graph API Features</CardTitle>
                         <CardDescription>
-                          Available features with the Instagram Basic Display API.
+                          Available features with the Instagram Graph API for professional accounts.
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
@@ -334,7 +406,7 @@ export default function InstagramPage() {
                             <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
                             <div>
                               <h3 className="font-medium">User Profiles</h3>
-                              <p className="text-sm text-gray-600">Access public profile information</p>
+                              <p className="text-sm text-gray-600">Access professional account information</p>
                             </div>
                           </div>
                           
@@ -342,26 +414,69 @@ export default function InstagramPage() {
                             <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
                             <div>
                               <h3 className="font-medium">Media Content</h3>
-                              <p className="text-sm text-gray-600">Access photos and videos from a user's account</p>
+                              <p className="text-sm text-gray-600">Access photos and videos from a professional account</p>
                             </div>
                           </div>
                           
-                          <div className="flex items-center p-3 bg-amber-50 rounded-md">
-                            <AlertCircle className="h-5 w-5 text-amber-500 mr-3" />
+                          <div className="flex items-center p-3 bg-green-50 rounded-md">
+                            <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
                             <div>
                               <h3 className="font-medium">Publishing Content</h3>
                               <p className="text-sm text-gray-600">
-                                Publishing requires a Professional account and Facebook Graph API access
+                                Post photos and videos to your connected professional account
                               </p>
                             </div>
                           </div>
                           
-                          <div className="flex items-center p-3 bg-amber-50 rounded-md">
-                            <Lock className="h-5 w-5 text-amber-500 mr-3" />
+                          <div className="flex items-center p-3 bg-green-50 rounded-md">
+                            <CheckCircle className="h-5 w-5 text-green-500 mr-3" />
                             <div>
-                              <h3 className="font-medium">API Rate Limits</h3>
+                              <h3 className="font-medium">Insights & Analytics</h3>
                               <p className="text-sm text-gray-600">
-                                Subject to Instagram's API rate limits per user
+                                View performance metrics for your content and account
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Requirements Section */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Requirements</CardTitle>
+                        <CardDescription>
+                          What you'll need to use Instagram publishing.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-start p-3 bg-blue-50 rounded-md">
+                            <SiFacebook className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Facebook Business Page</h3>
+                              <p className="text-sm text-gray-600">
+                                A Facebook Page is required to connect to Instagram's Graph API for publishing.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-pink-50 rounded-md">
+                            <SiInstagram className="h-5 w-5 text-pink-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Instagram Professional Account</h3>
+                              <p className="text-sm text-gray-600">
+                                You need a Professional account (Business or Creator) connected to your Facebook Page.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-indigo-50 rounded-md">
+                            <Key className="h-5 w-5 text-indigo-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Facebook Developer Account</h3>
+                              <p className="text-sm text-gray-600">
+                                Register as a developer to create apps with the necessary permissions.
                               </p>
                             </div>
                           </div>
@@ -371,174 +486,374 @@ export default function InstagramPage() {
                   </TabsContent>
                   
                   <TabsContent value="auth" className="space-y-6 mt-6">
+                    {/* Instagram Authentication */}
                     <Card>
                       <CardHeader>
                         <CardTitle>Instagram Authentication</CardTitle>
                         <CardDescription>
-                          Connect your Instagram account to enable content publishing.
+                          Connect your Instagram professional account to enable integration features.
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-6">
                         {!isConfigured ? (
-                          <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800">
-                            <div className="flex items-center">
-                              <AlertCircle className="h-5 w-5 mr-2" />
-                              <span className="font-medium">Configuration Required</span>
-                            </div>
-                            <p className="mt-1 text-sm">
-                              Please configure your Instagram Client ID, Client Secret and Redirect URI in the Settings tab before proceeding.
-                            </p>
-                          </div>
-                        ) : isConnected ? (
-                          <div className="bg-green-50 border border-green-200 rounded-md p-4 text-green-800">
-                            <div className="flex items-center">
-                              <CheckCircle className="h-5 w-5 mr-2" />
-                              <span className="font-medium">Connected to Instagram</span>
-                            </div>
-                            <p className="mt-1 text-sm">
-                              Your Instagram account is connected and you can now publish content.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="space-y-6">
-                            <div className="space-y-4">
-                              <h3 className="text-sm font-medium">Authentication Steps</h3>
-                              <div className="space-y-3">
-                                <div className="flex">
-                                  <div className="flex-shrink-0 flex h-6 w-6 rounded-full bg-blue-100 text-blue-600 items-center justify-center mr-3">
-                                    <span className="text-xs font-medium">1</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600">
-                                    Click the "Connect to Instagram" button below to authorize this application.
-                                  </p>
-                                </div>
-                                
-                                <div className="flex">
-                                  <div className="flex-shrink-0 flex h-6 w-6 rounded-full bg-blue-100 text-blue-600 items-center justify-center mr-3">
-                                    <span className="text-xs font-medium">2</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600">
-                                    Log in to your Instagram account if prompted.
-                                  </p>
-                                </div>
-                                
-                                <div className="flex">
-                                  <div className="flex-shrink-0 flex h-6 w-6 rounded-full bg-blue-100 text-blue-600 items-center justify-center mr-3">
-                                    <span className="text-xs font-medium">3</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600">
-                                    Review and grant the requested permissions.
-                                  </p>
-                                </div>
-                                
-                                <div className="flex">
-                                  <div className="flex-shrink-0 flex h-6 w-6 rounded-full bg-blue-100 text-blue-600 items-center justify-center mr-3">
-                                    <span className="text-xs font-medium">4</span>
-                                  </div>
-                                  <p className="text-sm text-gray-600">
-                                    You'll be redirected back to this application after authentication.
-                                  </p>
-                                </div>
+                          <div className="bg-amber-50 border border-amber-100 p-4 rounded-md">
+                            <div className="flex items-start">
+                              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-3" />
+                              <div>
+                                <h3 className="font-medium text-amber-800">Missing Configuration</h3>
+                                <p className="text-sm text-amber-700 mt-1">
+                                  Before you can connect your Instagram account, you need to configure your Facebook app credentials in the Settings tab.
+                                </p>
                               </div>
                             </div>
-                            
-                            <div className="flex justify-center">
-                              {authUrl ? (
-                                <a 
-                                  href={authUrl.authUrl} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500"
-                                >
-                                  <Key className="mr-2 h-4 w-4" />
-                                  Connect to Instagram
-                                  <ArrowUpRight className="ml-1 h-4 w-4" />
-                                </a>
-                              ) : (
-                                <Button disabled>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Loading...
-                                </Button>
-                              )}
+                          </div>
+                        ) : isLoadingStatus ? (
+                          <div className="flex items-center justify-center p-6">
+                            <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                          </div>
+                        ) : isConnected ? (
+                          <div className="flex flex-col items-center p-6 bg-green-50 border border-green-100 rounded-md">
+                            <div className="h-16 w-16 flex items-center justify-center bg-green-100 rounded-full mb-4">
+                              <CheckCircle className="h-8 w-8 text-green-500" />
                             </div>
-                            
-                            <div className="bg-gray-50 p-4 rounded-md">
-                              <h4 className="text-sm font-medium flex items-center">
-                                <Info className="h-4 w-4 mr-2 text-gray-500" />
-                                Required Permissions
-                              </h4>
-                              <ul className="mt-2 space-y-1 text-sm text-gray-600">
-                                <li className="flex items-center">
-                                  <CheckCircle className="h-3 w-3 mr-2 text-green-500" />
-                                  user_profile - Access basic profile information
-                                </li>
-                                <li className="flex items-center">
-                                  <CheckCircle className="h-3 w-3 mr-2 text-green-500" />
-                                  user_media - Access media data
-                                </li>
-                              </ul>
+                            <h3 className="text-lg font-medium text-center">Connected to Instagram</h3>
+                            {connectionStatus?.accountInfo && (
+                              <div className="flex flex-col items-center mt-2 mb-4">
+                                {connectionStatus.accountInfo.profilePicture && (
+                                  <img 
+                                    src={connectionStatus.accountInfo.profilePicture} 
+                                    alt={connectionStatus.accountInfo.username}
+                                    className="h-16 w-16 rounded-full mb-2 border-2 border-white shadow"
+                                  />
+                                )}
+                                <p className="text-sm font-medium text-gray-800">
+                                  @{connectionStatus.accountInfo.username}
+                                </p>
+                                <p className="text-xs text-gray-600">
+                                  Instagram Business Account
+                                </p>
+                              </div>
+                            )}
+                            <Button 
+                              variant="outline" 
+                              onClick={() => {
+                                // Re-authenticate
+                                if (authUrl?.authUrl) {
+                                  window.location.href = authUrl.authUrl;
+                                }
+                              }}
+                            >
+                              Reconnect Account
+                            </Button>
+                          </div>
+                        ) : authUrl ? (
+                          <div className="flex flex-col items-center p-6 bg-blue-50 border border-blue-100 rounded-md">
+                            <div className="h-16 w-16 flex items-center justify-center bg-blue-100 rounded-full mb-4">
+                              <SiInstagram className="h-8 w-8 text-pink-600" />
+                            </div>
+                            <h3 className="text-lg font-medium text-center">Connect to Instagram</h3>
+                            <p className="text-sm text-gray-600 text-center mt-2 mb-4">
+                              You'll be redirected to Facebook to authorize this application and connect your Instagram Professional account.
+                            </p>
+                            <Button 
+                              onClick={() => {
+                                window.location.href = authUrl.authUrl;
+                              }}
+                            >
+                              <SiFacebook className="h-4 w-4 mr-2" />
+                              Connect via Facebook
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center p-6">
+                            <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+                          </div>
+                        )}
+                        
+                        {connectionStatus?.error && (
+                          <div className="bg-red-50 border border-red-100 p-4 rounded-md mt-4">
+                            <div className="flex items-start">
+                              <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-3" />
+                              <div>
+                                <h3 className="font-medium text-red-800">Connection Error</h3>
+                                <p className="text-sm text-red-700 mt-1">
+                                  {connectionStatus.error}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                      <CardFooter className="bg-gray-50 border-t">
+                        <div className="w-full text-sm text-gray-500">
+                          <p>
+                            Connecting your Instagram professional account allows this application to access your content and publish on your behalf. This requires connecting through Facebook first.
+                          </p>
+                        </div>
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* Account Permissions */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Account Permissions</CardTitle>
+                        <CardDescription>
+                          Understand what permissions are granted when connecting your account.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <SiFacebook className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Facebook Page Access</h3>
+                              <p className="text-sm text-gray-600">
+                                Access to manage content on your linked Facebook Page
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <User className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Instagram Profile Data</h3>
+                              <p className="text-sm text-gray-600">
+                                Access to your professional account information
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <Grid className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Media Access</h3>
+                              <p className="text-sm text-gray-600">
+                                Read access to media (photos and videos) on your professional profile
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <ImagePlus className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Content Publishing</h3>
+                              <p className="text-sm text-gray-600">
+                                Ability to publish content to your Instagram professional account
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  
+                  <TabsContent value="publish" className="space-y-6 mt-6">
+                    {/* Content Publishing */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Publish to Instagram</CardTitle>
+                        <CardDescription>
+                          {isConnected 
+                            ? "Select an article to publish to your Instagram professional account." 
+                            : "Connect your Instagram account to enable publishing."}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {!isConnected ? (
+                          <div className="bg-amber-50 border border-amber-100 p-4 rounded-md">
+                            <div className="flex items-start">
+                              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-3" />
+                              <div>
+                                <h3 className="font-medium text-amber-800">Not Connected</h3>
+                                <p className="text-sm text-amber-700 mt-1">
+                                  You need to connect your Instagram professional account before you can publish content. Go to the Authentication tab to connect.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : publishableArticles.length === 0 ? (
+                          <div className="bg-gray-50 border border-gray-100 p-4 rounded-md">
+                            <div className="flex items-start">
+                              <Info className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                              <div>
+                                <h3 className="font-medium text-gray-800">No Publishable Articles</h3>
+                                <p className="text-sm text-gray-700 mt-1">
+                                  There are no published articles with images available to share on Instagram. Instagram requires images for posts.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <p className="text-sm text-gray-500 mb-4">
+                              Select an article to publish to Instagram. Only published articles with images are shown.
+                            </p>
+                            <div className="border rounded-md divide-y">
+                              {publishableArticles.map(article => (
+                                <div key={article.id} className="flex items-center justify-between p-4">
+                                  <div className="flex items-center space-x-4">
+                                    {article.imageUrl && (
+                                      <div className="flex-shrink-0 h-12 w-12 rounded-md overflow-hidden">
+                                        <img src={article.imageUrl} alt={article.title} className="h-full w-full object-cover" />
+                                      </div>
+                                    )}
+                                    <div>
+                                      <h4 className="font-medium text-gray-900">{article.title}</h4>
+                                      <p className="text-sm text-gray-500 truncate max-w-md">
+                                        {article.description || "No description"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handlePublishArticle(article.id)}
+                                    disabled={publishArticleMutation.isPending}
+                                  >
+                                    {publishArticleMutation.isPending ? (
+                                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                    ) : (
+                                      <ArrowUpRight className="h-4 w-4 mr-2" />
+                                    )}
+                                    Publish
+                                  </Button>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
                       </CardContent>
                     </Card>
                     
+                    {/* Publishing Guidelines */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Instagram Publishing Guidelines</CardTitle>
+                        <CardDescription>
+                          Best practices for publishing content to Instagram.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-start p-3 bg-blue-50 rounded-md">
+                            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Image Requirements</h3>
+                              <p className="text-sm text-gray-600">
+                                Images should be high-quality with a minimum resolution of 1080x1080 pixels. Instagram supports various aspect ratios between 4:5 and 1.91:1.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-blue-50 rounded-md">
+                            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Caption Best Practices</h3>
+                              <p className="text-sm text-gray-600">
+                                Keep captions concise and engaging. Include relevant hashtags to increase visibility, but don't overdo it (5-10 is ideal).
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-blue-50 rounded-md">
+                            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Content Policy</h3>
+                              <p className="text-sm text-gray-600">
+                                Ensure your content complies with Instagram's community guidelines and terms of service.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Recent Posts */}
                     {isConnected && (
                       <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center">
-                            <Grid className="h-5 w-5 mr-2" />
-                            Recent Instagram Posts
-                          </CardTitle>
-                          <CardDescription>
-                            Your recently published content on Instagram
-                          </CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                          <div>
+                            <CardTitle>Recent Instagram Posts</CardTitle>
+                            <CardDescription>
+                              View your recent posts on Instagram.
+                            </CardDescription>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/instagram/recent-posts'] })}
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh
+                          </Button>
                         </CardHeader>
                         <CardContent>
                           {isLoadingPosts ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                              {[1, 2, 3].map((i) => (
-                                <div key={i} className="bg-gray-100 aspect-square rounded-md animate-pulse"></div>
-                              ))}
+                            <div className="flex items-center justify-center p-8">
+                              <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
                             </div>
-                          ) : recentPosts && recentPosts.data && recentPosts.data.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                              {recentPosts.data.map((post) => (
-                                <div key={post.id} className="overflow-hidden rounded-md border bg-white">
-                                  <img 
-                                    src={post.media_url} 
-                                    alt="Instagram post" 
-                                    className="aspect-square object-cover w-full"
-                                  />
-                                  <div className="p-3">
-                                    <p className="text-xs text-gray-500 truncate">
-                                      {post.caption || "No caption"}
-                                    </p>
-                                    <a 
-                                      href={post.permalink}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-blue-600 hover:underline mt-1 inline-flex items-center"
-                                    >
-                                      View on Instagram
-                                      <ArrowUpRight className="h-3 w-3 ml-1" />
-                                    </a>
-                                  </div>
+                          ) : recentPosts.length === 0 ? (
+                            <div className="bg-gray-50 border border-gray-100 p-4 rounded-md">
+                              <div className="flex items-start">
+                                <Info className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                                <div>
+                                  <h3 className="font-medium text-gray-800">No Recent Posts</h3>
+                                  <p className="text-sm text-gray-700 mt-1">
+                                    You don't have any recent posts on Instagram, or we couldn't access your posts.
+                                  </p>
                                 </div>
-                              ))}
+                              </div>
                             </div>
                           ) : (
-                            <div className="text-center py-12">
-                              <p className="text-gray-500">No recent posts found</p>
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="mt-4"
-                                onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/instagram/recent-posts'] })}
-                              >
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                              </Button>
+                            <div>
+                              {isUsingFallback && (
+                                <div className="bg-amber-50 border border-amber-100 p-3 rounded-md mb-4">
+                                  <div className="flex items-start">
+                                    <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-2" />
+                                    <div>
+                                      <p className="text-sm text-amber-700">
+                                        {recentPostsData?.error 
+                                          ? `API Error: ${recentPostsData.error}` 
+                                          : "Unable to fetch real posts from Instagram. Showing local data instead."}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                {recentPosts.map(post => (
+                                  <div key={post.id} className="border rounded-md overflow-hidden">
+                                    {post.media_url && (
+                                      <div className="h-48 overflow-hidden">
+                                        <img 
+                                          src={post.media_url} 
+                                          alt={post.caption || "Instagram post"} 
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="p-3">
+                                      <p className="text-sm text-gray-700 line-clamp-2">
+                                        {post.caption || "No caption"}
+                                      </p>
+                                      <div className="flex justify-between items-center mt-2">
+                                        <span className="text-xs text-gray-500">
+                                          {new Date(post.timestamp).toLocaleDateString()}
+                                        </span>
+                                        {post.permalink && (
+                                          <a
+                                            href={post.permalink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-blue-600 hover:underline flex items-center"
+                                          >
+                                            View <ArrowUpRight className="h-3 w-3 ml-1" />
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
                         </CardContent>
@@ -546,95 +861,145 @@ export default function InstagramPage() {
                     )}
                   </TabsContent>
                   
-                  <TabsContent value="publish" className="space-y-6 mt-6">
+                  <TabsContent value="insights" className="space-y-6 mt-6">
+                    {/* Insights & Analytics */}
                     <Card>
                       <CardHeader>
-                        <CardTitle>Publish to Instagram</CardTitle>
+                        <CardTitle>Instagram Insights</CardTitle>
                         <CardDescription>
-                          Publish articles directly to your Instagram account.
+                          View performance metrics for your Instagram professional account.
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-6">
+                      <CardContent>
                         {!isConnected ? (
-                          <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800">
-                            <div className="flex items-center">
-                              <AlertCircle className="h-5 w-5 mr-2" />
-                              <span className="font-medium">Connection Required</span>
+                          <div className="bg-amber-50 border border-amber-100 p-4 rounded-md">
+                            <div className="flex items-start">
+                              <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 mr-3" />
+                              <div>
+                                <h3 className="font-medium text-amber-800">Not Connected</h3>
+                                <p className="text-sm text-amber-700 mt-1">
+                                  You need to connect your Instagram professional account to view insights. Go to the Authentication tab to connect.
+                                </p>
+                              </div>
                             </div>
-                            <p className="mt-1 text-sm">
-                              Please connect your Instagram account in the Authentication tab before publishing content.
-                            </p>
+                          </div>
+                        ) : isLoadingInsights ? (
+                          <div className="flex items-center justify-center p-8">
+                            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+                          </div>
+                        ) : !insights?.data || insights.data.length === 0 ? (
+                          <div className="bg-gray-50 border border-gray-100 p-4 rounded-md">
+                            <div className="flex items-start">
+                              <Info className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                              <div>
+                                <h3 className="font-medium text-gray-800">No Insights Available</h3>
+                                <p className="text-sm text-gray-700 mt-1">
+                                  We couldn't retrieve insights for your Instagram account. This could be due to limited account activity or permissions.
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         ) : (
-                          <>
-                            <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-amber-800">
-                              <div className="flex items-center">
-                                <Info className="h-5 w-5 mr-2" />
-                                <span className="font-medium">Publishing Limitations</span>
+                          <div className="space-y-6">
+                            <p className="text-sm text-gray-500">
+                              These insights show how your Instagram content is performing.
+                            </p>
+                            
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                              {/* Impressions Card */}
+                              <div className="bg-white p-4 rounded-lg border shadow-sm">
+                                <div className="flex items-center mb-2">
+                                  <BarChart className="h-5 w-5 text-indigo-500 mr-2" />
+                                  <h3 className="font-medium">Impressions</h3>
+                                </div>
+                                <div className="text-2xl font-bold mt-2 mb-1">
+                                  {insights.data.find(d => d.name === 'impressions')?.values[0]?.value || 0}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  Total number of times your content was viewed
+                                </p>
                               </div>
-                              <p className="mt-1 text-sm">
-                                Instagram Basic Display API doesn't support direct publishing. This feature simulates publishing - in a production environment, you would need to use the Facebook Graph API and a business account.
-                              </p>
+                              
+                              {/* Reach Card */}
+                              <div className="bg-white p-4 rounded-lg border shadow-sm">
+                                <div className="flex items-center mb-2">
+                                  <User className="h-5 w-5 text-green-500 mr-2" />
+                                  <h3 className="font-medium">Reach</h3>
+                                </div>
+                                <div className="text-2xl font-bold mt-2 mb-1">
+                                  {insights.data.find(d => d.name === 'reach')?.values[0]?.value || 0}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  Unique users who have seen your content
+                                </p>
+                              </div>
+                              
+                              {/* Profile Views Card */}
+                              <div className="bg-white p-4 rounded-lg border shadow-sm">
+                                <div className="flex items-center mb-2">
+                                  <Newspaper className="h-5 w-5 text-blue-500 mr-2" />
+                                  <h3 className="font-medium">Profile Views</h3>
+                                </div>
+                                <div className="text-2xl font-bold mt-2 mb-1">
+                                  {insights.data.find(d => d.name === 'profile_views')?.values[0]?.value || 0}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  Number of times your profile was viewed
+                                </p>
+                              </div>
                             </div>
                             
-                            <div>
-                              <h3 className="text-sm font-medium mb-4">Published Articles</h3>
-                              
-                              {publishableArticles.length === 0 ? (
-                                <div className="text-center py-8 border rounded-md">
-                                  <ImagePlus className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-                                  <p className="text-gray-500">No published articles with images found</p>
-                                  <p className="text-sm text-gray-400 mt-1">Articles must be published and have an image to be shared on Instagram</p>
-                                </div>
-                              ) : (
-                                <div className="space-y-4">
-                                  {publishableArticles.map((article) => (
-                                    <div key={article.id} className="flex border rounded-md overflow-hidden">
-                                      <div className="w-24 h-24 flex-shrink-0">
-                                        <img 
-                                          src={article.imageUrl} 
-                                          alt={article.title} 
-                                          className="w-full h-full object-cover"
-                                        />
-                                      </div>
-                                      <div className="flex-1 p-4 flex flex-col">
-                                        <h4 className="font-medium text-sm">{article.title}</h4>
-                                        <p className="text-xs text-gray-500 line-clamp-2 mt-1 flex-grow">
-                                          {article.description}
-                                        </p>
-                                        <div className="mt-2 flex justify-end">
-                                          <Button
-                                            size="sm"
-                                            onClick={() => handlePublishArticle(article.id)}
-                                            disabled={publishArticleMutation.isPending && publishArticleMutation.variables === article.id}
-                                          >
-                                            {publishArticleMutation.isPending && publishArticleMutation.variables === article.id ? (
-                                              <>
-                                                <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                                                Publishing...
-                                              </>
-                                            ) : (
-                                              <>
-                                                <SiInstagram className="mr-2 h-3 w-3" />
-                                                Publish to Instagram
-                                              </>
-                                            )}
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                            {/* Period Note */}
+                            <div className="text-sm text-gray-500 mt-2">
+                              <Info className="h-4 w-4 inline mr-1" />
+                              Data shown is for the last 24 hours
                             </div>
-                          </>
+                          </div>
                         )}
                       </CardContent>
-                      <CardFooter className="bg-gray-50 border-t">
-                        <p className="text-xs text-gray-500">
-                          Content published to Instagram must follow their Community Guidelines and Terms of Service.
-                        </p>
-                      </CardFooter>
+                    </Card>
+                    
+                    {/* Content Strategy */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Content Strategy Tips</CardTitle>
+                        <CardDescription>
+                          Optimize your Instagram content strategy based on insights.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="flex items-start p-3 bg-purple-50 rounded-md">
+                            <Coffee className="h-5 w-5 text-purple-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Best Time to Post</h3>
+                              <p className="text-sm text-gray-600">
+                                Analyze when your audience is most active and schedule posts accordingly. Peak times are often early mornings, lunch breaks, and evenings.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-purple-50 rounded-md">
+                            <Coffee className="h-5 w-5 text-purple-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Content Mix</h3>
+                              <p className="text-sm text-gray-600">
+                                Balance promotional content with educational and entertaining posts. Following the 80/20 rule (80% value-adding, 20% promotional) can maintain audience engagement.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-purple-50 rounded-md">
+                            <Coffee className="h-5 w-5 text-purple-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">Engagement Tactics</h3>
+                              <p className="text-sm text-gray-600">
+                                Ask questions, create polls, and respond to comments to boost engagement. The Instagram algorithm favors posts with higher engagement rates.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
                     </Card>
                   </TabsContent>
                 </Tabs>
