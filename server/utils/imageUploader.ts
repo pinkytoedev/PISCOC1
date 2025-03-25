@@ -1,0 +1,227 @@
+import fs from 'fs';
+import path from 'path';
+import FormData from 'form-data';
+import fetch from 'node-fetch';
+import { storage } from '../storage';
+
+interface UploadedFileInfo {
+  path: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+}
+
+interface AirtableAttachment {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  type: string;
+  width?: number;
+  height?: number;
+  thumbnails?: {
+    small: { url: string; width: number; height: number };
+    large: { url: string; width: number; height: number };
+    full: { url: string; width: number; height: number };
+  };
+}
+
+/**
+ * Creates a temporary public URL for a file that can be accessed by Airtable
+ * This simulates what the article mentions about needing a publicly accessible URL
+ * In a production environment, you would upload to S3, Cloudinary, or similar services
+ */
+async function getTemporaryPublicUrl(fileInfo: UploadedFileInfo): Promise<string | null> {
+  try {
+    // In a real implementation, we'd upload to S3, Cloudinary, etc.
+    // For this demo/prototype, we're simulating by having direct access to the file
+    return `file://${fileInfo.path}`;
+  } catch (error) {
+    console.error('Error creating temporary public URL:', error);
+    return null;
+  }
+}
+
+/**
+ * Creates an Airtable attachment object structure from a file
+ */
+export async function createAirtableAttachmentFromFile(
+  file: UploadedFileInfo
+): Promise<AirtableAttachment | null> {
+  try {
+    // In a real implementation, we'd host the file somewhere and provide a public URL
+    // For now, we'll read the file and use a data URL
+    const fileData = fs.readFileSync(file.path);
+    const base64Data = fileData.toString('base64');
+    const dataUrl = `data:${file.mimetype};base64,${base64Data}`;
+    
+    return {
+      id: `file_${Date.now()}`,
+      url: dataUrl,
+      filename: file.filename,
+      size: file.size,
+      type: file.mimetype
+    };
+  } catch (error) {
+    console.error('Error creating Airtable attachment from file:', error);
+    return null;
+  }
+}
+
+/**
+ * Directly uploads an image to Airtable using the Airtable API
+ * This is the main function that implements the logic described in the article
+ */
+export async function uploadImageToAirtable(
+  file: UploadedFileInfo,
+  recordId: string,
+  fieldName: string
+): Promise<AirtableAttachment | null> {
+  try {
+    // Get Airtable API settings
+    const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+    const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+    const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+    
+    if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+      throw new Error("Airtable settings are not fully configured");
+    }
+    
+    if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+      throw new Error("Some Airtable settings are disabled");
+    }
+    
+    const apiKey = apiKeySetting.value;
+    const baseId = baseIdSetting.value;
+    const tableName = tableNameSetting.value;
+    
+    // Step 1: Create a temporary URL where the file can be accessed
+    // In a production environment, upload to S3, Cloudinary, etc.
+    const fileBuffer = fs.readFileSync(file.path);
+    
+    // Create form data with the image file
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: file.filename,
+      contentType: file.mimetype
+    });
+    
+    // Upload to Airtable directly
+    const url = `https://api.airtable.com/v0/${baseId}/${tableName}/${recordId}`;
+    
+    // Create the fields update payload
+    const attachment = {
+      url: `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`,
+      filename: file.filename
+    };
+    
+    const payload = {
+      fields: {
+        [fieldName]: [attachment]
+      }
+    };
+    
+    // Send PATCH request to update the record with the attachment
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Airtable API error: ${response.status} - ${error}`);
+    }
+    
+    const result = await response.json();
+    
+    // Return the Airtable attachment object
+    return result.fields[fieldName][0] as AirtableAttachment;
+  } catch (error) {
+    console.error('Error uploading image to Airtable:', error);
+    return null;
+  }
+}
+
+/**
+ * Directly uploads an image to Airtable using the Airtable API with a remote URL
+ */
+export async function uploadImageUrlToAirtable(
+  imageUrl: string,
+  recordId: string,
+  fieldName: string,
+  filename: string
+): Promise<AirtableAttachment | null> {
+  try {
+    // Get Airtable API settings
+    const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+    const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+    const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+    
+    if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+      throw new Error("Airtable settings are not fully configured");
+    }
+    
+    if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+      throw new Error("Some Airtable settings are disabled");
+    }
+    
+    const apiKey = apiKeySetting.value;
+    const baseId = baseIdSetting.value;
+    const tableName = tableNameSetting.value;
+    
+    // Create the URL for the API request
+    const url = `https://api.airtable.com/v0/${baseId}/${tableName}/${recordId}`;
+    
+    // Create the fields update payload
+    const attachment = {
+      url: imageUrl,
+      filename: filename
+    };
+    
+    const payload = {
+      fields: {
+        [fieldName]: [attachment]
+      }
+    };
+    
+    // Send PATCH request to update the record with the attachment
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Airtable API error: ${response.status} - ${error}`);
+    }
+    
+    const result = await response.json();
+    
+    // Return the Airtable attachment object
+    return result.fields[fieldName][0] as AirtableAttachment;
+  } catch (error) {
+    console.error('Error uploading image URL to Airtable:', error);
+    return null;
+  }
+}
+
+/**
+ * Cleanup uploaded files after processing
+ */
+export function cleanupUploadedFile(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch (error) {
+    console.error(`Error cleaning up file ${filePath}:`, error);
+  }
+}

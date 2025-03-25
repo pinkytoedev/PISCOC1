@@ -346,6 +346,14 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   return airtableData;
 }
 
+import { upload } from '../utils/fileUpload';
+import { 
+  uploadImageToAirtable, 
+  uploadImageUrlToAirtable, 
+  cleanupUploadedFile, 
+  createAirtableAttachmentFromFile 
+} from '../utils/imageUploader';
+
 export function setupAirtableRoutes(app: Express) {
   // Test Airtable API connection
   app.get("/api/airtable/test-connection", async (req, res) => {
