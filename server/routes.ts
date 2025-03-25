@@ -7,8 +7,6 @@ import { setupAirtableRoutes } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagram";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
 import { ZodError } from "zod";
-import { upload, uploadImageToAirtable } from "./services/fileUpload";
-import path from 'path';
 
 // Middleware for validating if user is authenticated
 const isAuthenticated = (req: Request, res: Response, next: Function) => {
@@ -589,101 +587,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch metrics" });
-    }
-  });
-
-  // File upload routes
-  app.post('/api/upload/article-image/:id', isAuthenticated, upload.single('image'), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
-      }
-      
-      // Parse the article ID
-      const articleId = parseInt(req.params.id);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      // Check if article has an Airtable external ID
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ 
-          message: 'Article is not from Airtable or missing external ID',
-          article
-        });
-      }
-      
-      // Get Airtable settings
-      const apiKeySetting = await storage.getIntegrationSettingByKey('airtable', 'api_key');
-      const baseIdSetting = await storage.getIntegrationSettingByKey('airtable', 'base_id');
-      const tableNameSetting = await storage.getIntegrationSettingByKey('airtable', 'articles_table');
-      
-      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ message: 'Airtable settings are not fully configured' });
-      }
-      
-      if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
-        return res.status(400).json({ message: 'Some Airtable settings are disabled' });
-      }
-      
-      const apiKey = apiKeySetting.value;
-      const baseId = baseIdSetting.value;
-      const tableName = tableNameSetting.value;
-      
-      // Upload the image to Airtable
-      const response = await uploadImageToAirtable(
-        apiKey,
-        baseId,
-        tableName,
-        article.externalId,
-        'MainImage', // This is the field name in Airtable
-        req.file.path,
-        req.file.originalname,
-        req.file.mimetype
-      );
-      
-      // Get the URL of the uploaded image if available
-      let imageUrl = '';
-      if (response?.fields?.MainImage?.[0]?.url) {
-        imageUrl = response.fields.MainImage[0].url;
-        
-        // Update the article with the image URL
-        await storage.updateArticle(articleId, {
-          imageUrl,
-          imageType: 'url',
-          imagePath: null
-        });
-      }
-      
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'upload',
-        resourceType: 'article_image',
-        resourceId: articleId.toString(),
-        details: { 
-          fileName: req.file.originalname,
-          url: imageUrl
-        }
-      });
-      
-      res.json({
-        message: 'Image uploaded successfully',
-        imageUrl,
-        airtableResponse: response
-      });
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      res.status(500).json({ 
-        message: 'Failed to upload image',
-        error: error instanceof Error ? error.message : String(error)
-      });
     }
   });
 

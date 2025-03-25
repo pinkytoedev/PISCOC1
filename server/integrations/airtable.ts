@@ -1,7 +1,6 @@
-import { Express, Request, Response } from "express";
+import { Express } from "express";
 import { storage } from "../storage";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
-import { upload, uploadImageToAirtable } from "../services/fileUpload";
 
 // Type definitions for Airtable responses
 interface AirtableRecord<T> {
@@ -77,12 +76,6 @@ interface AirtableTeamMember {
 interface AirtableCarouselQuote {
   main: string;
   philo: string;
-}
-
-// Type for tracking article details in error handling
-interface ArticleErrorDetails {
-  externalId?: string | undefined;
-  title?: string | undefined;
 }
 
 // Helper function to make Airtable API requests
@@ -433,7 +426,7 @@ export function setupAirtableRoutes(app: Express) {
           const articleData: InsertArticle = {
             title: fields.Name,
             description: fields.Description || "",
-            excerpt: undefined, // Removed as requested
+            excerpt: null, // Removed as requested
             content: fields.Body,
             contentFormat: "html", // Most Airtable content is rich text
             imageUrl: imageUrl,
@@ -736,159 +729,6 @@ export function setupAirtableRoutes(app: Express) {
       }
       
       res.status(statusCode).json({ 
-        message: errorMessage,
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Add a new endpoint for updating an article with an image
-  app.post("/api/airtable/update/article/:id/with-image", upload.single('image'), async (req, res) => {
-    // Store article info for error logging
-    let articleId: number | undefined;
-    let articleDetails: { externalId?: string, title?: string } = {};
-    
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      // Verify the uploaded image file
-      if (!req.file) {
-        return res.status(400).json({ message: "No image file provided" });
-      }
-      
-      console.log(`Processing image upload: ${req.file.originalname}, size: ${req.file.size} bytes, path: ${req.file.path}`);
-      
-      articleId = parseInt(req.params.id);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: "Invalid article ID" });
-      }
-      
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: "Article not found" });
-      }
-      
-      // Save article details for error handling
-      articleDetails = {
-        externalId: article.externalId,
-        title: article.title
-      };
-      
-      // Check if this is an Airtable article
-      if (article.source !== "airtable" || !article.externalId) {
-        return res.status(400).json({ message: "This article is not from Airtable" });
-      }
-      
-      // Get Airtable settings
-      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-      
-      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ message: "Airtable settings are not fully configured" });
-      }
-      
-      if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
-        return res.status(400).json({ message: "Some Airtable settings are disabled" });
-      }
-      
-      const apiKey = apiKeySetting.value;
-      const baseId = baseIdSetting.value;
-      const tableName = tableNameSetting.value;
-      
-      // First upload the image to Airtable
-      console.log(`Uploading image to Airtable for article ID ${articleId}, external ID ${article.externalId}`);
-      
-      // Use the image upload function from fileUpload service
-      const imageUploadResponse = await uploadImageToAirtable(
-        apiKey,
-        baseId,
-        tableName,
-        article.externalId,
-        "MainImage",
-        req.file.path,
-        req.file.originalname,
-        req.file.mimetype
-      );
-      
-      console.log("Image upload to Airtable successful");
-      
-      // Now update the article data
-      // Convert article data to Airtable format
-      const airtableData = await convertToAirtableFormat(article);
-      
-      // If the image upload was successful, we can update the article with all field data
-      const response = await airtableRequest(
-        apiKey,
-        baseId,
-        tableName,
-        "PATCH",
-        {
-          records: [
-            {
-              id: article.externalId,
-              fields: airtableData
-            }
-          ]
-        }
-      );
-      
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: "update_with_image",
-        resourceType: "article",
-        resourceId: articleId.toString(),
-        details: { 
-          source: "airtable",
-          externalId: article.externalId,
-          imageName: req.file.originalname
-        }
-      });
-      
-      res.json({
-        message: "Article and image updated in Airtable",
-        article: response,
-        imageUpload: imageUploadResponse
-      });
-    } catch (error) {
-      console.error("Airtable update with image error:", error);
-      
-      let errorMessage = "Failed to update article with image in Airtable";
-      let statusCode = 500;
-      
-      // Check for specific error types to provide better error messages
-      if (error instanceof Error) {
-        const errorText = error.message;
-        console.log("Detailed Airtable error:", errorText);
-        
-        if (errorText.includes("403")) {
-          errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
-          statusCode = 403;
-        } else if (errorText.includes("404")) {
-          errorMessage = "Record not found in Airtable. The record may have been deleted or the table structure changed.";
-          statusCode = 404;
-        } else if (errorText.includes("422")) {
-          errorMessage = "Invalid data format for Airtable. Please check the field mappings.";
-          statusCode = 422;
-        } else if (errorText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-          errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
-          statusCode = 403;
-        }
-        
-        // Log article details that were captured earlier
-        if (articleId && articleDetails) {
-          console.log(`Article update failed for ID ${articleId}, externalId: ${articleDetails.externalId}, title: "${articleDetails.title}"`);
-        }
-      }
-      
-      // Log the specific error and status code we're sending back
-      console.log(`Returning error to client with status ${statusCode}: ${errorMessage}`);
-      
-      res.status(statusCode).json({
         message: errorMessage,
         error: error instanceof Error ? error.message : String(error)
       });

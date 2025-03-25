@@ -61,99 +61,11 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   // Add mutation for updating article in Airtable directly
   const updateAirtableMutation = useMutation({
     mutationFn: async (articleId: number) => {
-      // Check if there's a selected image in session storage for this article
-      const imageDataStr = window.sessionStorage.getItem(`article_image_${articleId}`);
-      let hasImage = false;
-      let imageFile: File | null = null;
-      
-      if (imageDataStr) {
-        try {
-          const imageData = JSON.parse(imageDataStr);
-          
-          // Check if there's an actual file matching this reference in the DOM
-          const fileInputs = document.querySelectorAll('input[type="file"]');
-          for (let i = 0; i < fileInputs.length; i++) {
-            const input = fileInputs[i] as HTMLInputElement;
-            if (input.files && input.files.length > 0) {
-              const file = input.files[0];
-              
-              // Compare file properties to see if this is our file
-              if (file.name === imageData.name && 
-                  file.size === imageData.size && 
-                  file.type === imageData.type &&
-                  file.lastModified === imageData.lastModified) {
-                imageFile = file;
-                hasImage = true;
-                console.log("Found matching file in DOM:", file.name);
-                break;
-              }
-            }
-          }
-          
-          if (!imageFile) {
-            console.log("No matching file found in DOM inputs, checking if there's a file input in another modal");
-            // This can happen if the modal is closed and opened again - let's try to find the file by name only
-            // in other modals that might be open
-            const allInputs = document.querySelectorAll('input[type="file"]');
-            for (let i = 0; i < allInputs.length; i++) {
-              const input = allInputs[i] as HTMLInputElement;
-              if (input.files && input.files.length > 0) {
-                const file = input.files[0];
-                if (file.name === imageData.name) {
-                  imageFile = file;
-                  hasImage = true;
-                  console.log("Found file with matching name in a different input:", file.name);
-                  break;
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Error parsing image data from session storage:", error);
-        }
-      }
-      
-      // If we have an image to upload with the update, use FormData
-      if (hasImage && imageFile) {
-        console.log("Uploading article with image to Airtable:", imageFile.name);
-        
-        const formData = new FormData();
-        formData.append("image", imageFile);
-        
-        try {
-          const response = await fetch(`/api/airtable/update/article/${articleId}/with-image`, {
-            method: "POST",
-            body: formData,
-            credentials: "same-origin"
-          });
-          
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: `Upload failed with status ${response.status}` }));
-            throw new Error(errorData.message || `Upload failed with status ${response.status}`);
-          }
-          
-          // Clear the session storage entry after successful upload
-          window.sessionStorage.removeItem(`article_image_${articleId}`);
-          
-          return await response.json();
-        } catch (error) {
-          console.error("Error uploading image to Airtable:", error);
-          throw error;
-        }
-      } else {
-        // Standard update without image
-        console.log("Updating article in Airtable without image");
-        try {
-          const response = await apiRequest(
-            "POST", 
-            `/api/airtable/update/article/${articleId}`
-          );
-          return await response.json();
-        } catch (error) {
-          console.error("Error updating article in Airtable:", error);
-          throw error;
-        }
-      }
+      const response = await apiRequest(
+        "POST", 
+        `/api/airtable/update/article/${articleId}`
+      );
+      return await response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
