@@ -2,7 +2,6 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import FormData from 'form-data';
 import fetch from 'node-fetch';
 import { Express, Request, Response } from 'express';
 
@@ -56,20 +55,19 @@ export async function uploadImageToAirtable(
   mimeType: string
 ): Promise<any> {
   try {
-    // This approach uses multipart/form-data as recommended by Airtable for file uploads
-    const form = new FormData();
+    // Use the native built-in FormData in Node instead
+    // Going back to a simpler approach
+    const fileData = fs.readFileSync(filePath).toString('base64');
     
-    // Read the file as a buffer
-    const fileBuffer = fs.readFileSync(filePath);
-    
-    // Create a proper metadata object for the form
-    const metadata = {
+    // Create a proper JSON request body with the file as base64
+    const requestBody = {
       records: [
         {
           id: recordId,
           fields: {
             [fieldName]: [
               {
+                url: `data:${mimeType};base64,${fileData}`,
                 filename: fileName
               }
             ]
@@ -78,28 +76,18 @@ export async function uploadImageToAirtable(
       ]
     };
     
-    // Add the metadata part first
-    form.append('metadata', JSON.stringify(metadata), {
-      contentType: 'application/json'
-    });
+    console.log(`Uploading image to Airtable: ${fileName}`);
     
-    // Then add the file as a separate part
-    form.append(`files[0]`, fileBuffer, {
-      filename: fileName,
-      contentType: mimeType
-    });
-    
-    console.log(`Uploading image to Airtable: ${fileName} (size: ${fileBuffer.length} bytes)`);
-    
-    // Use the batch endpoint for file uploads
+    // Use the JSON API to update the record
     const url = `https://api.airtable.com/v0/${baseId}/${tableId}`;
     
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
       },
-      body: form as any
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
