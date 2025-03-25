@@ -193,9 +193,10 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             <div className="mt-2 text-xs text-blue-600">
               <p><span className="font-semibold">Important:</span> When updating to Airtable:</p>
               <ul className="list-disc pl-5 mt-1 space-y-1">
-                <li>Main Image URL will update the MainImage field in Airtable</li>
-                <li>Instagram Image URL will update the instaPhoto field in Airtable</li>
+                <li>Main Image URL will update the MainImage attachment field in Airtable</li>
+                <li>Instagram Image URL will update the instaPhoto attachment field in Airtable</li>
                 <li>Both image fields can be set independently for better integration</li>
+                <li>Use publicly accessible image URLs for proper Airtable attachment handling</li>
                 <li>All Airtable fields like Date, Featured, and Status will be properly mapped</li>
               </ul>
             </div>
@@ -327,7 +328,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 </div>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                Enter a direct link to an image for the article cover
+                Enter a direct link to an image for the article cover. Must be a publicly accessible URL for Airtable integration.
               </p>
             </div>
 
@@ -363,7 +364,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 </div>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                Enter a direct link to an Instagram image (for Airtable instaPhoto field)
+                Enter a direct link to an Instagram image (for Airtable instaPhoto field). Must be a publicly accessible URL for Airtable integration.
               </p>
             </div>
 
@@ -395,7 +396,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 </Select>
               )}
               <p className="text-xs text-gray-500 mt-1">
-                This links to a team member in Airtable's Photo field
+                This links to a team member in Airtable's Photo field. Select "None" if no photographer should be linked in Airtable.
               </p>
             </div>
 

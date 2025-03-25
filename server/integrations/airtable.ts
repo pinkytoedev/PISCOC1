@@ -172,20 +172,21 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     // Only add MainImage if it's a URL - for other image types we'd need a different approach
     if (article.imageType === "url") {
       try {
-        // Create the Airtable Attachment structure for MainImage
+        // Create the minimal Airtable Attachment structure for MainImage
+        // For attachment fields, we just need to provide the URL when creating/updating
         const mainImageAttachment: Attachment = {
           id: `img_main_${Date.now()}`, // Generate a temporary id
           url: article.imageUrl,
           filename: article.imageUrl.split('/').pop() || 'main_image.jpg',
           size: 0, // We don't know the size, but Airtable requires this field
-          type: "image/jpeg" // Assume JPEG as default, could be improved with MIME detection
+          type: "image/jpeg" // Assume JPEG as default
         };
         
         airtableData.MainImage = [mainImageAttachment];
         
-        console.log("Setting MainImage attachment:", JSON.stringify(mainImageAttachment));
+        console.log("Setting MainImage URL for Airtable:", article.imageUrl);
       } catch (error) {
-        console.error("Error creating MainImage attachment:", error);
+        console.error("Error setting MainImage URL:", error);
       }
     }
   }
@@ -193,7 +194,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   // Handle instaPhoto field separately if we have an Instagram image URL
   if (article.instagramImageUrl && article.instagramImageUrl !== "") {
     try {
-      // Create the Airtable Attachment structure for instaPhoto
+      // Create the minimal Airtable Attachment structure for instaPhoto
       const instaPhotoAttachment: Attachment = {
         id: `img_insta_${Date.now()}`, // Generate a temporary id
         url: article.instagramImageUrl,
@@ -204,17 +205,18 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       
       airtableData.instaPhoto = [instaPhotoAttachment];
       
-      console.log("Setting instaPhoto attachment:", JSON.stringify(instaPhotoAttachment));
+      console.log("Setting instaPhoto URL for Airtable:", article.instagramImageUrl);
     } catch (error) {
-      console.error("Error creating instaPhoto attachment:", error);
+      console.error("Error setting instaPhoto URL:", error);
     }
   }
   // For Instagram-sourced articles without a specific Instagram image, 
   // use the main image for the instaPhoto field
   else if (article.source === "instagram" && article.imageUrl && article.imageUrl !== "") {
     try {
+      // Create the minimal Airtable Attachment structure using the main image URL
       const instaPhotoAttachment: Attachment = {
-        id: `img_insta_${Date.now()}`, // Generate a temporary id
+        id: `img_insta_fallback_${Date.now()}`, // Generate a temporary id
         url: article.imageUrl,
         filename: article.imageUrl.split('/').pop() || 'insta_photo.jpg',
         size: 0, 
@@ -223,9 +225,9 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       
       airtableData.instaPhoto = [instaPhotoAttachment];
       
-      console.log("Using main image for instaPhoto:", JSON.stringify(instaPhotoAttachment));
+      console.log("Using main image URL for instaPhoto field:", article.imageUrl);
     } catch (error) {
-      console.error("Error creating fallback instaPhoto attachment:", error);
+      console.error("Error setting fallback instaPhoto URL:", error);
     }
   }
   
