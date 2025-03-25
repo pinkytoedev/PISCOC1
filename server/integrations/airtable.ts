@@ -171,22 +171,61 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   if (article.imageUrl && article.imageUrl !== "") {
     // Only add MainImage if it's a URL - for other image types we'd need a different approach
     if (article.imageType === "url") {
-      // Create the Airtable Attachment structure
-      const imageAttachment: Attachment = {
-        id: `img_${Date.now()}`, // Generate a temporary id
-        url: article.imageUrl,
-        filename: article.imageUrl.split('/').pop() || 'image.jpg',
-        size: 0, // We don't know the size, but Airtable requires this field
-        type: "image/jpeg" // Assume JPEG as default, could be improved with MIME detection
+      try {
+        // Create the Airtable Attachment structure for MainImage
+        const mainImageAttachment: Attachment = {
+          id: `img_main_${Date.now()}`, // Generate a temporary id
+          url: article.imageUrl,
+          filename: article.imageUrl.split('/').pop() || 'main_image.jpg',
+          size: 0, // We don't know the size, but Airtable requires this field
+          type: "image/jpeg" // Assume JPEG as default, could be improved with MIME detection
+        };
+        
+        airtableData.MainImage = [mainImageAttachment];
+        
+        console.log("Setting MainImage attachment:", JSON.stringify(mainImageAttachment));
+      } catch (error) {
+        console.error("Error creating MainImage attachment:", error);
+      }
+    }
+  }
+  
+  // Handle instaPhoto field separately if we have an Instagram image URL
+  if (article.instagramImageUrl && article.instagramImageUrl !== "") {
+    try {
+      // Create the Airtable Attachment structure for instaPhoto
+      const instaPhotoAttachment: Attachment = {
+        id: `img_insta_${Date.now()}`, // Generate a temporary id
+        url: article.instagramImageUrl,
+        filename: article.instagramImageUrl.split('/').pop() || 'insta_photo.jpg',
+        size: 0, 
+        type: "image/jpeg"
       };
       
-      airtableData.MainImage = [imageAttachment];
+      airtableData.instaPhoto = [instaPhotoAttachment];
       
-      // For Instagram-sourced articles, also set the instaPhoto field to the same image
-      // This ensures proper syncing back to Airtable for Instagram-sourced content
-      if (article.source === "instagram") {
-        airtableData.instaPhoto = [imageAttachment];
-      }
+      console.log("Setting instaPhoto attachment:", JSON.stringify(instaPhotoAttachment));
+    } catch (error) {
+      console.error("Error creating instaPhoto attachment:", error);
+    }
+  }
+  // For Instagram-sourced articles without a specific Instagram image, 
+  // use the main image for the instaPhoto field
+  else if (article.source === "instagram" && article.imageUrl && article.imageUrl !== "") {
+    try {
+      const instaPhotoAttachment: Attachment = {
+        id: `img_insta_${Date.now()}`, // Generate a temporary id
+        url: article.imageUrl,
+        filename: article.imageUrl.split('/').pop() || 'insta_photo.jpg',
+        size: 0, 
+        type: "image/jpeg"
+      };
+      
+      airtableData.instaPhoto = [instaPhotoAttachment];
+      
+      console.log("Using main image for instaPhoto:", JSON.stringify(instaPhotoAttachment));
+    } catch (error) {
+      console.error("Error creating fallback instaPhoto attachment:", error);
     }
   }
   
@@ -438,14 +477,24 @@ export function setupAirtableRoutes(app: Express) {
             syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
           }
           
-          // Get the image URL from MainImage attachment if it exists
+          // Get the image URL from MainImage attachment if it exists and log the full structure
           let imageUrl = defaultImageUrl;
+          let instagramImageUrl = "";
+          
           if (fields.MainImage && fields.MainImage.length > 0) {
+            console.log(`Record ${record.id}: MainImage attachment structure:`, JSON.stringify(fields.MainImage[0], null, 2));
             imageUrl = fields.MainImage[0].url;
-          } else if (fields.instaPhoto && fields.instaPhoto.length > 0) {
+          }
+          
+          if (fields.instaPhoto && fields.instaPhoto.length > 0) {
+            console.log(`Record ${record.id}: instaPhoto attachment structure:`, JSON.stringify(fields.instaPhoto[0], null, 2));
+            instagramImageUrl = fields.instaPhoto[0].url;
+            
             // Use instaPhoto as fallback if MainImage is not available
-            imageUrl = fields.instaPhoto[0].url;
-            syncResults.details.push(`Record ${record.id}: Using instaPhoto as MainImage is not available`);
+            if (!fields.MainImage || fields.MainImage.length === 0) {
+              imageUrl = fields.instaPhoto[0].url;
+              syncResults.details.push(`Record ${record.id}: Using instaPhoto as MainImage is not available`);
+            }
           }
           
           // Get the author name as a string (first one if it's an array)
@@ -473,6 +522,7 @@ export function setupAirtableRoutes(app: Express) {
             imageUrl: imageUrl,
             imageType: "url",
             imagePath: null,
+            instagramImageUrl: instagramImageUrl, // Store instaPhoto URL separately
             featured: fields.Featured ? "yes" : "no",
             publishedAt: fields.Date ? new Date(fields.Date) : null,
             date: fields.Date || "", // Store the raw date string from Airtable
