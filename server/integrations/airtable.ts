@@ -353,6 +353,7 @@ import {
   cleanupUploadedFile, 
   createAirtableAttachmentFromFile 
 } from '../utils/imageUploader';
+import { Request, Response } from 'express';
 
 export function setupAirtableRoutes(app: Express) {
   // Test Airtable API connection
@@ -1284,6 +1285,183 @@ export function setupAirtableRoutes(app: Express) {
       
       res.status(statusCode).json({ 
         message: errorMessage,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // Upload an image file to Airtable for a specific article and field
+  app.post("/api/airtable/upload-image/:articleId/:fieldName", upload.single('image'), async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const articleId = parseInt(req.params.articleId);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ message: "Invalid article ID" });
+      }
+      
+      const fieldName = req.params.fieldName;
+      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto')) {
+        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'instaPhoto'" });
+      }
+      
+      // Get the article from the database
+      const article = await storage.getArticle(articleId);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      
+      // Check if this is an Airtable article
+      if (article.source !== "airtable" || !article.externalId) {
+        return res.status(400).json({ message: "This article is not from Airtable" });
+      }
+      
+      // Check if file was uploaded
+      if (!req.file) {
+        return res.status(400).json({ message: "No image file uploaded" });
+      }
+      
+      // Upload the image to Airtable
+      const result = await uploadImageToAirtable(
+        {
+          path: req.file.path,
+          filename: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size
+        },
+        article.externalId,
+        fieldName
+      );
+      
+      // Clean up the uploaded file
+      cleanupUploadedFile(req.file.path);
+      
+      if (!result) {
+        return res.status(500).json({ message: "Failed to upload image to Airtable" });
+      }
+      
+      // Update the article in the database with the new image URL
+      const updateData: Partial<InsertArticle> = {};
+      
+      if (fieldName === 'MainImage') {
+        updateData.imageUrl = result.url;
+        updateData.imageType = 'url';
+      } else if (fieldName === 'instaPhoto') {
+        updateData.instagramImageUrl = result.url;
+      }
+      
+      await storage.updateArticle(articleId, updateData);
+      
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "upload",
+        resourceType: "image",
+        resourceId: articleId.toString(),
+        details: {
+          fieldName,
+          filename: req.file.originalname
+        }
+      });
+      
+      res.json({
+        message: `Image uploaded successfully to ${fieldName}`,
+        attachment: result
+      });
+    } catch (error) {
+      console.error("Error uploading image to Airtable:", error);
+      res.status(500).json({ 
+        message: "Failed to upload image to Airtable",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Upload an image URL to Airtable for a specific article and field
+  app.post("/api/airtable/upload-image-url/:articleId/:fieldName", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const articleId = parseInt(req.params.articleId);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ message: "Invalid article ID" });
+      }
+      
+      const fieldName = req.params.fieldName;
+      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto')) {
+        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'instaPhoto'" });
+      }
+      
+      const { imageUrl, filename } = req.body;
+      
+      if (!imageUrl) {
+        return res.status(400).json({ message: "Image URL is required" });
+      }
+      
+      if (!filename) {
+        return res.status(400).json({ message: "Filename is required" });
+      }
+      
+      // Get the article from the database
+      const article = await storage.getArticle(articleId);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      
+      // Check if this is an Airtable article
+      if (article.source !== "airtable" || !article.externalId) {
+        return res.status(400).json({ message: "This article is not from Airtable" });
+      }
+      
+      // Upload the image URL to Airtable
+      const result = await uploadImageUrlToAirtable(
+        imageUrl,
+        article.externalId,
+        fieldName,
+        filename
+      );
+      
+      if (!result) {
+        return res.status(500).json({ message: "Failed to upload image URL to Airtable" });
+      }
+      
+      // Update the article in the database with the new image URL
+      const updateData: Partial<InsertArticle> = {};
+      
+      if (fieldName === 'MainImage') {
+        updateData.imageUrl = result.url;
+        updateData.imageType = 'url';
+      } else if (fieldName === 'instaPhoto') {
+        updateData.instagramImageUrl = result.url;
+      }
+      
+      await storage.updateArticle(articleId, updateData);
+      
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "upload",
+        resourceType: "image_url",
+        resourceId: articleId.toString(),
+        details: {
+          fieldName,
+          imageUrl,
+          filename
+        }
+      });
+      
+      res.json({
+        message: `Image URL uploaded successfully to ${fieldName}`,
+        attachment: result
+      });
+    } catch (error) {
+      console.error("Error uploading image URL to Airtable:", error);
+      res.status(500).json({ 
+        message: "Failed to upload image URL to Airtable",
         error: error instanceof Error ? error.message : String(error)
       });
     }

@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
-import fetch from 'node-fetch';
 import { storage } from '../storage';
+import fetch from 'node-fetch';
 
 interface UploadedFileInfo {
   path: string;
@@ -24,6 +24,13 @@ interface AirtableAttachment {
     large: { url: string; width: number; height: number };
     full: { url: string; width: number; height: number };
   };
+}
+
+// Response type for Airtable API
+interface AirtableResponse {
+  id: string;
+  createdTime?: string;
+  fields: Record<string, any>;
 }
 
 /**
@@ -136,10 +143,13 @@ export async function uploadImageToAirtable(
       throw new Error(`Airtable API error: ${response.status} - ${error}`);
     }
     
-    const result = await response.json();
+    const result = await response.json() as AirtableResponse;
     
-    // Return the Airtable attachment object
-    return result.fields[fieldName][0] as AirtableAttachment;
+    // Return the Airtable attachment object if it exists
+    if (result.fields && result.fields[fieldName] && Array.isArray(result.fields[fieldName])) {
+      return result.fields[fieldName][0] as AirtableAttachment;
+    }
+    return null;
   } catch (error) {
     console.error('Error uploading image to Airtable:', error);
     return null;
@@ -203,10 +213,13 @@ export async function uploadImageUrlToAirtable(
       throw new Error(`Airtable API error: ${response.status} - ${error}`);
     }
     
-    const result = await response.json();
+    const result = await response.json() as AirtableResponse;
     
-    // Return the Airtable attachment object
-    return result.fields[fieldName][0] as AirtableAttachment;
+    // Return the Airtable attachment object if it exists
+    if (result.fields && result.fields[fieldName] && Array.isArray(result.fields[fieldName])) {
+      return result.fields[fieldName][0] as AirtableAttachment;
+    }
+    return null;
   } catch (error) {
     console.error('Error uploading image URL to Airtable:', error);
     return null;
