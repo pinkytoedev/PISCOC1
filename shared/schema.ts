@@ -177,6 +177,7 @@ export const articleSchema = z.object({
   imageUrl: z.string(),
   imageType: z.enum(["url", "file"]),
   imagePath: z.string().nullable(),
+  instagramImageUrl: z.string().optional(), // Airtable instaPhoto field
   featured: z.string(),
   publishedAt: z.date().optional(),
   date: z.string().optional(), // Airtable Date field
