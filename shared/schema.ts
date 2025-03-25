@@ -46,6 +46,7 @@ export const articles = pgTable("articles", {
   imageUrl: text("image_url").notNull(),
   imageType: text("image_type").notNull().default("url"),
   imagePath: text("image_path"),
+  instagramImageUrl: text("instagram_image_url"), // For Airtable instaPhoto field
   featured: text("featured").notNull().default("no"),
   publishedAt: timestamp("published_at"),
   date: text("date"), // Airtable Date field (stored as string)
