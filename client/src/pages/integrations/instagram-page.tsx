@@ -101,7 +101,7 @@ export default function InstagramPage() {
   const { data: connectionStatus, isLoading: isLoadingStatus } = useQuery<InstagramConnectionStatus>({
     queryKey: ['/api/instagram/status'],
     enabled: !isLoading && hasClientId && hasClientSecret,
-    refetchInterval: connectionStatus?.connected ? 300000 : false, // Refresh every 5 minutes if connected
+    refetchInterval: 300000, // Refresh every 5 minutes
   });
   
   // Check connection status
