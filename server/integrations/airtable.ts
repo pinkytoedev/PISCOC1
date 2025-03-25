@@ -613,12 +613,16 @@ export function setupAirtableRoutes(app: Express) {
 
   // Update an article in Airtable
   app.post("/api/airtable/update/article/:id", async (req, res) => {
+    // Store article info for error logging
+    let articleId: number | undefined;
+    let articleDetails: { externalId?: string, title?: string } = {};
+    
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const articleId = parseInt(req.params.id);
+      articleId = parseInt(req.params.id);
       if (isNaN(articleId)) {
         return res.status(400).json({ message: "Invalid article ID" });
       }
@@ -628,6 +632,12 @@ export function setupAirtableRoutes(app: Express) {
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
+      
+      // Save article details for error handling
+      articleDetails = {
+        externalId: article.externalId,
+        title: article.title
+      };
       
       // Check if this is an Airtable article
       if (article.source !== "airtable" || !article.externalId) {
@@ -654,13 +664,21 @@ export function setupAirtableRoutes(app: Express) {
       // Convert article data to Airtable format
       const airtableData = await convertToAirtableFormat(article);
       
-      // Update the record in Airtable
+      // Update the record in Airtable using the records array format
+      // which is what the Airtable API expects for table-level operations
       const response = await airtableRequest(
         apiKey,
         baseId,
-        `${tableName}/${article.externalId}`,
+        tableName,
         "PATCH",
-        { fields: airtableData }
+        {
+          records: [
+            {
+              id: article.externalId,
+              fields: airtableData
+            }
+          ]
+        }
       );
       
       // Log the activity
@@ -688,6 +706,7 @@ export function setupAirtableRoutes(app: Express) {
       // Check for specific error types to provide better error messages
       if (error instanceof Error) {
         const errorText = error.message;
+        console.log("Detailed Airtable error:", errorText);
         
         if (errorText.includes("403")) {
           errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
@@ -698,6 +717,14 @@ export function setupAirtableRoutes(app: Express) {
         } else if (errorText.includes("422")) {
           errorMessage = "Invalid data format for Airtable. Please check the field mappings.";
           statusCode = 422;
+        } else if (errorText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
+          errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
+          statusCode = 403;
+        }
+        
+        // Log article details that were captured earlier
+        if (articleId && articleDetails) {
+          console.log(`Article update failed for ID ${articleId}, externalId: ${articleDetails.externalId}, title: "${articleDetails.title}"`);
         }
       }
       
@@ -814,17 +841,27 @@ export function setupAirtableRoutes(app: Express) {
 
   // Push an article to Airtable
   app.post("/api/airtable/push/article/:id", async (req, res) => {
+    // Store article info for error logging
+    let articleId: number | undefined;
+    let articleDetails: { externalId?: string, title?: string } = {};
+    
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const articleId = parseInt(req.params.id);
+      articleId = parseInt(req.params.id);
       const article = await storage.getArticle(articleId);
       
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
+      
+      // Save article details for error handling
+      articleDetails = {
+        externalId: article.externalId,
+        title: article.title
+      };
       
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
@@ -951,7 +988,38 @@ export function setupAirtableRoutes(app: Express) {
       });
     } catch (error) {
       console.error("Airtable push error:", error);
-      res.status(500).json({ message: "Failed to push article to Airtable" });
+      
+      let errorMessage = "Failed to push article to Airtable";
+      let statusCode = 500;
+      
+      if (error instanceof Error) {
+        const errorText = error.message;
+        console.log("Detailed Airtable push error:", errorText);
+        
+        if (errorText.includes("403")) {
+          errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
+          statusCode = 403;
+        } else if (errorText.includes("404")) {
+          errorMessage = "Table not found in Airtable. Please check your table name.";
+          statusCode = 404;
+        } else if (errorText.includes("422")) {
+          errorMessage = "Invalid data format for Airtable. Please check the field mappings.";
+          statusCode = 422;
+        } else if (errorText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
+          errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
+          statusCode = 403;
+        }
+        
+        // Log article details that were captured earlier
+        if (articleId !== undefined && articleDetails) {
+          console.log(`Article push failed for ID ${articleId}, title: "${articleDetails.title}", externalId: ${articleDetails.externalId || 'none'}`);
+        }
+      }
+      
+      res.status(statusCode).json({ 
+        message: errorMessage,
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 }
