@@ -475,12 +475,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               </p>
             </div>
 
-            {/* Image upload section - only shown when editing an Airtable article */}
+            {/* Image selection section - only shown when editing an Airtable article */}
             {isEditing && isFromAirtable && (
               <div className="col-span-2 mt-2 p-4 border border-gray-200 rounded-md">
                 <div className="flex items-center mb-2">
                   <ImageIcon className="h-4 w-4 mr-2 text-gray-600" />
-                  <Label className="font-medium">Upload Image to Airtable</Label>
+                  <Label className="font-medium">Select Image for Airtable</Label>
                 </div>
                 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
@@ -505,7 +505,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                     </div>
                   )}
                   
-                  {/* Upload controls */}
+                  {/* Image selection controls */}
                   <div className={`${previewUrl ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
                     <div className="mb-3">
                       <input
@@ -523,32 +523,10 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                           variant="outline" 
                           onClick={() => fileInputRef.current?.click()}
                           className="flex items-center"
-                          disabled={isUploading}
                         >
                           <Upload className="h-4 w-4 mr-2" />
                           {imageFile ? 'Change Image' : 'Select Image'}
                         </Button>
-                        
-                        {imageFile && (
-                          <Button
-                            type="button"
-                            onClick={handleUploadClick}
-                            className="flex items-center"
-                            disabled={isUploading}
-                          >
-                            {isUploading ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Uploading...
-                              </>
-                            ) : (
-                              <>
-                                <Check className="h-4 w-4 mr-2" />
-                                Upload to Airtable
-                              </>
-                            )}
-                          </Button>
-                        )}
                       </div>
                     </div>
                     
@@ -558,17 +536,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                       </div>
                     )}
                     
-                    {isUploading && (
-                      <div className="mt-2">
-                        <Progress value={uploadProgress} className="h-2" />
-                        <p className="text-xs text-gray-500 mt-1 text-right">{uploadProgress}%</p>
-                      </div>
-                    )}
-                    
-                    <p className="text-xs text-gray-500 mt-3">
-                      Upload an image to be attached to this article in Airtable. 
-                      Images will be stored in the MainImage field.
-                    </p>
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-md">
+                      <p className="text-xs text-blue-700">
+                        <AlertCircle className="h-3 w-3 inline-block mr-1" />
+                        <strong>Important:</strong> After saving this article, use the "Update in Airtable" button in the article list to upload this image to Airtable.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
