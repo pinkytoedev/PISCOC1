@@ -507,7 +507,7 @@ ${article.hashtags || ''}`;
         );
         
         res.json({ data: mediaResponse.data || [] });
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching Instagram media:", error);
         
         // If we get an API error, return a fallback of articles published to Instagram
@@ -570,7 +570,7 @@ ${article.hashtags || ''}`;
         );
         
         res.json(insightsResponse);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching Instagram insights:", error);
         res.status(500).json({ 
           message: "Failed to fetch Instagram insights", 
