@@ -325,6 +325,38 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             </div>
 
             <div>
+              <Label htmlFor="photo">Photo Reference</Label>
+              {isLoadingTeamMembers ? (
+                <Select disabled>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Loading team members..." />
+                  </SelectTrigger>
+                </Select>
+              ) : (
+                <Select 
+                  name="photo" 
+                  value={formData.photo || ''} 
+                  onValueChange={(value) => handleSelectChange("photo", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a photographer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {teamMembers?.map((member) => (
+                      <SelectItem key={`photo-${member.id}`} value={member.name}>
+                        {member.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                This links to a team member in Airtable's Photo field
+              </p>
+            </div>
+
+            <div>
               <Label htmlFor="photoCredit">Photo Credit</Label>
               <Input
                 id="photoCredit"

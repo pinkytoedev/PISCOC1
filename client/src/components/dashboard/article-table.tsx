@@ -303,6 +303,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                 Author
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Photo
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -382,6 +385,16 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                     <div className="text-sm text-gray-900 truncate max-w-[120px]" title={article.author}>
                       {article.author}
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 truncate max-w-[120px]" title={article.photo || ''}>
+                      {article.photo || '—'}
+                    </div>
+                    {article.photoCredit && (
+                      <div className="text-xs text-gray-500 truncate max-w-[120px]" title={article.photoCredit}>
+                        Credit: {article.photoCredit}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <StatusBadge status={article.status || 'draft'} />
