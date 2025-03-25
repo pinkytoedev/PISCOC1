@@ -184,6 +184,14 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               This article was imported from Airtable. Your changes will update the local copy.
               To push changes back to Airtable, use the "Update in Airtable" button in the article list after saving.
             </p>
+            <div className="mt-2 text-xs text-blue-600">
+              <p><span className="font-semibold">Important:</span> When updating to Airtable:</p>
+              <ul className="list-disc pl-5 mt-1 space-y-1">
+                <li>Image URLs will update the MainImage field in Airtable</li>
+                <li>For Instagram-sourced content, both MainImage and instaPhoto will be updated</li>
+                <li>All Airtable fields like Date, Featured, and Status will be properly mapped</li>
+              </ul>
+            </div>
             <span className="text-xs text-blue-600 mt-3 block">
               <span className="font-semibold">Airtable ID:</span> <code className="px-1 py-0.5 bg-white rounded text-xs font-mono">{editArticle.externalId}</code>
             </span>
@@ -289,6 +297,28 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 onChange={handleInputChange}
                 placeholder="URL for article cover image"
               />
+              {isFromAirtable && (
+                <p className="text-xs text-blue-600 mt-1">
+                  {formData.imageUrl && (
+                    <span className="block mb-1">
+                      <span className="font-medium">Current image from Airtable:</span> {formData.imageUrl.length > 50 ? `${formData.imageUrl.substring(0, 50)}...` : formData.imageUrl}
+                    </span>
+                  )}
+                  Changing this URL will update the MainImage or instaPhoto field in Airtable when using "Update in Airtable"
+                </p>
+              )}
+              {formData.imageUrl && (
+                <div className="mt-2 p-1 border border-gray-200 rounded-md overflow-hidden w-32 h-32">
+                  <img
+                    src={formData.imageUrl}
+                    alt="Article cover preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "https://placehold.co/600x400?text=Invalid+Image+URL";
+                    }}
+                  />
+                </div>
+              )}
               <p className="text-xs text-gray-500 mt-1">
                 Enter a direct link to an image for the article cover
               </p>

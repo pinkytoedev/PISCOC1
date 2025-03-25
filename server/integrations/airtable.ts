@@ -463,7 +463,7 @@ export function setupAirtableRoutes(app: Express) {
             photo: photoName,
             photoCredit: null, // Not available in new schema
             status: fields.Finished ? "published" : "draft",
-            hashtags: fields.Hashtags || null,
+            hashtags: fields.Hashtags || "",
             externalId: record.id,
             source: "airtable"
           };
@@ -658,7 +658,7 @@ export function setupAirtableRoutes(app: Express) {
       
       // Save article details for error handling
       articleDetails = {
-        externalId: article.externalId,
+        externalId: article.externalId || undefined,
         title: article.title
       };
       
@@ -712,7 +712,7 @@ export function setupAirtableRoutes(app: Express) {
         resourceId: articleId.toString(),
         details: { 
           source: "airtable",
-          externalId: article.externalId
+          externalId: article.externalId || undefined
         }
       });
       
@@ -882,7 +882,7 @@ export function setupAirtableRoutes(app: Express) {
       
       // Save article details for error handling
       articleDetails = {
-        externalId: article.externalId,
+        externalId: article.externalId || undefined,
         title: article.title
       };
       
