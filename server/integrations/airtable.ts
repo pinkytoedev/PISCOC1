@@ -150,6 +150,29 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     airtableData.Author = authorRecord;
   }
   
+  // Handle MainImage field if article has an imageUrl
+  if (article.imageUrl && article.imageUrl !== "") {
+    // Only add MainImage if it's a URL - for other image types we'd need a different approach
+    if (article.imageType === "url") {
+      // Create the Airtable Attachment structure
+      const imageAttachment: Attachment = {
+        id: `img_${Date.now()}`, // Generate a temporary id
+        url: article.imageUrl,
+        filename: article.imageUrl.split('/').pop() || 'image.jpg',
+        size: 0, // We don't know the size, but Airtable requires this field
+        type: "image/jpeg" // Assume JPEG as default, could be improved with MIME detection
+      };
+      
+      airtableData.MainImage = [imageAttachment];
+      
+      // For Instagram-sourced articles, also set the instaPhoto field to the same image
+      // This ensures proper syncing back to Airtable for Instagram-sourced content
+      if (article.source === "instagram") {
+        airtableData.instaPhoto = [imageAttachment];
+      }
+    }
+  }
+  
   return airtableData;
 }
 
