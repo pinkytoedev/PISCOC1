@@ -566,6 +566,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                       <p className="text-xs text-blue-700">
                         <AlertCircle className="h-3 w-3 inline-block mr-1" />
                         <strong>Important:</strong> After saving this article, use the "Update in Airtable" button in the article list to upload this image to Airtable.
+                        {imageFile && (
+                          <span className="block mt-1 text-green-700">
+                            <Check className="h-3 w-3 inline-block mr-1" />
+                            Image selected and ready for upload.
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
