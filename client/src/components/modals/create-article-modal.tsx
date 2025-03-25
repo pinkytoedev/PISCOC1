@@ -127,6 +127,132 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       setFormData((prev) => ({ ...prev, [name]: checked ? "published" : "draft" }));
     }
   };
+  
+  // Handle image upload for MainImage field
+  const uploadMainImageMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      // We need to check if the article is being edited and is from Airtable
+      if (!isEditing || !isFromAirtable) {
+        toast({
+          title: "Cannot upload directly to Airtable",
+          description: "Direct Airtable uploads are only available for existing Airtable articles",
+          variant: "destructive",
+        });
+        throw new Error("Cannot upload directly to Airtable");
+      }
+      
+      const response = await fetch(`/api/airtable/upload-image/${editArticle.id}/MainImage`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to upload image");
+      }
+      
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Image uploaded successfully",
+        description: "The image was uploaded to Airtable and attached to the article",
+      });
+      
+      // Update the form data with the new image URL
+      setFormData(prev => ({
+        ...prev,
+        imageUrl: data.attachment.url
+      }));
+      
+      setMainImageUploading(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to upload image",
+        description: error.message || "There was an error uploading the image to Airtable",
+        variant: "destructive",
+      });
+      setMainImageUploading(false);
+    }
+  });
+  
+  // Handle image upload for instaPhoto field
+  const uploadInstagramImageMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      // We need to check if the article is being edited and is from Airtable
+      if (!isEditing || !isFromAirtable) {
+        toast({
+          title: "Cannot upload directly to Airtable",
+          description: "Direct Airtable uploads are only available for existing Airtable articles",
+          variant: "destructive",
+        });
+        throw new Error("Cannot upload directly to Airtable");
+      }
+      
+      const response = await fetch(`/api/airtable/upload-image/${editArticle.id}/instaPhoto`, {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to upload image");
+      }
+      
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Instagram image uploaded successfully",
+        description: "The image was uploaded to Airtable and attached to the article",
+      });
+      
+      // Update the form data with the new image URL
+      setFormData(prev => ({
+        ...prev,
+        instagramImageUrl: data.attachment.url
+      }));
+      
+      setInstagramImageUploading(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to upload image",
+        description: error.message || "There was an error uploading the image to Airtable",
+        variant: "destructive",
+      });
+      setInstagramImageUploading(false);
+    }
+  });
+  
+  // Handle main image file selection
+  const handleMainImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    setMainImageUploading(true);
+    uploadMainImageMutation.mutate(formData);
+  };
+  
+  // Handle Instagram image file selection
+  const handleInstagramImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    setInstagramImageUploading(true);
+    uploadInstagramImageMutation.mutate(formData);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -305,13 +431,44 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
             <div className="col-span-2">
               <Label htmlFor="imageUrl">Image URL</Label>
-              <Input
-                id="imageUrl"
-                name="imageUrl"
-                value={formData.imageUrl}
-                onChange={handleInputChange}
-                placeholder="URL for article cover image"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="imageUrl"
+                  name="imageUrl"
+                  value={formData.imageUrl}
+                  onChange={handleInputChange}
+                  placeholder="URL for article cover image"
+                  className="flex-grow"
+                />
+                {isFromAirtable && (
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    className="flex items-center gap-1"
+                    onClick={() => mainImageFileInputRef.current?.click()}
+                    disabled={mainImageUploading}
+                  >
+                    {mainImageUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        <span>Upload</span>
+                      </>
+                    )}
+                  </Button>
+                )}
+                <input
+                  type="file"
+                  ref={mainImageFileInputRef}
+                  onChange={handleMainImageFileChange}
+                  className="hidden"
+                  accept="image/*"
+                />
+              </div>
               {isFromAirtable && (
                 <p className="text-xs text-blue-600 mt-1">
                   {formData.imageUrl && (
@@ -319,7 +476,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                       <span className="font-medium">Current image from Airtable:</span> {formData.imageUrl.length > 50 ? `${formData.imageUrl.substring(0, 50)}...` : formData.imageUrl}
                     </span>
                   )}
-                  Changing this URL will update the MainImage field in Airtable when using "Update in Airtable"
+                  {mainImageUploading ? (
+                    <span className="font-medium text-amber-600">Uploading image to Airtable...</span>
+                  ) : (
+                    <span>You can directly upload images to the MainImage field in Airtable using the Upload button</span>
+                  )}
                 </p>
               )}
               {formData.imageUrl && (
@@ -341,13 +502,44 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
             <div className="col-span-2">
               <Label htmlFor="instagramImageUrl">Instagram Image URL</Label>
-              <Input
-                id="instagramImageUrl"
-                name="instagramImageUrl"
-                value={formData.instagramImageUrl || ''}
-                onChange={handleInputChange}
-                placeholder="URL for Instagram image"
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="instagramImageUrl"
+                  name="instagramImageUrl"
+                  value={formData.instagramImageUrl || ''}
+                  onChange={handleInputChange}
+                  placeholder="URL for Instagram image"
+                  className="flex-grow"
+                />
+                {isFromAirtable && (
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    className="flex items-center gap-1"
+                    onClick={() => instagramImageFileInputRef.current?.click()}
+                    disabled={instagramImageUploading}
+                  >
+                    {instagramImageUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="h-4 w-4" />
+                        <span>Upload</span>
+                      </>
+                    )}
+                  </Button>
+                )}
+                <input
+                  type="file"
+                  ref={instagramImageFileInputRef}
+                  onChange={handleInstagramImageFileChange}
+                  className="hidden"
+                  accept="image/*"
+                />
+              </div>
               {isFromAirtable && (
                 <p className="text-xs text-blue-600 mt-1">
                   {formData.instagramImageUrl && (
@@ -355,7 +547,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                       <span className="font-medium">Current Instagram image from Airtable:</span> {formData.instagramImageUrl.length > 50 ? `${formData.instagramImageUrl.substring(0, 50)}...` : formData.instagramImageUrl}
                     </span>
                   )}
-                  This URL will update the instaPhoto field in Airtable when using "Update in Airtable"
+                  {instagramImageUploading ? (
+                    <span className="font-medium text-amber-600">Uploading image to Airtable instaPhoto field...</span>
+                  ) : (
+                    <span>You can directly upload images to the instaPhoto field in Airtable using the Upload button</span>
+                  )}
                 </p>
               )}
               {formData.instagramImageUrl && (
