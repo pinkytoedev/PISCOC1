@@ -129,8 +129,12 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     Description: article.description || "",
     Featured: article.featured === "yes",
     Finished: article.finished || article.status === "published", // Use either finished field or derive from status
-    Hashtags: article.hashtags || ""
+    Hashtags: article.hashtags || "",
+    message_sent: article.status === "published" // If the article is published, assume it was sent
   };
+  
+  // Add _updatedTime to track when this article was last updated
+  airtableData._updatedTime = new Date().toISOString();
   
   // Handle date mapping - Use the specific date field if available, fallback to publishedAt
   // Airtable expects date in full ISO format with time
@@ -148,6 +152,16 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   // Add author reference if we found one
   if (authorRecord) {
     airtableData.Author = authorRecord;
+  }
+  
+  // Handle Photo field - if we have a photo reference
+  if (article.photo) {
+    // Try to find the photo reference in the team members
+    const teamMembers = await storage.getTeamMembers();
+    const photoMember = teamMembers.find(m => m.name === article.photo);
+    if (photoMember && photoMember.externalId) {
+      airtableData.Photo = [photoMember.externalId];
+    }
   }
   
   // Handle MainImage field if article has an imageUrl
