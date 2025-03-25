@@ -167,10 +167,24 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     airtableData.Photo = [];
   }
   
+  // Check if URLs are from Airtable CDN (v5.airtableusercontent.com)
+  // If so, don't include them as they might be temporary or expired
+  const isAirtableCdnUrl = (url: string) => {
+    return url && (
+      url.includes('airtableusercontent.com') || 
+      url.includes('airtable.com') ||
+      url.includes('dl.airtable.com')
+    );
+  };
+
   // Handle MainImage field if article has an imageUrl
   if (article.imageUrl && article.imageUrl !== "") {
+    // Skip Airtable CDN URLs as they might be expired
+    if (isAirtableCdnUrl(article.imageUrl)) {
+      console.log(`Skipping Airtable CDN URL for MainImage: ${article.imageUrl}`);
+    } 
     // Only add MainImage if it's a URL - for other image types we'd need a different approach
-    if (article.imageType === "url") {
+    else if (article.imageType === "url") {
       try {
         // Extract file extension to determine proper MIME type
         const urlLower = article.imageUrl.toLowerCase();
@@ -232,114 +246,124 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   
   // Handle instaPhoto field separately if we have an Instagram image URL
   if (article.instagramImageUrl && article.instagramImageUrl !== "") {
-    try {
-      // Extract file extension to determine proper MIME type
-      const urlLower = article.instagramImageUrl.toLowerCase();
-      let mimeType = "image/jpeg"; // Default for Instagram
-      let fileExt = "jpg";
-      
-      // Determine MIME type based on URL extension
-      if (urlLower.endsWith('.png')) {
-        mimeType = "image/png";
-        fileExt = "png";
-      } else if (urlLower.endsWith('.gif')) {
-        mimeType = "image/gif";
-        fileExt = "gif";
-      } else if (urlLower.endsWith('.webp')) {
-        mimeType = "image/webp";
-        fileExt = "webp";
-      }
-      
-      // Extract filename or create a default one with proper extension
-      const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
-      
-      // Create the Airtable Attachment structure for instaPhoto
-      const instaPhotoAttachment: Attachment = {
-        id: `img_insta_${Date.now()}`, // Generate a temporary id
-        url: article.instagramImageUrl,
-        filename: filename,
-        size: 0, 
-        type: mimeType,
-        thumbnails: {
-          small: { 
-            url: article.instagramImageUrl,
-            width: 36,
-            height: 36
-          },
-          large: {
-            url: article.instagramImageUrl,
-            width: 512,
-            height: 512
-          },
-          full: {
-            url: article.instagramImageUrl,
-            width: 3000,
-            height: 3000
-          }
+    // Skip Airtable CDN URLs as they might be expired
+    if (isAirtableCdnUrl(article.instagramImageUrl)) {
+      console.log(`Skipping Airtable CDN URL for instaPhoto: ${article.instagramImageUrl}`);
+    } else {
+      try {
+        // Extract file extension to determine proper MIME type
+        const urlLower = article.instagramImageUrl.toLowerCase();
+        let mimeType = "image/jpeg"; // Default for Instagram
+        let fileExt = "jpg";
+        
+        // Determine MIME type based on URL extension
+        if (urlLower.endsWith('.png')) {
+          mimeType = "image/png";
+          fileExt = "png";
+        } else if (urlLower.endsWith('.gif')) {
+          mimeType = "image/gif";
+          fileExt = "gif";
+        } else if (urlLower.endsWith('.webp')) {
+          mimeType = "image/webp";
+          fileExt = "webp";
         }
-      };
-      
-      airtableData.instaPhoto = [instaPhotoAttachment];
-      
-      console.log("Setting instaPhoto attachment:", JSON.stringify(instaPhotoAttachment));
-    } catch (error) {
-      console.error("Error creating instaPhoto attachment:", error);
+        
+        // Extract filename or create a default one with proper extension
+        const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
+        
+        // Create the Airtable Attachment structure for instaPhoto
+        const instaPhotoAttachment: Attachment = {
+          id: `img_insta_${Date.now()}`, // Generate a temporary id
+          url: article.instagramImageUrl,
+          filename: filename,
+          size: 0, 
+          type: mimeType,
+          thumbnails: {
+            small: { 
+              url: article.instagramImageUrl,
+              width: 36,
+              height: 36
+            },
+            large: {
+              url: article.instagramImageUrl,
+              width: 512,
+              height: 512
+            },
+            full: {
+              url: article.instagramImageUrl,
+              width: 3000,
+              height: 3000
+            }
+          }
+        };
+        
+        airtableData.instaPhoto = [instaPhotoAttachment];
+        
+        console.log("Setting instaPhoto attachment:", JSON.stringify(instaPhotoAttachment));
+      } catch (error) {
+        console.error("Error creating instaPhoto attachment:", error);
+      }
     }
   }
   // For Instagram-sourced articles without a specific Instagram image, 
   // use the main image for the instaPhoto field
   else if (article.source === "instagram" && article.imageUrl && article.imageUrl !== "") {
-    try {
-      // Extract file extension to determine proper MIME type
-      const urlLower = article.imageUrl.toLowerCase();
-      let mimeType = "image/jpeg"; // Default
-      let fileExt = "jpg";
-      
-      // Determine MIME type based on URL extension
-      if (urlLower.endsWith('.png')) {
-        mimeType = "image/png";
-        fileExt = "png";
-      } else if (urlLower.endsWith('.gif')) {
-        mimeType = "image/gif";
-        fileExt = "gif";
-      } else if (urlLower.endsWith('.webp')) {
-        mimeType = "image/webp";
-        fileExt = "webp";
-      }
-      
-      // Extract filename or create a default one with proper extension
-      const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
-      
-      const instaPhotoAttachment: Attachment = {
-        id: `img_insta_${Date.now()}`, // Generate a temporary id
-        url: article.imageUrl,
-        filename: filename,
-        size: 0, 
-        type: mimeType,
-        thumbnails: {
-          small: { 
-            url: article.imageUrl,
-            width: 36,
-            height: 36
-          },
-          large: {
-            url: article.imageUrl,
-            width: 512,
-            height: 512
-          },
-          full: {
-            url: article.imageUrl,
-            width: 3000,
-            height: 3000
-          }
+    // Skip Airtable CDN URLs as they might be expired
+    if (isAirtableCdnUrl(article.imageUrl)) {
+      console.log(`Skipping Airtable CDN URL for fallback instaPhoto: ${article.imageUrl}`);
+    } else {
+      try {
+        // Extract file extension to determine proper MIME type
+        const urlLower = article.imageUrl.toLowerCase();
+        let mimeType = "image/jpeg"; // Default
+        let fileExt = "jpg";
+        
+        // Determine MIME type based on URL extension
+        if (urlLower.endsWith('.png')) {
+          mimeType = "image/png";
+          fileExt = "png";
+        } else if (urlLower.endsWith('.gif')) {
+          mimeType = "image/gif";
+          fileExt = "gif";
+        } else if (urlLower.endsWith('.webp')) {
+          mimeType = "image/webp";
+          fileExt = "webp";
         }
-      };
-      
-      airtableData.instaPhoto = [instaPhotoAttachment];
-      
-      console.log("Using main image for instaPhoto:", JSON.stringify(instaPhotoAttachment));
-    } catch (error) {
-      console.error("Error creating fallback instaPhoto attachment:", error);
+        
+        // Extract filename or create a default one with proper extension
+        const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
+        
+        const instaPhotoAttachment: Attachment = {
+          id: `img_insta_${Date.now()}`, // Generate a temporary id
+          url: article.imageUrl,
+          filename: filename,
+          size: 0, 
+          type: mimeType,
+          thumbnails: {
+            small: { 
+              url: article.imageUrl,
+              width: 36,
+              height: 36
+            },
+            large: {
+              url: article.imageUrl,
+              width: 512,
+              height: 512
+            },
+            full: {
+              url: article.imageUrl,
+              width: 3000,
+              height: 3000
+            }
+          }
+        };
+        
+        airtableData.instaPhoto = [instaPhotoAttachment];
+        
+        console.log("Using main image for instaPhoto:", JSON.stringify(instaPhotoAttachment));
+      } catch (error) {
+        console.error("Error creating fallback instaPhoto attachment:", error);
+      }
     }
   }
   
