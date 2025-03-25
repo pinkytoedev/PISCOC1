@@ -82,7 +82,7 @@ interface AirtableCarouselQuote {
 // Type for tracking article details in error handling
 interface ArticleErrorDetails {
   externalId?: string | undefined;
-  title?: string;
+  title?: string | undefined;
 }
 
 // Helper function to make Airtable API requests
