@@ -100,17 +100,33 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
               const response = JSON.parse(xhr.responseText);
+              
+              // Log the response for debugging
+              console.log('Upload response:', response);
+              
+              // Check if the image URL is in the expected location from Airtable
+              if (response?.airtableResponse?.fields?.MainImage?.[0]?.url) {
+                console.log('Image URL found in Airtable response:', response.airtableResponse.fields.MainImage[0].url);
+              }
+              
               resolve(response);
             } catch (error) {
+              console.error('Failed to parse response:', error);
               reject(new Error('Failed to parse response'));
             }
           } else {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              console.error('Upload error details:', errorData);
+              reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
+            } catch (e) {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
           }
         });
         
         xhr.addEventListener('error', () => {
-          reject(new Error('Upload failed'));
+          reject(new Error('Upload failed - network error'));
         });
         
         xhr.addEventListener('abort', () => {
@@ -123,18 +139,44 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       });
     },
     onSuccess: (data) => {
-      // Update the form with the new image URL
+      console.log('Upload success response:', data);
+      
+      // Try to get the image URL from different potential locations in the response
+      let imageUrl = '';
+      
+      // First try the direct imageUrl property (set by our backend)
       if (data.imageUrl) {
+        imageUrl = data.imageUrl;
+      } 
+      // Then try to extract from the Airtable response if available
+      else if (data.airtableResponse?.fields?.MainImage?.[0]?.url) {
+        imageUrl = data.airtableResponse.fields.MainImage[0].url;
+      }
+      // Then try to extract from the Airtable response if in a different format
+      else if (data.airtableResponse?.fields?.MainImage?.[0]?.thumbnails?.full?.url) {
+        imageUrl = data.airtableResponse.fields.MainImage[0].thumbnails.full.url;
+      }
+      
+      if (imageUrl) {
+        console.log('Using image URL:', imageUrl);
+        
+        // Update the form with the new image URL
         setFormData(prev => ({
           ...prev,
-          imageUrl: data.imageUrl,
+          imageUrl: imageUrl,
           imageType: 'url',
           imagePath: null
         }));
         
         toast({
           title: "Image uploaded",
-          description: "Image was successfully uploaded and linked to the article.",
+          description: "Image was successfully uploaded and linked to the article in Airtable.",
+        });
+      } else {
+        console.warn('No image URL found in response');
+        toast({
+          title: "Image upload completed",
+          description: "The image was uploaded, but the URL couldn't be retrieved. The article will be updated with the image in Airtable.",
         });
       }
       
