@@ -172,13 +172,53 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     // Only add MainImage if it's a URL - for other image types we'd need a different approach
     if (article.imageType === "url") {
       try {
+        // Extract file extension to determine proper MIME type
+        const urlLower = article.imageUrl.toLowerCase();
+        let mimeType = "image/jpeg"; // Default
+        let fileExt = "jpg";
+        
+        // Determine MIME type based on URL extension
+        if (urlLower.endsWith('.png')) {
+          mimeType = "image/png";
+          fileExt = "png";
+        } else if (urlLower.endsWith('.gif')) {
+          mimeType = "image/gif";
+          fileExt = "gif";
+        } else if (urlLower.endsWith('.webp')) {
+          mimeType = "image/webp";
+          fileExt = "webp";
+        } else if (urlLower.endsWith('.svg')) {
+          mimeType = "image/svg+xml";
+          fileExt = "svg";
+        }
+        
+        // Extract filename or create a default one with proper extension
+        const filename = article.imageUrl.split('/').pop() || `main_image.${fileExt}`;
+        
         // Create the Airtable Attachment structure for MainImage
         const mainImageAttachment: Attachment = {
           id: `img_main_${Date.now()}`, // Generate a temporary id
           url: article.imageUrl,
-          filename: article.imageUrl.split('/').pop() || 'main_image.jpg',
+          filename: filename,
           size: 0, // We don't know the size, but Airtable requires this field
-          type: "image/jpeg" // Assume JPEG as default, could be improved with MIME detection
+          type: mimeType,
+          thumbnails: {
+            small: { 
+              url: article.imageUrl,
+              width: 36,
+              height: 36
+            },
+            large: {
+              url: article.imageUrl,
+              width: 512,
+              height: 512
+            },
+            full: {
+              url: article.imageUrl,
+              width: 3000,
+              height: 3000
+            }
+          }
         };
         
         airtableData.MainImage = [mainImageAttachment];
@@ -193,13 +233,50 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   // Handle instaPhoto field separately if we have an Instagram image URL
   if (article.instagramImageUrl && article.instagramImageUrl !== "") {
     try {
+      // Extract file extension to determine proper MIME type
+      const urlLower = article.instagramImageUrl.toLowerCase();
+      let mimeType = "image/jpeg"; // Default for Instagram
+      let fileExt = "jpg";
+      
+      // Determine MIME type based on URL extension
+      if (urlLower.endsWith('.png')) {
+        mimeType = "image/png";
+        fileExt = "png";
+      } else if (urlLower.endsWith('.gif')) {
+        mimeType = "image/gif";
+        fileExt = "gif";
+      } else if (urlLower.endsWith('.webp')) {
+        mimeType = "image/webp";
+        fileExt = "webp";
+      }
+      
+      // Extract filename or create a default one with proper extension
+      const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
+      
       // Create the Airtable Attachment structure for instaPhoto
       const instaPhotoAttachment: Attachment = {
         id: `img_insta_${Date.now()}`, // Generate a temporary id
         url: article.instagramImageUrl,
-        filename: article.instagramImageUrl.split('/').pop() || 'insta_photo.jpg',
+        filename: filename,
         size: 0, 
-        type: "image/jpeg"
+        type: mimeType,
+        thumbnails: {
+          small: { 
+            url: article.instagramImageUrl,
+            width: 36,
+            height: 36
+          },
+          large: {
+            url: article.instagramImageUrl,
+            width: 512,
+            height: 512
+          },
+          full: {
+            url: article.instagramImageUrl,
+            width: 3000,
+            height: 3000
+          }
+        }
       };
       
       airtableData.instaPhoto = [instaPhotoAttachment];
@@ -213,12 +290,49 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   // use the main image for the instaPhoto field
   else if (article.source === "instagram" && article.imageUrl && article.imageUrl !== "") {
     try {
+      // Extract file extension to determine proper MIME type
+      const urlLower = article.imageUrl.toLowerCase();
+      let mimeType = "image/jpeg"; // Default
+      let fileExt = "jpg";
+      
+      // Determine MIME type based on URL extension
+      if (urlLower.endsWith('.png')) {
+        mimeType = "image/png";
+        fileExt = "png";
+      } else if (urlLower.endsWith('.gif')) {
+        mimeType = "image/gif";
+        fileExt = "gif";
+      } else if (urlLower.endsWith('.webp')) {
+        mimeType = "image/webp";
+        fileExt = "webp";
+      }
+      
+      // Extract filename or create a default one with proper extension
+      const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
+      
       const instaPhotoAttachment: Attachment = {
         id: `img_insta_${Date.now()}`, // Generate a temporary id
         url: article.imageUrl,
-        filename: article.imageUrl.split('/').pop() || 'insta_photo.jpg',
+        filename: filename,
         size: 0, 
-        type: "image/jpeg"
+        type: mimeType,
+        thumbnails: {
+          small: { 
+            url: article.imageUrl,
+            width: 36,
+            height: 36
+          },
+          large: {
+            url: article.imageUrl,
+            width: 512,
+            height: 512
+          },
+          full: {
+            url: article.imageUrl,
+            width: 3000,
+            height: 3000
+          }
+        }
       };
       
       airtableData.instaPhoto = [instaPhotoAttachment];
@@ -482,18 +596,52 @@ export function setupAirtableRoutes(app: Express) {
           let instagramImageUrl = "";
           
           if (fields.MainImage && fields.MainImage.length > 0) {
-            console.log(`Record ${record.id}: MainImage attachment structure:`, JSON.stringify(fields.MainImage[0], null, 2));
-            imageUrl = fields.MainImage[0].url;
+            try {
+              // Log the full structure to better understand the Airtable format
+              console.log(`Record ${record.id}: MainImage attachment structure:`, JSON.stringify(fields.MainImage[0], null, 2));
+              
+              // Extract the URL from the attachment object
+              // First try the url property, then check for thumbnails
+              if (fields.MainImage[0].url) {
+                imageUrl = fields.MainImage[0].url;
+              } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.full) {
+                imageUrl = fields.MainImage[0].thumbnails.full.url;
+              } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.large) {
+                imageUrl = fields.MainImage[0].thumbnails.large.url;
+              }
+              
+              syncResults.details.push(`Record ${record.id}: Found MainImage: ${imageUrl.substring(0, 50)}...`);
+            } catch (error) {
+              console.error(`Error parsing MainImage for record ${record.id}:`, error);
+              syncResults.details.push(`Record ${record.id}: Error parsing MainImage, using default`);
+            }
           }
           
           if (fields.instaPhoto && fields.instaPhoto.length > 0) {
-            console.log(`Record ${record.id}: instaPhoto attachment structure:`, JSON.stringify(fields.instaPhoto[0], null, 2));
-            instagramImageUrl = fields.instaPhoto[0].url;
-            
-            // Use instaPhoto as fallback if MainImage is not available
-            if (!fields.MainImage || fields.MainImage.length === 0) {
-              imageUrl = fields.instaPhoto[0].url;
-              syncResults.details.push(`Record ${record.id}: Using instaPhoto as MainImage is not available`);
+            try {
+              // Log the full structure to better understand the Airtable format
+              console.log(`Record ${record.id}: instaPhoto attachment structure:`, JSON.stringify(fields.instaPhoto[0], null, 2));
+              
+              // Extract the URL from the attachment object
+              // First try the url property, then check for thumbnails
+              if (fields.instaPhoto[0].url) {
+                instagramImageUrl = fields.instaPhoto[0].url;
+              } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.full) {
+                instagramImageUrl = fields.instaPhoto[0].thumbnails.full.url;
+              } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.large) {
+                instagramImageUrl = fields.instaPhoto[0].thumbnails.large.url;
+              }
+              
+              syncResults.details.push(`Record ${record.id}: Found instaPhoto: ${instagramImageUrl.substring(0, 50)}...`);
+              
+              // Use instaPhoto as fallback if MainImage is not available
+              if (!fields.MainImage || fields.MainImage.length === 0) {
+                imageUrl = instagramImageUrl;
+                syncResults.details.push(`Record ${record.id}: Using instaPhoto as MainImage is not available`);
+              }
+            } catch (error) {
+              console.error(`Error parsing instaPhoto for record ${record.id}:`, error);
+              syncResults.details.push(`Record ${record.id}: Error parsing instaPhoto, using default if needed`);
             }
           }
           
@@ -647,7 +795,26 @@ export function setupAirtableRoutes(app: Express) {
           // Get the image URL from image_url attachment if it exists
           let imageUrl = defaultImageUrl;
           if (fields.image_url && fields.image_url.length > 0) {
-            imageUrl = fields.image_url[0].url;
+            try {
+              // Log the full structure to better understand the Airtable format
+              console.log(`Team Member Record ${record.id}: image_url attachment structure:`, JSON.stringify(fields.image_url[0], null, 2));
+              
+              // Extract the URL from the attachment object
+              // First try the url property, then check for thumbnails
+              if (fields.image_url[0].url) {
+                imageUrl = fields.image_url[0].url;
+              } else if (fields.image_url[0].thumbnails && fields.image_url[0].thumbnails.full) {
+                imageUrl = fields.image_url[0].thumbnails.full.url;
+              } else if (fields.image_url[0].thumbnails && fields.image_url[0].thumbnails.large) {
+                imageUrl = fields.image_url[0].thumbnails.large.url;
+              }
+              
+              syncResults.details.push(`Record ${record.id}: Found team member image: ${imageUrl.substring(0, 50)}...`);
+            } catch (error) {
+              console.error(`Error parsing image_url for team member record ${record.id}:`, error);
+              syncResults.details.push(`Record ${record.id}: Error parsing image_url, using default`);
+              imageUrl = defaultImageUrl;
+            }
           }
           
           // Check if team member already exists
