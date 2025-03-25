@@ -59,22 +59,22 @@ export async function uploadImageToAirtable(
     const fileData = fs.readFileSync(filePath);
     const form = new FormData();
     
-    // Add metadata about the upload
-    const metadata: {
-      fields: Record<string, Array<{filename: string, type: string}>>
-    } = {
-      fields: {
-        [fieldName]: [
-          {
-            filename: fileName,
-            type: mimeType
-          }
-        ]
-      }
+    // Airtable API expects the data in this format
+    // We need the "fields" key in the form directly, not in a metadata field
+    const fields = {
+      [fieldName]: [
+        {
+          url: "https://placeholder.com/image.jpg", // This will be replaced by Airtable
+          filename: fileName
+        }
+      ]
     };
     
-    form.append('metadata', JSON.stringify(metadata));
-    form.append('attachment', fileData, {
+    // First append the fields
+    form.append('fields', JSON.stringify(fields));
+    
+    // Then append the file
+    form.append(fieldName, fileData, {
       filename: fileName,
       contentType: mimeType
     });
