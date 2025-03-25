@@ -61,6 +61,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         };
       }
       
+      // Set photo to "none" if it's empty for select component
+      if (!formDataToUse.photo) {
+        formDataToUse.photo = "none";
+      }
+      
       setFormData(formDataToUse);
     }
   }, [isOpen, editArticle]);
@@ -342,7 +347,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                     <SelectValue placeholder="Select a photographer" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {teamMembers?.map((member) => (
                       <SelectItem key={`photo-${member.id}`} value={member.name}>
                         {member.name}

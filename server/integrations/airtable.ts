@@ -155,13 +155,16 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   }
   
   // Handle Photo field - if we have a photo reference
-  if (article.photo) {
+  if (article.photo && article.photo !== "none") {
     // Try to find the photo reference in the team members
     const teamMembers = await storage.getTeamMembers();
     const photoMember = teamMembers.find(m => m.name === article.photo);
     if (photoMember && photoMember.externalId) {
       airtableData.Photo = [photoMember.externalId];
     }
+  } else {
+    // Explicitly set to empty array when "none" or no photo is selected
+    airtableData.Photo = [];
   }
   
   // Handle MainImage field if article has an imageUrl
@@ -452,7 +455,8 @@ export function setupAirtableRoutes(app: Express) {
           }
           
           // Get the photo name as a string (first one if it's an array)
-          let photoName = "";
+          // Default to "none" for empty values to work with the Select component
+          let photoName = "none";
           if (fields["Name (from Photo)"] && fields["Name (from Photo)"].length > 0) {
             photoName = fields["Name (from Photo)"][0];
           }
