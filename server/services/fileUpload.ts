@@ -56,35 +56,50 @@ export async function uploadImageToAirtable(
   mimeType: string
 ): Promise<any> {
   try {
-    // Read the file and convert to base64 encoding
-    const fileData = fs.readFileSync(filePath);
-    const base64Data = fileData.toString('base64');
+    // This approach uses multipart/form-data as recommended by Airtable for file uploads
+    const form = new FormData();
     
-    // Create the request body according to Airtable's API documentation
-    // Airtable expects attachments in a specific format
-    const requestBody = {
-      fields: {
-        [fieldName]: [
-          {
-            url: `data:${mimeType};base64,${base64Data}`,
-            filename: fileName
+    // Read the file as a buffer
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    // Create a proper metadata object for the form
+    const metadata = {
+      records: [
+        {
+          id: recordId,
+          fields: {
+            [fieldName]: [
+              {
+                filename: fileName
+              }
+            ]
           }
-        ]
-      }
+        }
+      ]
     };
-
-    console.log(`Uploading image to Airtable: ${fileName}`);
     
-    // Airtable API for record update
-    const url = `https://api.airtable.com/v0/${baseId}/${tableId}/${recordId}`;
+    // Add the metadata part first
+    form.append('metadata', JSON.stringify(metadata), {
+      contentType: 'application/json'
+    });
+    
+    // Then add the file as a separate part
+    form.append(`files[0]`, fileBuffer, {
+      filename: fileName,
+      contentType: mimeType
+    });
+    
+    console.log(`Uploading image to Airtable: ${fileName} (size: ${fileBuffer.length} bytes)`);
+    
+    // Use the batch endpoint for file uploads
+    const url = `https://api.airtable.com/v0/${baseId}/${tableId}`;
     
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(requestBody)
+      body: form as any
     });
 
     if (!response.ok) {
