@@ -34,6 +34,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     imageUrl: "",
     imageType: "url",
     imagePath: null,
+    instagramImageUrl: "", // For Airtable instaPhoto field
     featured: "no",
     author: "",
     photo: "",
@@ -192,8 +193,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             <div className="mt-2 text-xs text-blue-600">
               <p><span className="font-semibold">Important:</span> When updating to Airtable:</p>
               <ul className="list-disc pl-5 mt-1 space-y-1">
-                <li>Image URLs will update the MainImage field in Airtable</li>
-                <li>For Instagram-sourced content, both MainImage and instaPhoto will be updated</li>
+                <li>Main Image URL will update the MainImage field in Airtable</li>
+                <li>Instagram Image URL will update the instaPhoto field in Airtable</li>
+                <li>Both image fields can be set independently for better integration</li>
                 <li>All Airtable fields like Date, Featured, and Status will be properly mapped</li>
               </ul>
             </div>
@@ -309,7 +311,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                       <span className="font-medium">Current image from Airtable:</span> {formData.imageUrl.length > 50 ? `${formData.imageUrl.substring(0, 50)}...` : formData.imageUrl}
                     </span>
                   )}
-                  Changing this URL will update the MainImage or instaPhoto field in Airtable when using "Update in Airtable"
+                  Changing this URL will update the MainImage field in Airtable when using "Update in Airtable"
                 </p>
               )}
               {formData.imageUrl && (
@@ -326,6 +328,42 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               )}
               <p className="text-xs text-gray-500 mt-1">
                 Enter a direct link to an image for the article cover
+              </p>
+            </div>
+
+            <div className="col-span-2">
+              <Label htmlFor="instagramImageUrl">Instagram Image URL</Label>
+              <Input
+                id="instagramImageUrl"
+                name="instagramImageUrl"
+                value={formData.instagramImageUrl || ''}
+                onChange={handleInputChange}
+                placeholder="URL for Instagram image"
+              />
+              {isFromAirtable && (
+                <p className="text-xs text-blue-600 mt-1">
+                  {formData.instagramImageUrl && (
+                    <span className="block mb-1">
+                      <span className="font-medium">Current Instagram image from Airtable:</span> {formData.instagramImageUrl.length > 50 ? `${formData.instagramImageUrl.substring(0, 50)}...` : formData.instagramImageUrl}
+                    </span>
+                  )}
+                  This URL will update the instaPhoto field in Airtable when using "Update in Airtable"
+                </p>
+              )}
+              {formData.instagramImageUrl && (
+                <div className="mt-2 p-1 border border-gray-200 rounded-md overflow-hidden w-32 h-32">
+                  <img
+                    src={formData.instagramImageUrl}
+                    alt="Instagram image preview"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "https://placehold.co/600x400?text=Invalid+Image+URL";
+                    }}
+                  />
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Enter a direct link to an Instagram image (for Airtable instaPhoto field)
               </p>
             </div>
 
