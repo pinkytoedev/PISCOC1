@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,10 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { InsertArticle, TeamMember } from "@shared/schema";
-import { Loader2, AlertCircle, RefreshCw, Upload, Image as ImageIcon, Check } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
 
 interface CreateArticleModalProps {
   isOpen: boolean;
@@ -24,13 +23,6 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const { toast } = useToast();
   const isEditing = !!editArticle;
   const isFromAirtable = editArticle?.source === 'airtable';
-  
-  // File input reference and upload state
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isUploading, setIsUploading] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
   // Default values for new article
   const defaultForm: Partial<InsertArticle> = {
@@ -76,179 +68,6 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const { data: teamMembers, isLoading: isLoadingTeamMembers } = useQuery<TeamMember[]>({
     queryKey: ['/api/team-members'],
   });
-
-  // Initialize the upload image mutation
-  const uploadImageMutation = useMutation({
-    mutationFn: async ({ articleId, file }: { articleId: number, file: File }) => {
-      // Create form data for file upload
-      const formData = new FormData();
-      formData.append('image', file);
-      
-      // Track upload progress
-      const xhr = new XMLHttpRequest();
-      
-      // Return a promise that resolves when the upload is complete
-      return new Promise<any>((resolve, reject) => {
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable) {
-            const progress = Math.round((event.loaded / event.total) * 100);
-            setUploadProgress(progress);
-          }
-        });
-        
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const response = JSON.parse(xhr.responseText);
-              
-              // Log the response for debugging
-              console.log('Upload response:', response);
-              
-              // Check if the image URL is in the expected location from Airtable
-              if (response?.airtableResponse?.fields?.MainImage?.[0]?.url) {
-                console.log('Image URL found in Airtable response:', response.airtableResponse.fields.MainImage[0].url);
-              }
-              
-              resolve(response);
-            } catch (error) {
-              console.error('Failed to parse response:', error);
-              reject(new Error('Failed to parse response'));
-            }
-          } else {
-            try {
-              const errorData = JSON.parse(xhr.responseText);
-              console.error('Upload error details:', errorData);
-              reject(new Error(errorData.message || `Upload failed with status ${xhr.status}`));
-            } catch (e) {
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
-          }
-        });
-        
-        xhr.addEventListener('error', () => {
-          reject(new Error('Upload failed - network error'));
-        });
-        
-        xhr.addEventListener('abort', () => {
-          reject(new Error('Upload aborted'));
-        });
-        
-        // Open and send the request
-        xhr.open('POST', `/api/upload/article-image/${articleId}`);
-        xhr.send(formData);
-      });
-    },
-    onSuccess: (data) => {
-      console.log('Upload success response:', data);
-      
-      // Try to get the image URL from different potential locations in the response
-      let imageUrl = '';
-      
-      // First try the direct imageUrl property (set by our backend)
-      if (data.imageUrl) {
-        imageUrl = data.imageUrl;
-      } 
-      // Then try to extract from the Airtable response if available
-      else if (data.airtableResponse?.fields?.MainImage?.[0]?.url) {
-        imageUrl = data.airtableResponse.fields.MainImage[0].url;
-      }
-      // Then try to extract from the Airtable response if in a different format
-      else if (data.airtableResponse?.fields?.MainImage?.[0]?.thumbnails?.full?.url) {
-        imageUrl = data.airtableResponse.fields.MainImage[0].thumbnails.full.url;
-      }
-      
-      if (imageUrl) {
-        console.log('Using image URL:', imageUrl);
-        
-        // Update the form with the new image URL
-        setFormData(prev => ({
-          ...prev,
-          imageUrl: imageUrl,
-          imageType: 'url',
-          imagePath: null
-        }));
-        
-        toast({
-          title: "Image uploaded",
-          description: "Image was successfully uploaded and linked to the article in Airtable.",
-        });
-      } else {
-        console.warn('No image URL found in response');
-        toast({
-          title: "Image upload completed",
-          description: "The image was uploaded, but the URL couldn't be retrieved. The article will be updated with the image in Airtable.",
-        });
-      }
-      
-      // Reset upload state
-      setIsUploading(false);
-      setUploadProgress(0);
-    },
-    onError: (error) => {
-      setIsUploading(false);
-      setUploadProgress(0);
-      
-      toast({
-        title: "Image upload failed",
-        description: error.message || "Failed to upload image. Please try again.",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const selectedFile = files[0];
-      setImageFile(selectedFile);
-      
-      // Create preview for the selected image
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
-      };
-      reader.readAsDataURL(selectedFile);
-    }
-  };
-
-  // Handle upload button click
-  const handleUploadClick = () => {
-    if (!imageFile || !isEditing || !editArticle?.id) {
-      toast({
-        title: "Cannot upload image",
-        description: isEditing 
-          ? "Please select an image file first." 
-          : "Save the article before uploading an image.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (editArticle.source !== 'airtable' || !editArticle.externalId) {
-      toast({
-        title: "Upload not supported",
-        description: "Image upload to Airtable is only supported for articles imported from Airtable.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsUploading(true);
-    uploadImageMutation.mutate({ 
-      articleId: editArticle.id, 
-      file: imageFile 
-    });
-  };
-
-  // Clear the selected image
-  const handleClearImage = () => {
-    setImageFile(null);
-    setPreviewUrl(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
 
   const createArticleMutation = useMutation({
     mutationFn: async (article: InsertArticle) => {
@@ -334,32 +153,6 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     
     // Set the finished field based on status
     submissionData.finished = submissionData.status === "published";
-    
-    // If an image file is selected and we're creating/editing an article for Airtable
-    if (imageFile && isFromAirtable) {
-      // Store the file temporarily in localStorage for use when updating to Airtable
-      // We only save the filename and file size as a reference - the actual file object
-      // cannot be stored in localStorage but is kept in memory until page refresh
-      const articleId = isEditing ? editArticle.id : null;
-      
-      // Store a reference to the selected file in sessionStorage
-      // This will be used when clicking "Update in Airtable" button later
-      if (articleId) {
-        try {
-          window.sessionStorage.setItem(`article_image_${articleId}`, JSON.stringify({
-            name: imageFile.name,
-            size: imageFile.size,
-            type: imageFile.type,
-            lastModified: imageFile.lastModified,
-            selected: true,
-            timestamp: new Date().getTime()
-          }));
-          console.log(`Saved image reference for article ID ${articleId} in session storage`);
-        } catch (error) {
-          console.error("Failed to save image reference to session storage:", error);
-        }
-      }
-    }
     
     console.log("Submitting article with publishedAt:", submissionData.publishedAt);
     console.log("Airtable date field:", submissionData.date);
@@ -500,84 +293,6 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 Enter a direct link to an image for the article cover
               </p>
             </div>
-
-            {/* Image selection section - only shown when editing an Airtable article */}
-            {isEditing && isFromAirtable && (
-              <div className="col-span-2 mt-2 p-4 border border-gray-200 rounded-md">
-                <div className="flex items-center mb-2">
-                  <ImageIcon className="h-4 w-4 mr-2 text-gray-600" />
-                  <Label className="font-medium">Select Image for Airtable</Label>
-                </div>
-                
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
-                  {/* Image preview */}
-                  {previewUrl && (
-                    <div className="sm:col-span-4 relative">
-                      <div className="rounded-md overflow-hidden border border-gray-200 aspect-video bg-gray-50 flex items-center justify-center">
-                        <img 
-                          src={previewUrl} 
-                          alt="Preview" 
-                          className="object-cover w-full h-full" 
-                        />
-                      </div>
-                      <button 
-                        type="button"
-                        onClick={handleClearImage}
-                        className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-sm border border-gray-200"
-                        aria-label="Clear image"
-                      >
-                        <AlertCircle className="h-4 w-4 text-gray-600" />
-                      </button>
-                    </div>
-                  )}
-                  
-                  {/* Image selection controls */}
-                  <div className={`${previewUrl ? 'sm:col-span-8' : 'sm:col-span-12'}`}>
-                    <div className="mb-3">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        accept="image/*"
-                        className="hidden"
-                        id="image-upload"
-                      />
-                      
-                      <div className="flex space-x-2">
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          {imageFile ? 'Change Image' : 'Select Image'}
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    {imageFile && (
-                      <div className="text-sm text-gray-600">
-                        <p>Selected: {imageFile.name} ({Math.round(imageFile.size / 1024)} KB)</p>
-                      </div>
-                    )}
-                    
-                    <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded-md">
-                      <p className="text-xs text-blue-700">
-                        <AlertCircle className="h-3 w-3 inline-block mr-1" />
-                        <strong>Important:</strong> After saving this article, use the "Update in Airtable" button in the article list to upload this image to Airtable.
-                        {imageFile && (
-                          <span className="block mt-1 text-green-700">
-                            <Check className="h-3 w-3 inline-block mr-1" />
-                            Image selected and ready for upload.
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
 
             <div>
               <Label htmlFor="photoCredit">Photo Credit</Label>
