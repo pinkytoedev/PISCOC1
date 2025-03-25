@@ -91,7 +91,22 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
           }
           
           if (!imageFile) {
-            console.log("No matching file found in DOM inputs, image may have been lost on page refresh");
+            console.log("No matching file found in DOM inputs, checking if there's a file input in another modal");
+            // This can happen if the modal is closed and opened again - let's try to find the file by name only
+            // in other modals that might be open
+            const allInputs = document.querySelectorAll('input[type="file"]');
+            for (let i = 0; i < allInputs.length; i++) {
+              const input = allInputs[i] as HTMLInputElement;
+              if (input.files && input.files.length > 0) {
+                const file = input.files[0];
+                if (file.name === imageData.name) {
+                  imageFile = file;
+                  hasImage = true;
+                  console.log("Found file with matching name in a different input:", file.name);
+                  break;
+                }
+              }
+            }
           }
         } catch (error) {
           console.error("Error parsing image data from session storage:", error);
@@ -105,29 +120,39 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         const formData = new FormData();
         formData.append("image", imageFile);
         
-        const response = await fetch(`/api/airtable/update/article/${articleId}/with-image`, {
-          method: "POST",
-          body: formData,
-          credentials: "same-origin"
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+        try {
+          const response = await fetch(`/api/airtable/update/article/${articleId}/with-image`, {
+            method: "POST",
+            body: formData,
+            credentials: "same-origin"
+          });
+          
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: `Upload failed with status ${response.status}` }));
+            throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+          }
+          
+          // Clear the session storage entry after successful upload
+          window.sessionStorage.removeItem(`article_image_${articleId}`);
+          
+          return await response.json();
+        } catch (error) {
+          console.error("Error uploading image to Airtable:", error);
+          throw error;
         }
-        
-        // Clear the session storage entry after successful upload
-        window.sessionStorage.removeItem(`article_image_${articleId}`);
-        
-        return await response.json();
       } else {
         // Standard update without image
         console.log("Updating article in Airtable without image");
-        const response = await apiRequest(
-          "POST", 
-          `/api/airtable/update/article/${articleId}`
-        );
-        return await response.json();
+        try {
+          const response = await apiRequest(
+            "POST", 
+            `/api/airtable/update/article/${articleId}`
+          );
+          return await response.json();
+        } catch (error) {
+          console.error("Error updating article in Airtable:", error);
+          throw error;
+        }
       }
     },
     onSuccess: (data) => {
