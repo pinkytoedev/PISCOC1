@@ -193,8 +193,14 @@ async function handleCreateArticleCommand(interaction: any) {
       .setRequired(true)
       .setMaxLength(4000);
     
-    // Author field removed as it will be set automatically on the website
-    // Users don't need to input author information through Discord anymore
+    // For author, we'll use a text input initially, but we'll display a selection dropdown after showing the modal
+    const authorInput = new TextInputBuilder()
+      .setCustomId('author')
+      .setLabel('Author')  // Maps to Airtable's "Author" field
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Choose from team members in the follow-up prompt')
+      .setRequired(true)
+      .setMaxLength(100);
     
     const featuredInput = new TextInputBuilder()
       .setCustomId('featured')
@@ -208,10 +214,11 @@ async function handleCreateArticleCommand(interaction: any) {
     const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
     const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
     const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
+    const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
     const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
     
-    // Add inputs to the modal (author field removed)
-    modal.addComponents(titleRow, descriptionRow, bodyRow, featuredRow);
+    // Add inputs to the modal
+    modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
     // Show the modal with info about field mapping
     await interaction.showModal(modal);
@@ -413,7 +420,6 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
     
     // Add inputs to the modal
-    // Since we want to keep author field in the edit modal for now 
     modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
     // Show the modal directly 
@@ -448,8 +454,7 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       const title = interaction.fields.getTextInputValue('title');
       const description = interaction.fields.getTextInputValue('description');
       const body = interaction.fields.getTextInputValue('body');
-      // Use Discord username as temporary author (since we removed the author input field)
-      const author = interaction.user.username;
+      const author = interaction.fields.getTextInputValue('author');
       const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
       const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
       
@@ -528,7 +533,6 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       const title = interaction.fields.getTextInputValue('title');
       const description = interaction.fields.getTextInputValue('description');
       const body = interaction.fields.getTextInputValue('body');
-      // Keep existing author or use Discord username if needed
       const author = interaction.fields.getTextInputValue('author');
       const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
       const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
@@ -788,7 +792,13 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         .setRequired(true)
         .setMaxLength(4000);
       
-      // Author field removed - will use Discord username and authors database instead
+      const authorInput = new TextInputBuilder()
+        .setCustomId('author')
+        .setLabel('Author')  // Maps to Airtable's "Author" field
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder('Enter author name')
+        .setRequired(true)
+        .setMaxLength(100);
       
       const featuredInput = new TextInputBuilder()
         .setCustomId('featured')
@@ -806,7 +816,6 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
       
       // Add inputs to the modal
-      // Since we want to keep author field in the button interaction handler for now
       modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
       
       // Show the modal
