@@ -120,17 +120,27 @@ async function getTeamMembers() {
 
 /**
  * Helper function to create an author selection component
- * Uses a dropdown with team members as options
+ * Uses a dropdown with team members as options, limited to Discord's 25-option maximum
  */
 async function createAuthorSelectMenu() {
   // Get all team members for author options
-  const teamMembers = await getTeamMembers();
+  let teamMembers = await getTeamMembers();
   
-  // Create options for the select menu - use the team member ID as the value
+  // Sort by name for consistency
+  teamMembers = teamMembers.sort((a, b) => a.name.localeCompare(b.name));
+  
+  // Limit to 24 members to leave room for the "Custom" option (Discord limit is 25 options total)
+  // If there are more than 24 members, we'll take the first 24 alphabetically
+  if (teamMembers.length > 24) {
+    console.log(`Warning: Limiting team members dropdown to 24 options (+ custom) from ${teamMembers.length} total members`);
+    teamMembers = teamMembers.slice(0, 24);
+  }
+  
+  // Create options from limited team members
   const options = teamMembers.map(member => ({
     label: member.name,
     value: member.id.toString(), // We'll use the ID as the value for proper referencing
-    description: member.role || 'Team Member'
+    description: member.role?.substring(0, 50) || 'Team Member' // Limit description to 50 chars for safety
   }));
   
   // Add a "Manual Entry" option
