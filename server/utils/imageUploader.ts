@@ -102,6 +102,14 @@ export async function uploadImageToAirtable(
     const baseId = baseIdSetting.value;
     const tableName = tableNameSetting.value;
     
+    // Debug log to help identify configuration issues
+    console.log("Airtable Upload Config:", {
+      baseId,
+      tableName,
+      recordId,
+      fieldName
+    });
+    
     // Step 1: Create a temporary URL where the file can be accessed
     // In a production environment, upload to S3, Cloudinary, etc.
     const fileBuffer = fs.readFileSync(file.path);
@@ -113,8 +121,11 @@ export async function uploadImageToAirtable(
       contentType: file.mimetype
     });
     
-    // Upload to Airtable directly
-    const url = `https://api.airtable.com/v0/${baseId}/${tableName}/${recordId}`;
+    // Make sure table name is URL encoded for special characters
+    const encodedTableName = encodeURIComponent(tableName);
+    
+    // Upload to Airtable directly - use encoded table name
+    const url = `https://api.airtable.com/v0/${baseId}/${encodedTableName}/${recordId}`;
     
     // Create the fields update payload
     const attachment = {
@@ -183,8 +194,19 @@ export async function uploadImageUrlToAirtable(
     const baseId = baseIdSetting.value;
     const tableName = tableNameSetting.value;
     
+    // Debug log to help identify configuration issues
+    console.log("Airtable Image URL Upload Config:", {
+      baseId,
+      tableName,
+      recordId,
+      fieldName
+    });
+    
+    // Make sure table name is URL encoded for special characters
+    const encodedTableName = encodeURIComponent(tableName);
+    
     // Create the URL for the API request
-    const url = `https://api.airtable.com/v0/${baseId}/${tableName}/${recordId}`;
+    const url = `https://api.airtable.com/v0/${baseId}/${encodedTableName}/${recordId}`;
     
     // Create the fields update payload
     const attachment = {
