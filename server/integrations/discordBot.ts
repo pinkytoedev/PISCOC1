@@ -65,7 +65,8 @@ async function handleListArticlesCommand(interaction: any) {
         : 'No date';
       
       // Show author information when available
-      const authorInfo = article.author ? `\nAuthor: ${article.author}` : '';
+      const authorInfo = article.author ? 
+        (typeof article.author === 'string' ? `\nAuthor: ${article.author}` : '\nAuthor: Unknown') : '';
         
       embed.addFields({
         name: `${index + 1}. ${title}`,
@@ -260,17 +261,22 @@ async function createArticleSelectMenu() {
   const options = unpublishedArticles.slice(0, 25).map(article => {
     // Format title with status
     const statusIcon = article.status === 'draft' ? '📝' : '⏳';
-    let optionLabel = `${statusIcon} ${article.title}`;
+    // Safely handle title, provide a fallback if missing
+    const title = article.title || 'Untitled Article';
+    let optionLabel = `${statusIcon} ${title}`;
     
     // Truncate if needed (Discord max length is 100 chars)
     if (optionLabel.length > 95) {
       optionLabel = optionLabel.substring(0, 95) + '...';
     }
     
+    const authorText = article.author ? 
+      (typeof article.author === 'string' ? article.author.substring(0, 30) : 'Unknown') : 'Unknown';
+    
     return {
       label: optionLabel,
       value: article.id.toString(),
-      description: `ID: ${article.id} | Author: ${article.author.substring(0, 30)}`
+      description: `ID: ${article.id} | Author: ${authorText}`
     };
   });
   
@@ -345,9 +351,10 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     }
     
     // Create modal for article editing with pre-filled values
+    const title = article.title || 'Untitled Article';
     const modal = new ModalBuilder()
       .setCustomId(`edit_article_modal_${articleId}`) // Include the article ID in the custom ID
-      .setTitle(`Edit Article: ${article.title.substring(0, 30)}${article.title.length > 30 ? '...' : ''}`);
+      .setTitle(`Edit Article: ${title.substring(0, 30)}${title.length > 30 ? '...' : ''}`);
 
     // Add input fields that match our Airtable field names, with pre-filled values
     const titleInput = new TextInputBuilder()
@@ -406,7 +413,8 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
     // Show the modal with info about field mapping
-    await interaction.editReply(`Preparing to edit article #${articleId}: "${article.title}"`);
+    const displayTitle = article.title || 'Untitled Article';
+    await interaction.editReply(`Preparing to edit article #${articleId}: "${displayTitle}"`);
     await interaction.showModal(modal);
     
     // Add a follow-up message about author selection
