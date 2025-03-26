@@ -35,11 +35,11 @@ export default function DiscordPage() {
   
   const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
     queryKey: ['/api/discord/bot/status'],
-    refetchInterval: botTab => botTab === "bot" ? 10000 : false, // Only refresh status when on bot tab
+    refetchInterval: () => tab === "bot" ? 10000 : 0, // Only refresh status when on bot tab
   });
   
   // When settings are loaded, set the bot token and client ID fields
-  React.useEffect(() => {
+  useEffect(() => {
     if (settings) {
       const tokenSetting = settings.find(s => s.key === 'bot_token');
       const clientIdSetting = settings.find(s => s.key === 'bot_client_id');
