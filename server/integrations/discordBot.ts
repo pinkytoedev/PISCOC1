@@ -412,9 +412,7 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     // Add inputs to the modal
     modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
-    // Show the modal with info about field mapping
-    const displayTitle = article.title || 'Untitled Article';
-    await interaction.editReply(`Preparing to edit article #${articleId}: "${displayTitle}"`);
+    // Show the modal directly without editReply first
     await interaction.showModal(modal);
     
     // Add a follow-up message about author selection
@@ -433,7 +431,16 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     }
   } catch (error) {
     console.error('Error handling edit article command:', error);
-    await interaction.editReply('Sorry, there was an error editing the article. Please try again later.');
+    
+    // Check if we can use followUp instead of editReply
+    try {
+      await interaction.followUp({
+        content: 'Sorry, there was an error editing the article. Please try again later.',
+        ephemeral: true
+      });
+    } catch (followUpError) {
+      console.error('Error sending error follow-up:', followUpError);
+    }
   }
 }
 
@@ -555,7 +562,19 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
     }
   } catch (error) {
     console.error('Error handling modal submission:', error);
-    await interaction.editReply('Sorry, there was an error processing your article. Please try again later.');
+    try {
+      // Check if we need to use reply or editReply based on the interaction state
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: 'Sorry, there was an error processing your article. Please try again later.',
+          ephemeral: true
+        });
+      } else {
+        await interaction.editReply('Sorry, there was an error processing your article. Please try again later.');
+      }
+    } catch (replyError) {
+      console.error('Error sending error message:', replyError);
+    }
   }
 }
 
