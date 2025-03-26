@@ -396,11 +396,11 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     
     const authorInput = new TextInputBuilder()
       .setCustomId('author')
-      .setLabel('Author')  // Maps to Airtable's "Author" field
+      .setLabel('Author (read-only)')  // Maps to Airtable's "Author" field
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Author name (use dropdown after submitting)')
-      .setValue(article.author || '')
-      .setRequired(true)
+      .setPlaceholder('Current author (cannot be modified here)')
+      .setValue(article.author || 'No author assigned')
+      .setRequired(false) // Not required as it's read-only
       .setMaxLength(100);
     
     const featuredInput = new TextInputBuilder()
@@ -537,12 +537,12 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
       const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
       
-      // Update article data
+      // Update article data - don't update the author field (it's read-only)
       const articleData = {
         title,                     // Maps to Airtable's "Name" field
         description,               // Maps to Airtable's "Description" field
         content: body,             // Maps to Airtable's "Body" field
-        author,                    // Maps to Airtable's "Author" field
+        // author field is intentionally omitted - keep existing author
         featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
         // Don't change the status of the article
         // Don't change image or other fields (keep them as is)
@@ -564,28 +564,18 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         .addFields(
           { name: 'Name', value: title },
           { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
-          { name: 'Author', value: author },
+          { name: 'Author', value: existingArticle.author || 'No author assigned' }, // Display the existing author
           { name: 'Status', value: updatedArticle.status },
           { name: 'Featured', value: featured ? 'Yes' : 'No' }
         )
         .setFooter({ text: 'The updated article will be synced to Airtable through the website' });
       
-      await interaction.editReply({ embeds: [embed] });
-      
-      // Add author selection menu after successful article update
-      try {
-        // Get author selection menu
-        const authorSelect = await createAuthorSelectMenu();
-        const authorRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(authorSelect);
-        
-        await interaction.followUp({
-          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.",
-          components: [authorRow],
-          ephemeral: true
-        });
-      } catch (followUpError) {
-        console.error("Couldn't send author selection menu:", followUpError);
-      }
+      // Add information about the author being read-only
+      await interaction.editReply({ 
+        embeds: [embed],
+        // Add a follow-up message explaining that the author field is read-only
+        content: "**Note:** The author field is read-only when editing articles. To change an article's author, please use the website interface."
+      });
     }
   } catch (error) {
     console.error('Error handling modal submission:', error);
