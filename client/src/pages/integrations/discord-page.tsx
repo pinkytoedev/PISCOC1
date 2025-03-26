@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -8,18 +8,51 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting } from "@shared/schema";
 import { SiDiscord } from "react-icons/si";
-import { CheckCircle, AlertCircle, Loader2, Copy, RefreshCw, Webhook } from "lucide-react";
+import { CheckCircle, AlertCircle, Loader2, Copy, RefreshCw, Webhook, Bot, Shield, PowerOff, Terminal } from "lucide-react";
+
+interface BotStatus {
+  connected: boolean;
+  status: string;
+  username?: string;
+  id?: string;
+  guilds?: number;
+}
 
 export default function DiscordPage() {
   const { toast } = useToast();
+  const [tab, setTab] = useState("webhook");
+  const [botToken, setBotToken] = useState("");
+  const [clientId, setClientId] = useState("");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
   });
+  
+  const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
+    queryKey: ['/api/discord/bot/status'],
+    refetchInterval: botTab => botTab === "bot" ? 10000 : false, // Only refresh status when on bot tab
+  });
+  
+  // When settings are loaded, set the bot token and client ID fields
+  React.useEffect(() => {
+    if (settings) {
+      const tokenSetting = settings.find(s => s.key === 'bot_token');
+      const clientIdSetting = settings.find(s => s.key === 'bot_client_id');
+      
+      if (tokenSetting) {
+        setBotToken(tokenSetting.value);
+      }
+      
+      if (clientIdSetting) {
+        setClientId(clientIdSetting.value);
+      }
+    }
+  }, [settings]);
   
   const updateSettingMutation = useMutation({
     mutationFn: async ({ key, value, enabled }: { key: string; value: string; enabled?: boolean }) => {
@@ -57,6 +90,72 @@ export default function DiscordPage() {
       toast({
         title: "Test failed",
         description: error.message || "Failed to send test message to Discord.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const initializeBotMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/discord/bot/initialize", {
+        token: botToken,
+        clientId: clientId
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Bot initialized",
+        description: "Discord bot has been initialized successfully.",
+      });
+      refetchBotStatus();
+    },
+    onError: (error) => {
+      toast({
+        title: "Bot initialization failed",
+        description: error.message || "Failed to initialize Discord bot.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const startBotMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/discord/bot/start");
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Bot started",
+        description: "Discord bot has been started successfully.",
+      });
+      refetchBotStatus();
+    },
+    onError: (error) => {
+      toast({
+        title: "Bot start failed",
+        description: error.message || "Failed to start Discord bot.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  const stopBotMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/discord/bot/stop");
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Bot stopped",
+        description: "Discord bot has been stopped successfully.",
+      });
+      refetchBotStatus();
+    },
+    onError: (error) => {
+      toast({
+        title: "Bot stop failed",
+        description: error.message || "Failed to stop Discord bot.",
         variant: "destructive",
       });
     },
@@ -181,116 +280,293 @@ export default function DiscordPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Discord Webhook Configuration */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Discord Webhook</CardTitle>
-                    <CardDescription>
-                      Configure the webhook URL where notifications will be sent to your Discord server.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="webhook_url">Webhook URL</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="webhook_url"
-                          type="text"
-                          placeholder="https://discord.com/api/webhooks/..."
-                          value={getSettingValue('webhook_url')}
-                          onChange={(e) => handleSettingChange('webhook_url', e.target.value)}
-                          className="flex-1"
-                        />
-                        <div className="flex items-center space-x-2">
-                          <Switch
-                            checked={getSettingEnabled('webhook_url')}
-                            onCheckedChange={(checked) => handleToggleEnabled('webhook_url', checked)}
-                          />
-                          <span className="text-sm text-gray-500">
-                            {getSettingEnabled('webhook_url') ? 'Enabled' : 'Disabled'}
-                          </span>
+                <Tabs 
+                  defaultValue="webhook" 
+                  value={tab} 
+                  onValueChange={setTab}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="webhook" className="flex items-center">
+                      <Webhook className="h-4 w-4 mr-2" />
+                      Webhook Integration
+                    </TabsTrigger>
+                    <TabsTrigger value="bot" className="flex items-center">
+                      <Bot className="h-4 w-4 mr-2" />
+                      Discord Bot
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  {/* Webhook Tab */}
+                  <TabsContent value="webhook" className="space-y-6 mt-6">
+                    {/* Discord Webhook Configuration */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Discord Webhook</CardTitle>
+                        <CardDescription>
+                          Configure the webhook URL where notifications will be sent to your Discord server.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="webhook_url">Webhook URL</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="webhook_url"
+                              type="text"
+                              placeholder="https://discord.com/api/webhooks/..."
+                              value={getSettingValue('webhook_url')}
+                              onChange={(e) => handleSettingChange('webhook_url', e.target.value)}
+                              className="flex-1"
+                            />
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={getSettingEnabled('webhook_url')}
+                                onCheckedChange={(checked) => handleToggleEnabled('webhook_url', checked)}
+                              />
+                              <span className="text-sm text-gray-500">
+                                {getSettingEnabled('webhook_url') ? 'Enabled' : 'Disabled'}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Create a webhook in your Discord server settings and paste the URL here.
+                          </p>
                         </div>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Create a webhook in your Discord server settings and paste the URL here.
-                      </p>
-                    </div>
-                    
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleTestDiscord}
-                      disabled={!getSettingValue('webhook_url') || testDiscordMutation.isPending}
-                    >
-                      {testDiscordMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Send Test Message
-                        </>
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-                
-                {/* Content Submission Webhook */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Content Submission</CardTitle>
-                    <CardDescription>
-                      This webhook URL allows Discord users to submit content to your platform.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label>Submission Webhook URL</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          value={webhookUrl}
-                          readOnly
-                          className="flex-1 bg-gray-50"
-                        />
+                        
                         <Button 
                           variant="outline" 
-                          size="icon"
-                          onClick={() => copyToClipboard(webhookUrl)}
+                          size="sm" 
+                          onClick={handleTestDiscord}
+                          disabled={!getSettingValue('webhook_url') || testDiscordMutation.isPending}
                         >
-                          <Copy className="h-4 w-4" />
+                          {testDiscordMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="mr-2 h-4 w-4" />
+                              Send Test Message
+                            </>
+                          )}
                         </Button>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Use this URL in your Discord bot or third-party integrations to submit content.
-                      </p>
-                    </div>
+                      </CardContent>
+                    </Card>
                     
-                    <div className="grid gap-2">
-                      <Label htmlFor="webhook_secret">Webhook Secret (Optional)</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="webhook_secret"
-                          type="text"
-                          placeholder="Secret key for webhook authentication"
-                          value={getSettingValue('webhook_secret')}
-                          onChange={(e) => handleSettingChange('webhook_secret', e.target.value)}
-                          className="flex-1"
-                        />
-                        <Button 
-                          variant="outline" 
-                          onClick={generateRandomSecret}
-                        >
-                          Generate
-                        </Button>
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        Add this secret to your webhook requests as a query parameter or 'x-discord-signature' header for added security.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
+                    {/* Content Submission Webhook */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Content Submission</CardTitle>
+                        <CardDescription>
+                          This webhook URL allows Discord users to submit content to your platform.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label>Submission Webhook URL</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              value={webhookUrl}
+                              readOnly
+                              className="flex-1 bg-gray-50"
+                            />
+                            <Button 
+                              variant="outline" 
+                              size="icon"
+                              onClick={() => copyToClipboard(webhookUrl)}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Use this URL in your Discord bot or third-party integrations to submit content.
+                          </p>
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="webhook_secret">Webhook Secret (Optional)</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="webhook_secret"
+                              type="text"
+                              placeholder="Secret key for webhook authentication"
+                              value={getSettingValue('webhook_secret')}
+                              onChange={(e) => handleSettingChange('webhook_secret', e.target.value)}
+                              className="flex-1"
+                            />
+                            <Button 
+                              variant="outline" 
+                              onClick={generateRandomSecret}
+                            >
+                              Generate
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Add this secret to your webhook requests as a query parameter or 'x-discord-signature' header for added security.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  
+                  {/* Bot Tab */}
+                  <TabsContent value="bot" className="space-y-6 mt-6">
+                    {/* Discord Bot Configuration */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center">
+                          <Bot className="h-5 w-5 mr-2 text-[#5865F2]" />
+                          Discord Bot Configuration
+                        </CardTitle>
+                        <CardDescription>
+                          Configure your Discord bot to enable interactive commands in your server.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="bot_token">Bot Token</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="bot_token"
+                              type="password"
+                              placeholder="Your Discord bot token"
+                              value={botToken}
+                              onChange={(e) => setBotToken(e.target.value)}
+                              className="flex-1"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            Create a bot in the Discord Developer Portal and paste its token here.
+                          </p>
+                        </div>
+                        
+                        <div className="grid gap-2">
+                          <Label htmlFor="bot_client_id">Application ID</Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="bot_client_id"
+                              type="text"
+                              placeholder="Your Discord application ID"
+                              value={clientId}
+                              onChange={(e) => setClientId(e.target.value)}
+                              className="flex-1"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            The application ID from your Discord Developer Portal.
+                          </p>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2 pt-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => initializeBotMutation.mutate()}
+                            disabled={!botToken || !clientId || initializeBotMutation.isPending}
+                          >
+                            {initializeBotMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Initializing...
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Initialize Bot
+                              </>
+                            )}
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => startBotMutation.mutate()}
+                            disabled={startBotMutation.isPending}
+                          >
+                            {startBotMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Starting...
+                              </>
+                            ) : (
+                              <>
+                                <SiDiscord className="mr-2 h-4 w-4" />
+                                Start Bot
+                              </>
+                            )}
+                          </Button>
+                          
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => stopBotMutation.mutate()}
+                            disabled={stopBotMutation.isPending || !botStatus?.connected}
+                          >
+                            {stopBotMutation.isPending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Stopping...
+                              </>
+                            ) : (
+                              <>
+                                <PowerOff className="mr-2 h-4 w-4" />
+                                Stop Bot
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Bot Status */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Bot Status</CardTitle>
+                        <CardDescription>
+                          Current status of your Discord bot connection and available commands.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {isLoadingBotStatus ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                              <div className="flex items-center">
+                                <div className={`h-3 w-3 rounded-full mr-3 ${botStatus?.connected ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                <div>
+                                  <p className="font-medium">{botStatus?.connected ? 'Connected' : 'Disconnected'}</p>
+                                  <p className="text-sm text-gray-500">{botStatus?.status}</p>
+                                </div>
+                              </div>
+                              {botStatus?.connected && (
+                                <div className="text-right">
+                                  <p className="font-medium">{botStatus.username}</p>
+                                  <p className="text-sm text-gray-500">Servers: {botStatus.guilds || 0}</p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <h3 className="text-sm font-medium mb-2">Available Commands</h3>
+                              <div className="bg-gray-900 text-gray-100 p-3 rounded-md font-mono text-sm">
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/ping</span>
+                                  <span className="ml-3 text-gray-400">Check the bot's response time</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                </Tabs>
                 
                 {/* Integration Guide */}
                 <Card>
@@ -303,44 +579,65 @@ export default function DiscordPage() {
                   <CardContent>
                     <div className="space-y-4">
                       <div>
-                        <h3 className="text-sm font-medium">Step 1: Create Discord Webhook</h3>
+                        <h3 className="text-sm font-medium">Step 1: Create Discord Application</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Discord Developer Portal</a>, 
+                          create a new application, and add a bot to it. Copy your bot token and application ID.
+                        </p>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div>
+                        <h3 className="text-sm font-medium">Step 2: Set Up Webhook</h3>
                         <p className="text-sm text-gray-500 mt-1">
                           In your Discord server, go to Server Settings → Integrations → Webhooks → Create Webhook.
-                          Copy the webhook URL and paste it in the field above.
+                          Copy the webhook URL and paste it in the webhook configuration tab.
                         </p>
                       </div>
                       
                       <Separator />
                       
                       <div>
-                        <h3 className="text-sm font-medium">Step 2: Configure Submission Webhook</h3>
+                        <h3 className="text-sm font-medium">Step 3: Add Bot to Your Server</h3>
                         <p className="text-sm text-gray-500 mt-1">
-                          Use the submission webhook URL to receive content from Discord. Optionally, set a webhook secret
-                          for secure communication.
+                          Use the OAuth2 URL Generator in the Discord Developer Portal to generate an invite link for your bot,
+                          then add it to your server. Make sure to give it the necessary permissions.
                         </p>
                       </div>
                       
                       <Separator />
                       
                       <div>
-                        <h3 className="text-sm font-medium">Step 3: Test the Integration</h3>
+                        <h3 className="text-sm font-medium">Step 4: Initialize and Test</h3>
                         <p className="text-sm text-gray-500 mt-1">
-                          Send a test message to verify that your Discord webhook is properly configured.
-                          You should see a message in your Discord channel.
+                          Enter your bot token and application ID, initialize the bot, and test the commands in your Discord server.
+                          Try the <span className="font-mono text-xs bg-gray-100 px-1 rounded">/ping</span> command to verify it's working.
                         </p>
                       </div>
                     </div>
                   </CardContent>
                   <CardFooter className="bg-gray-50 border-t">
-                    <a 
-                      href="https://discord.com/developers/docs/resources/webhook" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline text-sm flex items-center"
-                    >
-                      <Webhook className="h-4 w-4 mr-1" />
-                      Discord Webhook Documentation
-                    </a>
+                    <div className="flex space-x-4">
+                      <a 
+                        href="https://discord.com/developers/docs/resources/webhook" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-sm flex items-center"
+                      >
+                        <Webhook className="h-4 w-4 mr-1" />
+                        Webhook Docs
+                      </a>
+                      <a 
+                        href="https://discord.com/developers/docs/intro" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-sm flex items-center"
+                      >
+                        <Bot className="h-4 w-4 mr-1" />
+                        Bot Docs
+                      </a>
+                    </div>
                   </CardFooter>
                 </Card>
               </div>
