@@ -19,9 +19,19 @@ import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
 import { Article, InsertArticle } from '@shared/schema';
 
+// Define bot status interface
+interface BotStatus {
+  connected: boolean;
+  status: string;
+  username: string;
+  id: string;
+  guilds: number;
+  commands: string[];
+}
+
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
-let botStatus = {
+let botStatus: BotStatus = {
   connected: false,
   status: 'Not initialized',
   username: '',
@@ -359,12 +369,11 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
     }
 
     // Create a new client with appropriate intents
+    // Only use essential non-privileged intents
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,  // Needed for message content access
-        GatewayIntentBits.GuildIntegrations // Needed for slash commands
       ]
     });
 
