@@ -1031,7 +1031,7 @@ export function setupAirtableRoutes(app: Express) {
       // Get API key and base ID from settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "carousel_quotes_table");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
       
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ 
