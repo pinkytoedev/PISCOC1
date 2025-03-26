@@ -56,15 +56,19 @@ async function handleWriterListCommand(interaction: any) {
     const articlesToShow = nonPublishedArticles.slice(0, 10);
     
     articlesToShow.forEach((article, index) => {
-      const title = article.title || 'Untitled';
+      // Map the fields to Airtable field names
+      const title = article.title || 'Untitled';       // Maps to Airtable's "Name" field
       const status = article.status || 'draft';
       const date = article.createdAt 
         ? new Date(article.createdAt).toLocaleDateString() 
         : 'No date';
+      
+      // Show author information when available
+      const authorInfo = article.author ? `\nAuthor: ${article.author}` : '';
         
       embed.addFields({
         name: `${index + 1}. ${title}`,
-        value: `Status: **${status}**\nLast updated: ${date}\nID: ${article.id}`
+        value: `Status: **${status}**\nLast updated: ${date}${authorInfo}\nID: ${article.id}`
       });
     });
     
@@ -72,6 +76,10 @@ async function handleWriterListCommand(interaction: any) {
     if (nonPublishedArticles.length > 10) {
       embed.setFooter({
         text: `Showing 10 of ${nonPublishedArticles.length} unpublished articles.`
+      });
+    } else {
+      embed.setFooter({
+        text: 'Articles submitted through Discord will be synced to Airtable through the website'
       });
     }
     
@@ -106,10 +114,10 @@ async function handleWriterCreateCommand(interaction: any) {
       .setCustomId('create_article_modal')
       .setTitle('Create New Article');
 
-    // Add input fields
+    // Add input fields that match our Airtable field names
     const titleInput = new TextInputBuilder()
       .setCustomId('title')
-      .setLabel('Title')
+      .setLabel('Title')  // Maps to Airtable's "Name" field
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Enter article title')
       .setRequired(true)
@@ -117,7 +125,7 @@ async function handleWriterCreateCommand(interaction: any) {
     
     const descriptionInput = new TextInputBuilder()
       .setCustomId('description')
-      .setLabel('Description')
+      .setLabel('Description')  // Maps to Airtable's "Description" field
       .setStyle(TextInputStyle.Paragraph)
       .setPlaceholder('Enter a brief description')
       .setRequired(true)
@@ -125,7 +133,7 @@ async function handleWriterCreateCommand(interaction: any) {
     
     const bodyInput = new TextInputBuilder()
       .setCustomId('body')
-      .setLabel('Body')
+      .setLabel('Body')  // Maps to Airtable's "Body" field
       .setStyle(TextInputStyle.Paragraph)
       .setPlaceholder('Enter the article content')
       .setRequired(true)
@@ -133,7 +141,7 @@ async function handleWriterCreateCommand(interaction: any) {
     
     const authorInput = new TextInputBuilder()
       .setCustomId('author')
-      .setLabel('Author')
+      .setLabel('Author')  // Maps to Airtable's "Author" field
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Enter author name')
       .setRequired(true)
@@ -141,7 +149,7 @@ async function handleWriterCreateCommand(interaction: any) {
     
     const featuredInput = new TextInputBuilder()
       .setCustomId('featured')
-      .setLabel('Featured (yes/no)')
+      .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Type "yes" to mark as featured')
       .setRequired(false)
@@ -157,8 +165,19 @@ async function handleWriterCreateCommand(interaction: any) {
     // Add inputs to the modal
     modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
-    // Show the modal
+    // Show the modal with info about field mapping
     await interaction.showModal(modal);
+    
+    // Add a follow-up message about Airtable mapping
+    try {
+      await interaction.followUp({
+        content: "The fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Author → Author, Featured → Featured",
+        ephemeral: true
+      });
+    } catch (error) {
+      // Ignore follow-up errors as the modal still works
+      console.log("Couldn't send follow-up about field mapping");
+    }
   } catch (error) {
     console.error('Error showing article creation modal:', error);
     await interaction.reply({ 
@@ -184,32 +203,39 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
       const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
       
-      // Create article data
+      // Create article data - map to fields in our system
+      // Note: These field names are later mapped to Airtable's fields by the website,
+      // We're not directly modifying Airtable here
       const articleData: InsertArticle = {
-        title,
-        description,
-        content: body,
-        author,
-        featured: featured ? 'yes' : 'no', // Convert boolean to 'yes'/'no' string
-        status: 'draft',
-        source: 'discord',
+        title,                    // Maps to Airtable's "Name" field
+        description,              // Maps to Airtable's "Description" field
+        content: body,            // Maps to Airtable's "Body" field
+        author,                   // Maps to Airtable's "Author" field
+        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
+        status: 'draft',          // Article status in our system
+        imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder image
+        imageType: 'url',
+        contentFormat: 'plaintext',
+        source: 'discord',        // Identifies the article as coming from Discord
         externalId: `discord-${interaction.user.id}-${Date.now()}`,
       };
       
-      // Create the article
+      // Create the article via our API - Discord bot only modifies our website's data
       const article = await storage.createArticle(articleData);
       
       // Send confirmation
       const embed = new EmbedBuilder()
         .setTitle('✅ Article Created Successfully')
-        .setDescription(`Your article "${title}" has been created as a draft.`)
+        .setDescription(`Your article "${title}" has been created as a draft on the website.`)
         .setColor('#22A559')
         .addFields(
+          { name: 'Name', value: title },
           { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
           { name: 'Author', value: author },
           { name: 'Status', value: 'Draft' },
           { name: 'Featured', value: featured ? 'Yes' : 'No' }
-        );
+        )
+        .setFooter({ text: 'The article will be synced to Airtable through the website' });
       
       await interaction.editReply({ embeds: [embed] });
     }
@@ -230,10 +256,10 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         .setCustomId('create_article_modal')
         .setTitle('Create New Article');
 
-      // Add input fields
+      // Add input fields that match Airtable field names
       const titleInput = new TextInputBuilder()
         .setCustomId('title')
-        .setLabel('Title')
+        .setLabel('Title')  // Maps to Airtable's "Name" field
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Enter article title')
         .setRequired(true)
@@ -241,7 +267,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       const descriptionInput = new TextInputBuilder()
         .setCustomId('description')
-        .setLabel('Description')
+        .setLabel('Description')  // Maps to Airtable's "Description" field
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder('Enter a brief description')
         .setRequired(true)
@@ -249,7 +275,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       const bodyInput = new TextInputBuilder()
         .setCustomId('body')
-        .setLabel('Body')
+        .setLabel('Body')  // Maps to Airtable's "Body" field
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder('Enter the article content')
         .setRequired(true)
@@ -257,7 +283,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       const authorInput = new TextInputBuilder()
         .setCustomId('author')
-        .setLabel('Author')
+        .setLabel('Author')  // Maps to Airtable's "Author" field
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Enter author name')
         .setRequired(true)
@@ -265,7 +291,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       const featuredInput = new TextInputBuilder()
         .setCustomId('featured')
-        .setLabel('Featured (yes/no)')
+        .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Type "yes" to mark as featured')
         .setRequired(false)
@@ -652,24 +678,29 @@ export function setupArticleReceiveEndpoint(app: Express) {
         });
       }
       
-      // Create article data
+      // Create article data - map to fields in our system
+      // Note: These field names map to Airtable fields through the website
       const articleData: InsertArticle = {
-        title,
-        description: description || '',
-        content,
-        author: author || 'Discord User',
-        featured: featured ? 'yes' : 'no', // Convert boolean to string
-        status: 'draft',
-        source: 'discord',
-        externalId: `discord-api-${Date.now()}`,
+        title,                    // Maps to Airtable's "Name" field
+        description: description || '',   // Maps to Airtable's "Description" field
+        content,                  // Maps to Airtable's "Body" field
+        author: author || 'Discord User', // Maps to Airtable's "Author" field
+        featured: featured ? 'yes' : 'no', // Maps to Airtable's "Featured" field (as string)
+        status: 'draft',          // Article status in our system
+        imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder
+        imageType: 'url',         // Specifies that we're using a URL, not a file
+        contentFormat: 'plaintext', // Format of the content
+        source: 'discord',        // Identifies the article as coming from Discord
+        externalId: `discord-api-${Date.now()}`, // Unique ID for tracking
       };
       
-      // Create the article
+      // Create the article through our website's storage system
+      // This doesn't directly modify Airtable - that sync happens through the website
       const article = await storage.createArticle(articleData);
       
       res.status(201).json({
         success: true,
-        message: 'Article created successfully',
+        message: 'Article created successfully in the website database',
         article
       });
     } catch (error) {
