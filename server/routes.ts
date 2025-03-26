@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupDiscordRoutes } from "./integrations/discord";
+import { setupDiscordBotRoutes, autoStartDiscordBot } from "./integrations/discordBot";
 import { setupAirtableRoutes } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagram";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
@@ -592,8 +593,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Set up integration-specific routes
   setupDiscordRoutes(app);
+  setupDiscordBotRoutes(app);
   setupAirtableRoutes(app);
   setupInstagramRoutes(app);
+  
+  // Auto-start Discord bot if settings are available
+  autoStartDiscordBot();
 
   const httpServer = createServer(app);
   return httpServer;
