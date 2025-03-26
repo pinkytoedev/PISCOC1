@@ -240,29 +240,107 @@ async function handleCreateArticleCommand(interaction: any) {
  * Handler for the /edit_article command
  * Retrieves the article and opens a modal for editing it
  */
+/**
+ * Create a select menu for unpublished articles
+ */
+async function createArticleSelectMenu() {
+  // Get all draft and pending articles
+  const draftArticles = await storage.getArticlesByStatus('draft');
+  const pendingArticles = await storage.getArticlesByStatus('pending');
+  
+  // Combine them and sort by creation date (newest first)
+  const unpublishedArticles = [...draftArticles, ...pendingArticles].sort((a, b) => {
+    // Convert dates to numbers for comparison, fallback to 0 if null/undefined
+    const dateA = a.createdAt ? new Date(a.createdAt.toString()).getTime() : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt.toString()).getTime() : 0;
+    return dateB - dateA; // Newest first
+  });
+  
+  // Create options for the select menu (max 25 options allowed by Discord)
+  const options = unpublishedArticles.slice(0, 25).map(article => {
+    // Format title with status
+    const statusIcon = article.status === 'draft' ? '📝' : '⏳';
+    let optionLabel = `${statusIcon} ${article.title}`;
+    
+    // Truncate if needed (Discord max length is 100 chars)
+    if (optionLabel.length > 95) {
+      optionLabel = optionLabel.substring(0, 95) + '...';
+    }
+    
+    return {
+      label: optionLabel,
+      value: article.id.toString(),
+      description: `ID: ${article.id} | Author: ${article.author.substring(0, 30)}`
+    };
+  });
+  
+  // If no unpublished articles, add a placeholder option
+  if (options.length === 0) {
+    options.push({
+      label: 'No unpublished articles found',
+      value: '0',
+      description: 'Create a new article or publish some from the website first'
+    });
+  }
+  
+  // Return the select menu
+  return new StringSelectMenuBuilder()
+    .setCustomId('article_select')
+    .setPlaceholder('Select an article to edit')
+    .addOptions(options);
+}
+
 async function handleEditArticleCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
   
   try {
-    // Get the article ID from the command option
-    const articleId = interaction.options.getInteger('id');
+    // Create a select menu for article selection
+    const articleSelect = await createArticleSelectMenu();
     
-    if (!articleId) {
-      await interaction.editReply('Please provide a valid article ID to edit.');
+    // If no articles available to edit
+    if (articleSelect.options[0].data.value === '0') {
+      await interaction.editReply('No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.');
       return;
     }
     
+    // Create an action row with the article select menu
+    const row = new ActionRowBuilder().addComponents(articleSelect);
+    
+    // Show the selection menu to the user
+    await interaction.editReply({
+      content: 'Please select an article to edit:',
+      components: [row]
+    });
+    
+    // We'll handle the article editing in the string select menu interaction handler
+  } catch (error) {
+    console.error('Error handling edit article command:', error);
+    await interaction.editReply('Sorry, there was an error fetching articles. Please try again later.');
+  }
+}
+
+/**
+ * Function to actually open the article edit modal after selection
+ */
+async function openArticleEditModal(interaction: any, articleId: number) {
+  try {
     // Get the article from the database
     const article = await storage.getArticle(articleId);
     
     if (!article) {
-      await interaction.editReply(`No article found with ID ${articleId}. Use \`/list_articles\` to see available articles.`);
+      await interaction.followUp({
+        content: `No article found with ID ${articleId}. It may have been deleted.`,
+        ephemeral: true
+      });
       return;
     }
     
-    // Verify the article is a draft (not published)
+    // Verify the article is not published
     if (article.status === 'published') {
-      await interaction.editReply('This article has already been published and cannot be edited through the bot. Please use the website admin interface to edit published articles.');
+      await interaction.followUp({
+        content: 'This article has already been published and cannot be edited through the bot. Please use the website admin interface to edit published articles.',
+        ephemeral: true
+      });
       return;
     }
     
@@ -478,8 +556,26 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
  */
 async function handleStringSelectMenuInteraction(interaction: any) {
   try {
+    // Handle article selection dropdown
+    if (interaction.customId === 'article_select') {
+      await interaction.deferUpdate();
+      
+      // Get the selected article ID
+      const articleId = parseInt(interaction.values[0], 10);
+      
+      if (isNaN(articleId) || articleId === 0) {
+        await interaction.followUp({
+          content: 'No valid article was selected.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Open the edit modal for the selected article
+      await openArticleEditModal(interaction, articleId);
+    }
     // Handle author selection dropdown
-    if (interaction.customId === 'author_select') {
+    else if (interaction.customId === 'author_select') {
       await interaction.deferUpdate();
       
       // Get the selected team member ID
@@ -678,11 +774,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('edit_article')
     .setDescription('Edit an existing draft article')
-    .addIntegerOption(option => 
-      option.setName('id')
-        .setDescription('The ID of the article to edit')
-        .setRequired(true)
-    )
 ];
 
 /**
