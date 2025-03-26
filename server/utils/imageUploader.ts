@@ -262,16 +262,36 @@ export async function uploadImageUrlToAirtable(
     
     if (!response.ok) {
       const errorText = await response.text();
+      let errorDetails = {};
+      
+      try {
+        // Try to parse the error response as JSON for more structured info
+        errorDetails = JSON.parse(errorText);
+      } catch (e) {
+        // If it's not JSON, use the raw text
+        errorDetails = { error: errorText };
+      }
+      
       console.error("Airtable API Error Response:", {
         status: response.status, 
         statusText: response.statusText,
         response: errorText,
         url,
+        encodedTableName,
+        originalTableName: tableName,
         recordId,
         fieldName,
-        method: 'PATCH', 
-        payload: JSON.stringify(payload)
+        method: 'PATCH',
+        payloadSize: JSON.stringify(payload).length,
+        fieldValue: fieldName,
+        errorDetails
       });
+      
+      // Specific handling for 403 errors
+      if (response.status === 403) {
+        throw new Error(`Airtable API permission error (403): This could be due to invalid API key, incorrect permissions, or an invalid table name/record ID. Check your Airtable configuration and record IDs. Full error: ${errorText}`);
+      }
+      
       throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
     }
     
