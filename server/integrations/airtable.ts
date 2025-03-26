@@ -84,9 +84,21 @@ async function airtableRequest(
   baseId: string,
   tableName: string,
   method: string = "GET",
-  data?: any
+  data?: any,
+  queryParams?: Record<string, string | number | boolean>
 ) {
-  const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
+  // Build the URL with query parameters if provided
+  let url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
+  
+  if (queryParams && Object.keys(queryParams).length > 0 && method === "GET") {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(queryParams)) {
+      params.append(key, String(value));
+    }
+    url += `?${params.toString()}`;
+  }
+  
+  console.log(`Airtable API request: ${method} ${url.split('?')[0]} ${queryParams ? JSON.stringify(queryParams) : ''}`);
   
   const options: RequestInit = {
     method,
@@ -374,59 +386,47 @@ export function setupAirtableRoutes(app: Express) {
       // Get Airtable settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
       
-      if (!apiKeySetting?.value || !baseIdSetting?.value) {
+      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ 
           success: false, 
           message: "Airtable settings are not fully configured",
           missing: [
             !apiKeySetting?.value ? "API Key" : null,
-            !baseIdSetting?.value ? "Base ID" : null
+            !baseIdSetting?.value ? "Base ID" : null,
+            !tableNameSetting?.value ? "Table Name" : null
           ].filter(Boolean)
         });
       }
       
-      // Test the connection by fetching base metadata
+      // Test the connection by fetching a single record
+      // Instead of using /meta/bases which requires special permissions,
+      // we'll test by attempting to access the table directly with maxRecords=1
       try {
-        const url = `https://api.airtable.com/v0/meta/bases/${baseIdSetting.value}`;
-        const response = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${apiKeySetting.value}`,
-            "Content-Type": "application/json"
-          }
-        });
+        const apiKey = apiKeySetting.value;
+        const baseId = baseIdSetting.value;
+        const tableName = tableNameSetting.value;
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          
-          if (response.status === 403) {
-            return res.status(403).json({
-              success: false,
-              message: "Authentication failed with Airtable. Please check your API key and permissions.",
-              error: errorText
-            });
-          } else if (response.status === 404) {
-            return res.status(404).json({
-              success: false,
-              message: "Base not found in Airtable. Please check your Base ID.",
-              error: errorText
-            });
-          }
-          
-          throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
-        }
+        // Make a simple request to get one record from the table
+        // This requires less permissions than accessing base metadata
+        const response = await airtableRequest(
+          apiKey,
+          baseId,
+          tableName,
+          "GET",
+          null,
+          { maxRecords: 1 }
+        );
         
-        const baseData = await response.json();
-        
-        // Return success with some base data
+        // If we get here, the connection was successful
         return res.json({
           success: true,
           message: "Successfully connected to Airtable",
-          base: {
-            id: baseData.id,
-            name: baseData.name,
-            permissionLevel: baseData.permissionLevel
+          details: {
+            recordCount: response.records?.length || 0,
+            baseId: baseId,
+            tableName: tableName
           }
         });
       } catch (error) {
