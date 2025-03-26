@@ -321,10 +321,12 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
 
 // Commands configuration
 const commands = [
+  // Simple ping command
   new SlashCommandBuilder()
     .setName('ping')
     .setDescription('Replies with the bot latency'),
   
+  // Writer command with subcommands
   new SlashCommandBuilder()
     .setName('writer')
     .setDescription('Manage article writing')
@@ -338,7 +340,7 @@ const commands = [
         .setName('create')
         .setDescription('Create a new article draft')
     )
-];
+] as SlashCommandBuilder[];
 
 /**
  * Initialize a new Discord bot with the provided token and client ID
@@ -427,10 +429,24 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
 
     // Register commands with Discord API
     const rest = new REST().setToken(token);
-    await rest.put(
-      Routes.applicationCommands(clientId),
-      { body: commands }
-    );
+    
+    try {
+      console.log('Started refreshing application (/) commands...');
+      
+      // Convert commands to JSON format as required by the Discord API
+      const commandsJson = commands.map(command => command.toJSON());
+      
+      // Register commands with Discord API
+      await rest.put(
+        Routes.applicationCommands(clientId),
+        { body: commandsJson }
+      );
+      
+      console.log('Successfully registered the following commands:');
+      commandsJson.forEach(cmd => console.log(`- /${cmd.name}`));
+    } catch (error) {
+      console.error('Error registering commands with Discord API:', error);
+    }
 
     // Store token and client ID in integration settings
     const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
