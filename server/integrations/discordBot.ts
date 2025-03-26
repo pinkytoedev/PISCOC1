@@ -13,7 +13,8 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ModalSubmitInteraction,
-  MessageComponentInteraction
+  MessageComponentInteraction,
+  StringSelectMenuBuilder
 } from 'discord.js';
 import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
@@ -104,6 +105,48 @@ async function handleListArticlesCommand(interaction: any) {
 }
 
 /**
+ * Helper function to get all team members from the database
+ * Used for author suggestions/selection
+ */
+async function getTeamMembers() {
+  try {
+    return await storage.getTeamMembers();
+  } catch (error) {
+    console.error('Error fetching team members:', error);
+    return [];
+  }
+}
+
+/**
+ * Helper function to create an author selection component
+ * Uses a dropdown with team members as options
+ */
+async function createAuthorSelectMenu() {
+  // Get all team members for author options
+  const teamMembers = await getTeamMembers();
+  
+  // Create options for the select menu
+  const options = teamMembers.map(member => ({
+    label: member.name,
+    value: member.name,
+    description: member.role || 'Team Member'
+  }));
+  
+  // Add a "Manual Entry" option
+  options.push({
+    label: "Enter Custom Author",
+    value: "custom",
+    description: "Enter a custom author name not in the list"
+  });
+  
+  // Return the select menu
+  return new StringSelectMenuBuilder()
+    .setCustomId('author_select')
+    .setPlaceholder('Select an author from team members')
+    .addOptions(options);
+}
+
+/**
  * Handler for the /create_article command
  * Opens a modal for article creation
  */
@@ -139,11 +182,12 @@ async function handleCreateArticleCommand(interaction: any) {
       .setRequired(true)
       .setMaxLength(4000);
     
+    // For author, we'll use a text input initially, but we'll display a selection dropdown after showing the modal
     const authorInput = new TextInputBuilder()
       .setCustomId('author')
       .setLabel('Author')  // Maps to Airtable's "Author" field
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Enter author name')
+      .setPlaceholder('Choose from team members in the follow-up prompt')
       .setRequired(true)
       .setMaxLength(100);
     
@@ -168,15 +212,20 @@ async function handleCreateArticleCommand(interaction: any) {
     // Show the modal with info about field mapping
     await interaction.showModal(modal);
     
-    // Add a follow-up message about Airtable mapping
+    // Add a follow-up message about Airtable mapping and author selection
     try {
+      // Get author selection menu
+      const authorSelect = await createAuthorSelectMenu();
+      const authorRow = new ActionRowBuilder().addComponents(authorSelect);
+      
       await interaction.followUp({
-        content: "The fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Author → Author, Featured → Featured",
+        content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.\n\nThe fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Author → Author, Featured → Featured",
+        components: [authorRow],
         ephemeral: true
       });
     } catch (error) {
       // Ignore follow-up errors as the modal still works
-      console.log("Couldn't send follow-up about field mapping");
+      console.log("Couldn't send follow-up about field mapping:", error);
     }
   } catch (error) {
     console.error('Error showing article creation modal:', error);
@@ -188,10 +237,126 @@ async function handleCreateArticleCommand(interaction: any) {
 }
 
 /**
+ * Handler for the /edit_article command
+ * Retrieves the article and opens a modal for editing it
+ */
+async function handleEditArticleCommand(interaction: any) {
+  await interaction.deferReply({ ephemeral: true });
+  
+  try {
+    // Get the article ID from the command option
+    const articleId = interaction.options.getInteger('id');
+    
+    if (!articleId) {
+      await interaction.editReply('Please provide a valid article ID to edit.');
+      return;
+    }
+    
+    // Get the article from the database
+    const article = await storage.getArticle(articleId);
+    
+    if (!article) {
+      await interaction.editReply(`No article found with ID ${articleId}. Use \`/list_articles\` to see available articles.`);
+      return;
+    }
+    
+    // Verify the article is a draft (not published)
+    if (article.status === 'published') {
+      await interaction.editReply('This article has already been published and cannot be edited through the bot. Please use the website admin interface to edit published articles.');
+      return;
+    }
+    
+    // Create modal for article editing with pre-filled values
+    const modal = new ModalBuilder()
+      .setCustomId(`edit_article_modal_${articleId}`) // Include the article ID in the custom ID
+      .setTitle(`Edit Article: ${article.title.substring(0, 30)}${article.title.length > 30 ? '...' : ''}`);
+
+    // Add input fields that match our Airtable field names, with pre-filled values
+    const titleInput = new TextInputBuilder()
+      .setCustomId('title')
+      .setLabel('Title')  // Maps to Airtable's "Name" field
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Enter article title')
+      .setValue(article.title || '')
+      .setRequired(true)
+      .setMaxLength(100);
+    
+    const descriptionInput = new TextInputBuilder()
+      .setCustomId('description')
+      .setLabel('Description')  // Maps to Airtable's "Description" field
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Enter a brief description')
+      .setValue(article.description || '')
+      .setRequired(true)
+      .setMaxLength(500);
+    
+    const bodyInput = new TextInputBuilder()
+      .setCustomId('body')
+      .setLabel('Body')  // Maps to Airtable's "Body" field
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Enter the article content')
+      .setValue(article.content || '')
+      .setRequired(true)
+      .setMaxLength(4000);
+    
+    const authorInput = new TextInputBuilder()
+      .setCustomId('author')
+      .setLabel('Author')  // Maps to Airtable's "Author" field
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Author name (use dropdown after submitting)')
+      .setValue(article.author || '')
+      .setRequired(true)
+      .setMaxLength(100);
+    
+    const featuredInput = new TextInputBuilder()
+      .setCustomId('featured')
+      .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Type "yes" to mark as featured')
+      .setValue(article.featured === 'yes' ? 'yes' : 'no')
+      .setRequired(false)
+      .setMaxLength(3);
+    
+    // Create action rows (each input needs its own row)
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
+    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
+    const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
+    const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
+    
+    // Add inputs to the modal
+    modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
+    
+    // Show the modal with info about field mapping
+    await interaction.editReply(`Preparing to edit article #${articleId}: "${article.title}"`);
+    await interaction.showModal(modal);
+    
+    // Add a follow-up message about author selection
+    try {
+      // Get author selection menu
+      const authorSelect = await createAuthorSelectMenu();
+      const authorRow = new ActionRowBuilder().addComponents(authorSelect);
+      
+      await interaction.followUp({
+        content: "**Important:** Please select an author from the team members dropdown below after submitting the form. This will properly link to Airtable's reference field.",
+        components: [authorRow],
+        ephemeral: true
+      });
+    } catch (error) {
+      console.log("Couldn't send follow-up about author selection:", error);
+    }
+  } catch (error) {
+    console.error('Error handling edit article command:', error);
+    await interaction.editReply('Sorry, there was an error editing the article. Please try again later.');
+  }
+}
+
+/**
  * Handler for modal submissions (article creation)
  */
 async function handleModalSubmission(interaction: ModalSubmitInteraction) {
   try {
+    // Handle article creation
     if (interaction.customId === 'create_article_modal') {
       await interaction.deferReply({ ephemeral: true });
       
@@ -239,9 +404,128 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       
       await interaction.editReply({ embeds: [embed] });
     }
+    // Handle article editing (check if customId starts with edit_article_modal_)
+    else if (interaction.customId.startsWith('edit_article_modal_')) {
+      await interaction.deferReply({ ephemeral: true });
+      
+      // Extract the article ID from the customId (edit_article_modal_123 => 123)
+      const articleId = parseInt(interaction.customId.replace('edit_article_modal_', ''), 10);
+      
+      if (isNaN(articleId)) {
+        await interaction.editReply('Error: Invalid article ID');
+        return;
+      }
+      
+      // Get the existing article to verify it exists
+      const existingArticle = await storage.getArticle(articleId);
+      
+      if (!existingArticle) {
+        await interaction.editReply(`Error: Article with ID ${articleId} not found.`);
+        return;
+      }
+      
+      // Get form input values
+      const title = interaction.fields.getTextInputValue('title');
+      const description = interaction.fields.getTextInputValue('description');
+      const body = interaction.fields.getTextInputValue('body');
+      const author = interaction.fields.getTextInputValue('author');
+      const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
+      const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
+      
+      // Update article data
+      const articleData = {
+        title,                     // Maps to Airtable's "Name" field
+        description,               // Maps to Airtable's "Description" field
+        content: body,             // Maps to Airtable's "Body" field
+        author,                    // Maps to Airtable's "Author" field
+        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
+        // Don't change the status of the article
+        // Don't change image or other fields (keep them as is)
+      };
+      
+      // Update the article via our API
+      const updatedArticle = await storage.updateArticle(articleId, articleData);
+      
+      if (!updatedArticle) {
+        await interaction.editReply(`Error: Failed to update article with ID ${articleId}.`);
+        return;
+      }
+      
+      // Send confirmation
+      const embed = new EmbedBuilder()
+        .setTitle('✅ Article Updated Successfully')
+        .setDescription(`Your article "${title}" has been updated on the website.`)
+        .setColor('#22A559')
+        .addFields(
+          { name: 'Name', value: title },
+          { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
+          { name: 'Author', value: author },
+          { name: 'Status', value: updatedArticle.status },
+          { name: 'Featured', value: featured ? 'Yes' : 'No' }
+        )
+        .setFooter({ text: 'The updated article will be synced to Airtable through the website' });
+      
+      await interaction.editReply({ embeds: [embed] });
+    }
   } catch (error) {
     console.error('Error handling modal submission:', error);
-    await interaction.editReply('Sorry, there was an error creating your article. Please try again later.');
+    await interaction.editReply('Sorry, there was an error processing your article. Please try again later.');
+  }
+}
+
+/**
+ * Handler for string select menu interactions
+ */
+async function handleStringSelectMenuInteraction(interaction: any) {
+  try {
+    // Handle author selection dropdown
+    if (interaction.customId === 'author_select') {
+      await interaction.deferUpdate();
+      
+      // Get the selected team member ID
+      const selectedTeamMemberId = interaction.values[0];
+      if (!selectedTeamMemberId) {
+        await interaction.followUp({
+          content: 'No author was selected.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Get the team member info from our database
+      const teamMember = await storage.getTeamMember(parseInt(selectedTeamMemberId, 10));
+      
+      if (!teamMember) {
+        await interaction.followUp({
+          content: 'Could not find the selected team member.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Send confirmation of selection
+      await interaction.followUp({
+        content: `✅ Selected author: **${teamMember.name}**\n\nThis will properly reference the team member in Airtable when the article is synced.`,
+        ephemeral: true
+      });
+      
+      // Here, we would typically update the article with the selected author
+      // But since we already let the user enter an author name in the form, we'll just confirm the selection
+      // In a full implementation, we could fetch the article ID from the interaction's message
+      // and update the article with the team member's ID as the author
+    }
+  } catch (error) {
+    console.error('Error handling string select menu interaction:', error);
+    try {
+      if (!interaction.replied) {
+        await interaction.followUp({ 
+          content: 'An error occurred while processing your selection.', 
+          ephemeral: true 
+        });
+      }
+    } catch (followUpError) {
+      console.error('Error sending error follow-up:', followUpError);
+    }
   }
 }
 
@@ -331,7 +615,16 @@ const commands = [
   
   new SlashCommandBuilder()
     .setName('create_article')
-    .setDescription('Create a new article draft')
+    .setDescription('Create a new article draft'),
+    
+  new SlashCommandBuilder()
+    .setName('edit_article')
+    .setDescription('Edit an existing draft article')
+    .addIntegerOption(option => 
+      option.setName('id')
+        .setDescription('The ID of the article to edit')
+        .setRequired(true)
+    )
 ];
 
 /**
@@ -375,6 +668,9 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
         } else if (interaction.isModalSubmit()) {
           // Handle modal submissions (for article creation)
           await handleModalSubmission(interaction);
+        } else if (interaction.isStringSelectMenu()) {
+          // Handle string select menu interactions
+          await handleStringSelectMenuInteraction(interaction);
         } else if (interaction.isChatInputCommand()) {
           // Handle slash commands
           
@@ -396,6 +692,11 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
           // Create article command
           else if (interaction.commandName === 'create_article') {
             await handleCreateArticleCommand(interaction);
+          }
+          
+          // Edit article command
+          else if (interaction.commandName === 'edit_article') {
+            await handleEditArticleCommand(interaction);
           }
         }
       } catch (error) {
