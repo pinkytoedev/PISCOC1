@@ -1047,6 +1047,19 @@ export function setupAirtableRoutes(app: Express) {
       // Convert to Airtable format
       const airtableFields = await convertCarouselQuoteToAirtableFormat(quoteData);
       
+      // Log the fields being sent to Airtable for debugging
+      console.log("Sending to Airtable for quote update:", {
+        quoteId: id,
+        externalId: quoteData.externalId,
+        fields: airtableFields,
+        originalData: {
+          main: quoteData.main,
+          philo: quoteData.philo,
+          carousel: quoteData.carousel,
+          quote: quoteData.quote
+        }
+      });
+      
       // Create the Airtable update payload
       const airtableData = {
         records: [
