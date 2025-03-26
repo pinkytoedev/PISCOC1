@@ -125,10 +125,10 @@ async function createAuthorSelectMenu() {
   // Get all team members for author options
   const teamMembers = await getTeamMembers();
   
-  // Create options for the select menu
+  // Create options for the select menu - use the team member ID as the value
   const options = teamMembers.map(member => ({
     label: member.name,
-    value: member.name,
+    value: member.id.toString(), // We'll use the ID as the value for proper referencing
     description: member.role || 'Team Member'
   }));
   
@@ -483,8 +483,8 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       await interaction.deferUpdate();
       
       // Get the selected team member ID
-      const selectedTeamMemberId = interaction.values[0];
-      if (!selectedTeamMemberId) {
+      const selectedValue = interaction.values[0];
+      if (!selectedValue) {
         await interaction.followUp({
           content: 'No author was selected.',
           ephemeral: true
@@ -492,8 +492,17 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
+      // Check if the user selected "custom" option
+      if (selectedValue === 'custom') {
+        await interaction.followUp({
+          content: '✅ You chose to enter a custom author name. Please make sure you entered it in the article form.',
+          ephemeral: true
+        });
+        return;
+      }
+      
       // Get the team member info from our database
-      const teamMember = await storage.getTeamMember(parseInt(selectedTeamMemberId, 10));
+      const teamMember = await storage.getTeamMember(parseInt(selectedValue, 10));
       
       if (!teamMember) {
         await interaction.followUp({
@@ -503,16 +512,65 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
-      // Send confirmation of selection
-      await interaction.followUp({
-        content: `✅ Selected author: **${teamMember.name}**\n\nThis will properly reference the team member in Airtable when the article is synced.`,
-        ephemeral: true
+      // Try to find the article ID from recent interactions
+      // This is a simplistic approach - we're assuming this menu is shown after a modal submission
+      // In a more robust implementation, you'd include article ID in the menu's custom ID
+      
+      // First, try to find a recent created article
+      const recentArticles = await storage.getArticlesByStatus('draft');
+      const TWO_MINUTES_MS = 2 * 60 * 1000;
+
+      let targetArticle = recentArticles.find(article => {
+        // Check if it's from discord and created by this user
+        if (!article.source || article.source !== 'discord' || !article.externalId?.includes(interaction.user.id)) {
+          return false;
+        }
+        
+        // If createdAt exists, check if it was created in the last 2 minutes
+        if (article.createdAt) {
+          try {
+            // Ensure we're working with a string
+            const createdAtString = typeof article.createdAt === 'object' 
+              ? article.createdAt.toISOString() 
+              : String(article.createdAt);
+              
+            const createdTime = new Date(createdAtString).getTime();
+            return (Date.now() - createdTime < TWO_MINUTES_MS);
+          } catch (err) {
+            return false;
+          }
+        }
+        return false;
       });
       
-      // Here, we would typically update the article with the selected author
-      // But since we already let the user enter an author name in the form, we'll just confirm the selection
-      // In a full implementation, we could fetch the article ID from the interaction's message
-      // and update the article with the team member's ID as the author
+      if (targetArticle) {
+        // Update the article with the team member's name
+        // We'll store the author name since that's what our schema has
+        const updatedArticle = await storage.updateArticle(targetArticle.id, {
+          author: teamMember.name,
+          // Store the externalId of the team member in a way that Airtable can reference it
+          // This could be improved by adding a proper author reference field to the schema
+          photo: teamMember.externalId || `ref_${teamMember.id}`
+        });
+        
+        if (updatedArticle) {
+          await interaction.followUp({
+            content: `✅ Selected author: **${teamMember.name}**\n\nYour draft article has been updated with this author. This will properly reference the team member in Airtable when the article is synced.`,
+            ephemeral: true
+          });
+        } else {
+          await interaction.followUp({
+            content: `✅ Selected author: **${teamMember.name}**\n\nCouldn't automatically update your article. Please make sure to manually set this author in your article.`,
+            ephemeral: true
+          });
+        }
+      } else {
+        // If we can't find a recent article, just confirm the selection
+        await interaction.followUp({
+          content: `✅ Selected author: **${teamMember.name}**\n\nThis author will be used for your article. When creating or editing articles, please enter this name to ensure proper Airtable reference.`,
+          ephemeral: true
+        });
+      }
     }
   } catch (error) {
     console.error('Error handling string select menu interaction:', error);
