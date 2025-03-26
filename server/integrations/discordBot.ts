@@ -190,6 +190,8 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         description,
         content: body,
         author,
+        imageUrl: 'https://via.placeholder.com/800x600?text=Discord+Article', // Default placeholder image
+        imageType: 'url',
         featured: featured ? 'yes' : 'no', // Convert boolean to 'yes'/'no' string
         status: 'draft',
         source: 'discord',
@@ -658,6 +660,8 @@ export function setupArticleReceiveEndpoint(app: Express) {
         description: description || '',
         content,
         author: author || 'Discord User',
+        imageUrl: 'https://via.placeholder.com/800x600?text=Discord+Article', // Default placeholder image
+        imageType: 'url',
         featured: featured ? 'yes' : 'no', // Convert boolean to string
         status: 'draft',
         source: 'discord',
