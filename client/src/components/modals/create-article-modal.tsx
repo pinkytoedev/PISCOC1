@@ -144,6 +144,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       const response = await fetch(`/api/airtable/upload-image/${editArticle.id}/MainImage`, {
         method: 'POST',
         body: formData,
+        credentials: 'include', // Include session cookies for authentication
       });
       
       if (!response.ok) {
@@ -193,6 +194,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       const response = await fetch(`/api/airtable/upload-image/${editArticle.id}/instaPhoto`, {
         method: 'POST',
         body: formData,
+        credentials: 'include', // Include session cookies for authentication
       });
       
       if (!response.ok) {
