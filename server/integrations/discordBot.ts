@@ -30,10 +30,10 @@ let botStatus = {
 };
 
 /**
- * Handler for the /writer list command
+ * Handler for the /list_articles command
  * Lists all articles that are not published (drafts, pending review, etc.)
  */
-async function handleWriterListCommand(interaction: any) {
+async function handleListArticlesCommand(interaction: any) {
   await interaction.deferReply();
   
   try {
@@ -42,7 +42,7 @@ async function handleWriterListCommand(interaction: any) {
     const nonPublishedArticles = allArticles.filter(article => article.status !== 'published');
     
     if (nonPublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found. You can create a new article with `/writer create`.');
+      await interaction.editReply('No unpublished articles found. You can create a new article with `/create_article`.');
       return;
     }
     
@@ -104,10 +104,10 @@ async function handleWriterListCommand(interaction: any) {
 }
 
 /**
- * Handler for the /writer create command
+ * Handler for the /create_article command
  * Opens a modal for article creation
  */
-async function handleWriterCreateCommand(interaction: any) {
+async function handleCreateArticleCommand(interaction: any) {
   try {
     // Create modal for article creation
     const modal = new ModalBuilder()
@@ -326,18 +326,12 @@ const commands = [
     .setDescription('Replies with the bot latency'),
   
   new SlashCommandBuilder()
-    .setName('writer')
-    .setDescription('Manage article writing')
-    .addSubcommand(subcommand => 
-      subcommand
-        .setName('list')
-        .setDescription('List articles not yet published')
-    )
-    .addSubcommand(subcommand => 
-      subcommand
-        .setName('create')
-        .setDescription('Create a new article draft')
-    )
+    .setName('list_articles')
+    .setDescription('List articles that have not been published yet'),
+  
+  new SlashCommandBuilder()
+    .setName('create_article')
+    .setDescription('Create a new article draft')
 ];
 
 /**
@@ -394,18 +388,14 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
             await interaction.editReply(`Pong! Bot latency: ${latency}ms | API Latency: ${Math.round(client!.ws.ping)}ms`);
           } 
           
-          // Writer command - for article management
-          else if (interaction.commandName === 'writer') {
-            const subcommand = interaction.options.getSubcommand();
-            
-            // List non-published articles
-            if (subcommand === 'list') {
-              await handleWriterListCommand(interaction);
-            } 
-            // Create a new article
-            else if (subcommand === 'create') {
-              await handleWriterCreateCommand(interaction);
-            }
+          // List articles command
+          else if (interaction.commandName === 'list_articles') {
+            await handleListArticlesCommand(interaction);
+          }
+          
+          // Create article command
+          else if (interaction.commandName === 'create_article') {
+            await handleCreateArticleCommand(interaction);
           }
         }
       } catch (error) {
