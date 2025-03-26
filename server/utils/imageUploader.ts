@@ -128,8 +128,27 @@ export async function uploadImageToAirtable(
     const url = `https://api.airtable.com/v0/${baseId}/${encodedTableName}/${recordId}`;
     
     // Create the fields update payload
+    // Based on Airtable API documentation and our testing, Airtable requires a valid URL for attachments
+    // We need to either:
+    // 1. Host the file somewhere and provide the URL
+    // 2. Use a data URL for small images (which may not always work with Airtable)
+    
+    // In a production environment, we'd upload to S3 or similar storage
+    // For this prototype, we'll try using a direct data URL but note this is not recommended
+    // for large files and may not work in all cases
+    
+    // Check if file is over 1MB - if so, warn that it might not work via data URL
+    if (fileBuffer.length > 1 * 1024 * 1024) {
+      console.warn("Large file detected. Data URLs are not recommended for files over 1MB.");
+    }
+    
+    // Create the attachment object with a data URL
+    // While this isn't ideal for production, it's a simple approach for prototyping
+    const dataUrl = `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`;
+    
+    // Create the attachment object with the data URL
     const attachment = {
-      url: `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`,
+      url: dataUrl,
       filename: file.filename
     };
     
@@ -239,10 +258,17 @@ export async function uploadImageUrlToAirtable(
     const url = `https://api.airtable.com/v0/${baseId}/${encodedTableName}/${recordId}`;
     
     // Create the fields update payload
+    // For URL-based uploads, Airtable will fetch the image from the provided URL
+    // The URL must be publicly accessible
+    
+    // Create the attachment object with the URL
     const attachment = {
       url: imageUrl,
       filename: filename
     };
+    
+    // Log URL being used (helps with debugging)
+    console.log(`Using URL for Airtable attachment: ${imageUrl.substring(0, 100)}${imageUrl.length > 100 ? '...' : ''}`);
     
     const payload = {
       fields: {
