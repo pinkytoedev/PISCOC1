@@ -412,23 +412,10 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     // Add inputs to the modal
     modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
-    // Show the modal directly without editReply first
+    // Show the modal directly 
+    // When showing a modal, no further interactions can happen until the modal is submitted
+    // We will show the author selection dropdown after the modal is submitted instead
     await interaction.showModal(modal);
-    
-    // Add a follow-up message about author selection
-    try {
-      // Get author selection menu
-      const authorSelect = await createAuthorSelectMenu();
-      const authorRow = new ActionRowBuilder().addComponents(authorSelect);
-      
-      await interaction.followUp({
-        content: "**Important:** Please select an author from the team members dropdown below after submitting the form. This will properly link to Airtable's reference field.",
-        components: [authorRow],
-        ephemeral: true
-      });
-    } catch (error) {
-      console.log("Couldn't send follow-up about author selection:", error);
-    }
   } catch (error) {
     console.error('Error handling edit article command:', error);
     
@@ -496,6 +483,21 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         .setFooter({ text: 'The article will be synced to Airtable through the website' });
       
       await interaction.editReply({ embeds: [embed] });
+      
+      // Add author selection menu after successful article creation
+      try {
+        // Get author selection menu
+        const authorSelect = await createAuthorSelectMenu();
+        const authorRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(authorSelect);
+        
+        await interaction.followUp({
+          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.",
+          components: [authorRow],
+          ephemeral: true
+        });
+      } catch (followUpError) {
+        console.error("Couldn't send author selection menu:", followUpError);
+      }
     }
     // Handle article editing (check if customId starts with edit_article_modal_)
     else if (interaction.customId.startsWith('edit_article_modal_')) {
@@ -559,6 +561,21 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         .setFooter({ text: 'The updated article will be synced to Airtable through the website' });
       
       await interaction.editReply({ embeds: [embed] });
+      
+      // Add author selection menu after successful article update
+      try {
+        // Get author selection menu
+        const authorSelect = await createAuthorSelectMenu();
+        const authorRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(authorSelect);
+        
+        await interaction.followUp({
+          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.",
+          components: [authorRow],
+          ephemeral: true
+        });
+      } catch (followUpError) {
+        console.error("Couldn't send author selection menu:", followUpError);
+      }
     }
   } catch (error) {
     console.error('Error handling modal submission:', error);
@@ -585,12 +602,12 @@ async function handleStringSelectMenuInteraction(interaction: any) {
   try {
     // Handle article selection dropdown
     if (interaction.customId === 'article_select') {
-      await interaction.deferUpdate();
-      
-      // Get the selected article ID
+      // Get the selected article ID before deferring
       const articleId = parseInt(interaction.values[0], 10);
       
       if (isNaN(articleId) || articleId === 0) {
+        // For error messages, we can defer first
+        await interaction.deferUpdate();
         await interaction.followUp({
           content: 'No valid article was selected.',
           ephemeral: true
@@ -598,8 +615,27 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
+      // We don't defer update here because we need to show a modal
+      // and modals cannot be shown after deferUpdate
+      
       // Open the edit modal for the selected article
-      await openArticleEditModal(interaction, articleId);
+      try {
+        // Directly show the modal without deferring first
+        await openArticleEditModal(interaction, articleId);
+      } catch (error) {
+        console.error('Error showing edit modal:', error);
+        
+        // If modal fails, try to let the user know
+        try {
+          await interaction.deferUpdate();
+          await interaction.followUp({
+            content: 'Error opening the edit modal. Please try again later.',
+            ephemeral: true
+          });
+        } catch (replyError) {
+          console.error('Error sending error notification:', replyError);
+        }
+      }
     }
     // Handle author selection dropdown
     else if (interaction.customId === 'author_select') {
