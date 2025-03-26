@@ -77,9 +77,11 @@ export const insertArticleSchema = createInsertSchema(articles).omit({
 // Carousel quotes table
 export const carouselQuotes = pgTable("carousel_quotes", {
   id: serial("id").primaryKey(),
-  carousel: text("carousel").notNull(),
-  quote: text("quote").notNull(),
-  externalId: text("external_id"), // For Airtable ID reference
+  carousel: text("carousel").notNull(), // Maps to main field in Airtable
+  quote: text("quote").notNull(),     // Maps to philo field in Airtable
+  main: text("main"),                 // Original main field from Airtable
+  philo: text("philo"),               // Original philo field from Airtable
+  externalId: text("external_id"),    // For Airtable ID reference
 });
 
 export const insertCarouselQuoteSchema = createInsertSchema(carouselQuotes).omit({
@@ -194,6 +196,9 @@ export const carouselQuoteSchema = z.object({
   id: z.number(),
   carousel: z.string(),
   quote: z.string(),
+  main: z.string().optional(),
+  philo: z.string().optional(),
+  externalId: z.string().optional(),
 });
 
 export const adminSchema = z.object({
