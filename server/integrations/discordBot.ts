@@ -786,8 +786,8 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         .setCustomId('author')
         .setLabel('Author')  // Maps to Airtable's "Author" field
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Enter author name (optional - can be set from dropdown after submission)')
-        .setRequired(false)
+        .setPlaceholder('Enter author name')
+        .setRequired(true)
         .setMaxLength(100);
       
       const featuredInput = new TextInputBuilder()
