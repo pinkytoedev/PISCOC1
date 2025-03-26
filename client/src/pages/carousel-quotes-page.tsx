@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { CarouselQuote, InsertCarouselQuote } from "@shared/schema";
-import { Plus, Edit, Trash2, Loader2, Quote } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, Quote, CloudUpload, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
@@ -18,9 +18,11 @@ export default function CarouselQuotesPage() {
   const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editQuote, setEditQuote] = useState<CarouselQuote | null>(null);
-  const [formData, setFormData] = useState<InsertCarouselQuote>({
+  const [formData, setFormData] = useState<InsertCarouselQuote & {main?: string, philo?: string, externalId?: string}>({
     carousel: "",
     quote: "",
+    main: "",
+    philo: "",
   });
   
   const { data: quotes, isLoading } = useQuery<CarouselQuote[]>({
@@ -89,6 +91,8 @@ export default function CarouselQuotesPage() {
     setFormData({
       carousel: "",
       quote: "",
+      main: "",
+      philo: "",
     });
     setIsModalOpen(true);
   };
@@ -98,6 +102,9 @@ export default function CarouselQuotesPage() {
     setFormData({
       carousel: quote.carousel,
       quote: quote.quote,
+      main: quote.main ?? quote.carousel, // Use existing main or carousel as fallback
+      philo: quote.philo ?? quote.quote,  // Use existing philo or quote as fallback
+      externalId: quote.externalId ?? undefined,
     });
     setIsModalOpen(true);
   };
@@ -124,6 +131,8 @@ export default function CarouselQuotesPage() {
     setFormData({
       carousel: "",
       quote: "",
+      main: "",
+      philo: "",
     });
   };
   
@@ -276,6 +285,37 @@ export default function CarouselQuotesPage() {
                       rows={4}
                       required
                     />
+                  </div>
+
+                  {/* Airtable specific fields */}
+                  <div className="space-y-4 border rounded-md p-4 bg-gray-50">
+                    <div className="text-sm font-medium text-gray-700">Airtable Fields</div>
+                    <p className="text-xs text-gray-500">
+                      These fields are used when synchronizing with Airtable. If left empty, the carousel and quote values will be used.
+                    </p>
+                    
+                    <div>
+                      <Label htmlFor="main">Airtable Main Field</Label>
+                      <Input
+                        id="main"
+                        name="main"
+                        value={formData.main || ""}
+                        onChange={handleInputChange}
+                        placeholder="Main field value for Airtable"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="philo">Airtable Philo Field</Label>
+                      <Textarea
+                        id="philo"
+                        name="philo"
+                        value={formData.philo || ""}
+                        onChange={handleInputChange}
+                        placeholder="Philo field value for Airtable"
+                        rows={3}
+                      />
+                    </div>
                   </div>
                   
                   <DialogFooter>
