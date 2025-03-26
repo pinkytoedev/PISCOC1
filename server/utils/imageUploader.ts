@@ -150,8 +150,18 @@ export async function uploadImageToAirtable(
     });
     
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Airtable API error: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      console.error("Airtable API Error Response:", {
+        status: response.status, 
+        statusText: response.statusText,
+        response: errorText,
+        url,
+        recordId,
+        fieldName,
+        method: 'PATCH',
+        payload: JSON.stringify(payload)
+      });
+      throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
     }
     
     const result = await response.json() as AirtableResponse;
@@ -231,8 +241,18 @@ export async function uploadImageUrlToAirtable(
     });
     
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Airtable API error: ${response.status} - ${error}`);
+      const errorText = await response.text();
+      console.error("Airtable API Error Response:", {
+        status: response.status, 
+        statusText: response.statusText,
+        response: errorText,
+        url,
+        recordId,
+        fieldName,
+        method: 'PATCH', 
+        payload: JSON.stringify(payload)
+      });
+      throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
     }
     
     const result = await response.json() as AirtableResponse;
