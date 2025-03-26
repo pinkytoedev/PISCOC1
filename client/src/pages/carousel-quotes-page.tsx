@@ -165,8 +165,8 @@ export default function CarouselQuotesPage() {
     updateAirtableMutation.mutate({
       id: quote.id,
       externalId: quote.externalId,
-      main: quote.main || quote.carousel,
-      philo: quote.philo || quote.quote,
+      main: quote.main || quote.carousel || null,
+      philo: quote.philo || quote.quote || null,
       carousel: quote.carousel,
       quote: quote.quote
     });
@@ -404,8 +404,8 @@ export default function CarouselQuotesPage() {
                             // Create and update a quote using the current form data
                             const quoteToUpdate = {
                               ...editQuote,
-                              main: formData.main,
-                              philo: formData.philo
+                              main: formData.main || null,
+                              philo: formData.philo || null
                             };
                             handleUpdateAirtable(quoteToUpdate);
                           }}
