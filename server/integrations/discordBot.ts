@@ -1,304 +1,321 @@
 import { Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from 'discord.js';
-import { Express } from "express";
-import { storage } from "../storage";
+import type { Express, Request, Response } from 'express';
+import { storage } from '../storage';
 
-// Define the Discord bot client
+// Store bot instance for the application lifecycle
 let client: Client | null = null;
-let commands: any[] = [];
-let isInitialized = false;
-
-// Register slash commands
-const registerCommands = async (clientId: string, token: string) => {
-  const rest = new REST().setToken(token);
-  
-  try {
-    console.log('Started refreshing application (/) commands.');
-
-    await rest.put(
-      Routes.applicationCommands(clientId),
-      { body: commands.map(command => command.toJSON()) },
-    );
-
-    console.log('Successfully reloaded application (/) commands.');
-  } catch (error) {
-    console.error('Error refreshing application commands:', error);
-    throw error;
-  }
+let botStatus = {
+  connected: false,
+  status: 'Not initialized',
+  username: '',
+  id: '',
+  guilds: 0
 };
 
-// Initialize the Discord bot
-export const initializeDiscordBot = async (token: string, clientId: string) => {
-  if (isInitialized && client) {
-    await client.destroy();
-    console.log('Destroying existing Discord bot client');
-  }
+// Commands configuration
+const commands = [
+  new SlashCommandBuilder()
+    .setName('ping')
+    .setDescription('Replies with the bot latency')
+];
 
+/**
+ * Initialize a new Discord bot with the provided token and client ID
+ */
+export const initializeDiscordBot = async (token: string, clientId: string) => {
   try {
+    // Clean up any existing client
+    if (client) {
+      await client.destroy();
+      client = null;
+    }
+
     // Create a new client
-    client = new Client({ 
+    client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages
-      ] 
+      ]
     });
 
-    // Define commands
-    commands = [
-      new SlashCommandBuilder()
-        .setName('ping')
-        .setDescription('Replies with pong and latency check'),
-    ];
-
-    // Register commands with Discord API
-    await registerCommands(clientId, token);
-
-    // Set up event handlers
+    // Register event handlers
     client.once(Events.ClientReady, c => {
-      console.log(`Discord bot ready! Logged in as ${c.user.tag}`);
-      isInitialized = true;
+      botStatus = {
+        connected: true,
+        status: 'Connected and ready',
+        username: c.user.username,
+        id: c.user.id,
+        guilds: c.guilds.cache.size
+      };
+      console.log(`Ready! Logged in as ${c.user.tag}`);
     });
 
-    // Handle slash commands
+    // Register commands
     client.on(Events.InteractionCreate, async interaction => {
       if (!interaction.isChatInputCommand()) return;
 
-      const { commandName } = interaction;
-
-      if (commandName === 'ping') {
-        const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true });
-        const pingTime = sent.createdTimestamp - interaction.createdTimestamp;
-        await interaction.editReply(`Pong! Bot latency: ${pingTime}ms | API Latency: ${Math.round(client!.ws.ping)}ms`);
-        
-        // Log interaction for analytics
-        storage.createActivityLog({
-          action: "bot_command",
-          resourceType: "discord_bot",
-          resourceId: "ping",
-          details: { 
-            latency: pingTime,
-            apiLatency: client!.ws.ping,
-            user: interaction.user.username
-          }
-        }).catch(console.error);
+      if (interaction.commandName === 'ping') {
+        const sent = await interaction.reply({ 
+          content: 'Pinging...', 
+          fetchReply: true 
+        });
+        const latency = sent.createdTimestamp - interaction.createdTimestamp;
+        await interaction.editReply(`Pong! Bot latency: ${latency}ms | API Latency: ${Math.round(client!.ws.ping)}ms`);
       }
     });
 
-    // Login to Discord
-    await client.login(token);
-    return { success: true, message: 'Discord bot successfully initialized' };
+    // Register commands with Discord API
+    const rest = new REST().setToken(token);
+    await rest.put(
+      Routes.applicationCommands(clientId),
+      { body: commands }
+    );
+
+    // Store token and client ID in integration settings
+    const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
+    if (!tokenSetting) {
+      await storage.createIntegrationSetting({
+        service: 'discord',
+        key: 'bot_token',
+        value: token,
+        enabled: true
+      });
+    } else {
+      await storage.updateIntegrationSetting(tokenSetting.id, {
+        value: token,
+        enabled: true
+      });
+    }
+
+    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
+    if (!clientIdSetting) {
+      await storage.createIntegrationSetting({
+        service: 'discord',
+        key: 'bot_client_id',
+        value: clientId,
+        enabled: true
+      });
+    } else {
+      await storage.updateIntegrationSetting(clientIdSetting.id, {
+        value: clientId,
+        enabled: true
+      });
+    }
+
+    botStatus.status = 'Initialized (not connected)';
+    return { success: true, message: 'Bot initialized successfully' };
   } catch (error) {
+    botStatus = {
+      connected: false,
+      status: `Initialization error: ${error instanceof Error ? error.message : String(error)}`,
+      username: '',
+      id: '',
+      guilds: 0
+    };
     console.error('Error initializing Discord bot:', error);
-    return { success: false, message: `Error initializing Discord bot: ${error}` };
+    return { success: false, message: 'Failed to initialize bot', error };
   }
 };
 
-// Get the bot status
-export const getDiscordBotStatus = () => {
-  if (!client) {
-    return { connected: false, status: 'Not initialized' };
-  }
-  
-  return {
-    connected: client.isReady(),
-    status: client.isReady() ? 'Connected' : 'Connecting',
-    username: client.user?.username,
-    id: client.user?.id,
-    guilds: client.guilds.cache.size
-  };
-};
-
-// Set up the Discord bot routes
-export function setupDiscordBotRoutes(app: Express) {
-  // Initialize the Discord bot
-  app.post("/api/discord/bot/initialize", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
+/**
+ * Start the Discord bot
+ */
+export const startDiscordBot = async () => {
+  try {
+    if (!client) {
+      // Try to load settings from storage and initialize
+      const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
+      const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
+      
+      if (!tokenSetting || !clientIdSetting) {
+        return { success: false, message: 'Bot not initialized. Please set bot token and client ID first.' };
       }
       
+      await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
+      if (!client) {
+        return { success: false, message: 'Failed to initialize bot with stored credentials.' };
+      }
+    }
+    
+    botStatus.status = 'Connecting...';
+    await client.login(await getDiscordBotToken());
+    
+    return { success: true, message: 'Bot started successfully' };
+  } catch (error) {
+    botStatus = {
+      ...botStatus,
+      connected: false,
+      status: `Start error: ${error instanceof Error ? error.message : String(error)}`
+    };
+    console.error('Error starting Discord bot:', error);
+    return { success: false, message: 'Failed to start bot', error };
+  }
+};
+
+/**
+ * Stop the Discord bot
+ */
+export const stopDiscordBot = async () => {
+  try {
+    if (!client) {
+      return { success: false, message: 'Bot not initialized' };
+    }
+    
+    await client.destroy();
+    botStatus = {
+      connected: false,
+      status: 'Disconnected',
+      username: botStatus.username,
+      id: botStatus.id,
+      guilds: 0
+    };
+    
+    return { success: true, message: 'Bot stopped successfully' };
+  } catch (error) {
+    console.error('Error stopping Discord bot:', error);
+    return { success: false, message: 'Failed to stop bot', error };
+  }
+};
+
+/**
+ * Get the Discord bot status
+ */
+export const getDiscordBotStatus = () => {
+  if (client) {
+    // Update the connected status based on client's readiness
+    botStatus.connected = client.isReady();
+    
+    // Update guild count if connected
+    if (client.isReady()) {
+      botStatus.guilds = client.guilds.cache.size;
+    }
+  }
+  
+  return botStatus;
+};
+
+/**
+ * Helper function to get the Discord bot token from storage
+ */
+async function getDiscordBotToken(): Promise<string> {
+  const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
+  
+  if (!tokenSetting || !tokenSetting.value) {
+    throw new Error('Discord bot token not found in settings');
+  }
+  
+  return tokenSetting.value;
+}
+
+/**
+ * Set up Discord bot routes for the Express app
+ */
+export function setupDiscordBotRoutes(app: Express) {
+  // Initialize the bot with token and client ID
+  app.post("/api/discord/bot/initialize", async (req: Request, res: Response) => {
+    try {
       const { token, clientId } = req.body;
       
       if (!token || !clientId) {
-        return res.status(400).json({ message: "Bot token and client ID are required" });
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Bot token and client ID are required' 
+        });
       }
       
-      // Initialize the bot
       const result = await initializeDiscordBot(token, clientId);
       
       if (result.success) {
-        // Save token and client ID to integration settings
-        const tokenSetting = await storage.getIntegrationSettingByKey("discord", "bot_token");
-        if (tokenSetting) {
-          await storage.updateIntegrationSetting(tokenSetting.id, {
-            value: token,
-            enabled: true
-          });
-        } else {
-          await storage.createIntegrationSetting({
-            service: "discord",
-            key: "bot_token",
-            value: token,
-            enabled: true
-          });
-        }
-        
-        const clientIdSetting = await storage.getIntegrationSettingByKey("discord", "bot_client_id");
-        if (clientIdSetting) {
-          await storage.updateIntegrationSetting(clientIdSetting.id, {
-            value: clientId,
-            enabled: true
-          });
-        } else {
-          await storage.createIntegrationSetting({
-            service: "discord",
-            key: "bot_client_id",
-            value: clientId,
-            enabled: true
-          });
-        }
-        
-        // Log the activity
-        await storage.createActivityLog({
-          userId: req.user?.id,
-          action: "initialize",
-          resourceType: "discord_bot",
-          resourceId: "bot",
-          details: { success: true }
-        });
-        
-        return res.json({ message: "Discord bot initialized successfully" });
+        res.json({ success: true, message: result.message });
       } else {
-        // Log the failure
-        if (req.user) {
-          await storage.createActivityLog({
-            userId: req.user.id,
-            action: "initialize",
-            resourceType: "discord_bot",
-            resourceId: "bot",
-            details: { success: false, error: result.message }
-          });
-        }
-        
-        return res.status(500).json({ message: result.message });
+        res.status(500).json({ 
+          success: false, 
+          message: result.message 
+        });
       }
     } catch (error) {
-      console.error("Discord bot initialization error:", error);
-      res.status(500).json({ message: "Failed to initialize Discord bot" });
+      console.error('Error initializing Discord bot:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while initializing the Discord bot' 
+      });
     }
   });
-  
-  // Get the status of the Discord bot
-  app.get("/api/discord/bot/status", async (req, res) => {
+
+  // Start the bot
+  app.post("/api/discord/bot/start", async (req: Request, res: Response) => {
     try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
+      const result = await startDiscordBot();
       
+      if (result.success) {
+        res.json({ success: true, message: result.message });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          message: result.message 
+        });
+      }
+    } catch (error) {
+      console.error('Error starting Discord bot:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while starting the Discord bot' 
+      });
+    }
+  });
+
+  // Stop the bot
+  app.post("/api/discord/bot/stop", async (req: Request, res: Response) => {
+    try {
+      const result = await stopDiscordBot();
+      
+      if (result.success) {
+        res.json({ success: true, message: result.message });
+      } else {
+        res.status(400).json({ 
+          success: false, 
+          message: result.message 
+        });
+      }
+    } catch (error) {
+      console.error('Error stopping Discord bot:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while stopping the Discord bot' 
+      });
+    }
+  });
+
+  // Get bot status
+  app.get("/api/discord/bot/status", (req: Request, res: Response) => {
+    try {
       const status = getDiscordBotStatus();
       res.json(status);
     } catch (error) {
-      console.error("Discord bot status error:", error);
-      res.status(500).json({ message: "Failed to get Discord bot status" });
-    }
-  });
-  
-  // Start the bot with saved credentials
-  app.post("/api/discord/bot/start", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      // Get saved token and client ID
-      const tokenSetting = await storage.getIntegrationSettingByKey("discord", "bot_token");
-      const clientIdSetting = await storage.getIntegrationSettingByKey("discord", "bot_client_id");
-      
-      if (!tokenSetting?.enabled || !tokenSetting.value || !clientIdSetting?.enabled || !clientIdSetting.value) {
-        return res.status(400).json({ message: "Discord bot token or client ID not configured" });
-      }
-      
-      const result = await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
-      
-      if (result.success) {
-        // Log the activity
-        await storage.createActivityLog({
-          userId: req.user?.id,
-          action: "start",
-          resourceType: "discord_bot",
-          resourceId: "bot",
-          details: { success: true }
-        });
-        
-        return res.json({ message: "Discord bot started successfully" });
-      } else {
-        // Log the failure
-        if (req.user) {
-          await storage.createActivityLog({
-            userId: req.user.id,
-            action: "start",
-            resourceType: "discord_bot",
-            resourceId: "bot",
-            details: { success: false, error: result.message }
-          });
-        }
-        
-        return res.status(500).json({ message: result.message });
-      }
-    } catch (error) {
-      console.error("Discord bot start error:", error);
-      res.status(500).json({ message: "Failed to start Discord bot" });
-    }
-  });
-  
-  // Stop the Discord bot
-  app.post("/api/discord/bot/stop", async (req, res) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      if (!client) {
-        return res.status(400).json({ message: "Discord bot is not running" });
-      }
-      
-      await client.destroy();
-      client = null;
-      isInitialized = false;
-      
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: "stop",
-        resourceType: "discord_bot",
-        resourceId: "bot",
-        details: { success: true }
+      console.error('Error getting Discord bot status:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while getting Discord bot status' 
       });
-      
-      res.json({ message: "Discord bot stopped successfully" });
-    } catch (error) {
-      console.error("Discord bot stop error:", error);
-      res.status(500).json({ message: "Failed to stop Discord bot" });
     }
   });
 }
 
-// Auto-start the bot when the server starts (if credentials are configured)
+/**
+ * Auto-start the Discord bot if settings are available
+ */
 export const autoStartDiscordBot = async () => {
   try {
-    const tokenSetting = await storage.getIntegrationSettingByKey("discord", "bot_token");
-    const clientIdSetting = await storage.getIntegrationSettingByKey("discord", "bot_client_id");
+    // Check if we have the required settings
+    const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
+    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
     
-    if (tokenSetting?.enabled && tokenSetting.value && clientIdSetting?.enabled && clientIdSetting.value) {
-      console.log("Auto-starting Discord bot...");
-      const result = await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
-      
-      if (result.success) {
-        console.log("Discord bot auto-started successfully");
-      } else {
-        console.error("Failed to auto-start Discord bot:", result.message);
-      }
+    if (tokenSetting?.enabled && clientIdSetting?.enabled) {
+      console.log('Auto-starting Discord bot...');
+      await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
+      await startDiscordBot();
     }
   } catch (error) {
-    console.error("Error auto-starting Discord bot:", error);
+    console.error('Error auto-starting Discord bot:', error);
   }
 };
