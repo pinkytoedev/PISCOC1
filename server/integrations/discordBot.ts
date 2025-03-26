@@ -26,7 +26,8 @@ let botStatus = {
   status: 'Not initialized',
   username: '',
   id: '',
-  guilds: 0
+  guilds: 0,
+  commands: ['ping'] // Default available commands
 };
 
 /**
@@ -319,17 +320,21 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
   }
 }
 
-// Commands configuration
+// Commands configuration with proper permissions
 const commands = [
   // Simple ping command
   new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Replies with the bot latency'),
+    .setDescription('Replies with the bot latency')
+    .setDMPermission(true)
+    .setDefaultMemberPermissions(null), // Everyone can use this command
   
   // Writer command with subcommands
   new SlashCommandBuilder()
     .setName('writer')
     .setDescription('Manage article writing')
+    .setDMPermission(true)  // Allow in DMs
+    .setDefaultMemberPermissions(null)  // Everyone can use this command
     .addSubcommand(subcommand => 
       subcommand
         .setName('list')
@@ -353,11 +358,13 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
       client = null;
     }
 
-    // Create a new client
+    // Create a new client with appropriate intents
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,  // Needed for message content access
+        GatewayIntentBits.GuildIntegrations // Needed for slash commands
       ]
     });
 
@@ -436,7 +443,9 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
       // Convert commands to JSON format as required by the Discord API
       const commandsJson = commands.map(command => command.toJSON());
       
-      // Register commands with Discord API
+      // Register commands with Discord API globally
+      // This makes them available in all servers the bot is in
+      console.log(`Registering global commands for application ID: ${clientId}`);
       await rest.put(
         Routes.applicationCommands(clientId),
         { body: commandsJson }
