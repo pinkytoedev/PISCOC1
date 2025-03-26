@@ -355,6 +355,14 @@ import {
 } from '../utils/imageUploader';
 import { Request, Response } from 'express';
 
+// Helper function to convert from database model to Airtable format
+async function convertCarouselQuoteToAirtableFormat(quote: any): Promise<Partial<AirtableCarouselQuote>> {
+  return {
+    main: quote.main || quote.carousel,
+    philo: quote.philo || quote.quote
+  };
+}
+
 export function setupAirtableRoutes(app: Express) {
   // Test Airtable API connection
   app.get("/api/airtable/test-connection", async (req, res) => {
@@ -1003,6 +1011,105 @@ export function setupAirtableRoutes(app: Express) {
   });
 
   // Sync carousel quotes from Airtable
+  // Update a single carousel quote in Airtable
+  app.post("/api/airtable/update-quote/:id", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { id } = req.params;
+      const quoteData = req.body;
+      
+      if (!quoteData.externalId) {
+        return res.status(400).json({ 
+          success: false,
+          message: "External ID (Airtable record ID) is required"
+        });
+      }
+      
+      // Get API key and base ID from settings
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "carousel_quotes_table");
+      
+      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Airtable settings are not fully configured" 
+        });
+      }
+      
+      const apiKey = apiKeySetting.value;
+      const baseId = baseIdSetting.value;
+      const tableName = tableNameSetting.value;
+      
+      // Convert to Airtable format
+      const airtableFields = await convertCarouselQuoteToAirtableFormat(quoteData);
+      
+      // Create the Airtable update payload
+      const airtableData = {
+        records: [
+          {
+            id: quoteData.externalId,
+            fields: airtableFields
+          }
+        ]
+      };
+      
+      // Update the record in Airtable
+      try {
+        const response = await airtableRequest(
+          apiKey,
+          baseId,
+          tableName,
+          "PATCH",
+          airtableData
+        );
+        
+        // Update the local database record with the new Airtable fields
+        const quote = await storage.getCarouselQuote(parseInt(id));
+        if (quote) {
+          await storage.updateCarouselQuote(quote.id, {
+            main: quoteData.main || null,
+            philo: quoteData.philo || null
+          });
+        }
+        
+        // Log the activity
+        await storage.createActivityLog({
+          userId: req.user?.id,
+          action: "update",
+          resourceType: "carousel_quote",
+          details: { 
+            id: parseInt(id),
+            airtableId: quoteData.externalId,
+            source: "direct"
+          }
+        });
+        
+        return res.json({
+          success: true,
+          message: "Quote updated in Airtable",
+          data: response
+        });
+      } catch (error) {
+        console.error("Error updating quote in Airtable:", error);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to update quote in Airtable",
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    } catch (error) {
+      console.error("Error in update quote endpoint:", error);
+      return res.status(500).json({ 
+        success: false,
+        message: "Internal server error" 
+      });
+    }
+  });
+
   app.post("/api/airtable/sync/carousel-quotes", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
