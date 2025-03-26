@@ -19,25 +19,14 @@ import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
 import { Article, InsertArticle } from '@shared/schema';
 
-// Define bot status interface
-interface BotStatus {
-  connected: boolean;
-  status: string;
-  username: string;
-  id: string;
-  guilds: number;
-  commands: string[];
-}
-
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
-let botStatus: BotStatus = {
+let botStatus = {
   connected: false,
   status: 'Not initialized',
   username: '',
   id: '',
-  guilds: 0,
-  commands: ['ping'] // Default available commands
+  guilds: 0
 };
 
 /**
@@ -330,21 +319,15 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
   }
 }
 
-// Commands configuration with proper permissions
+// Commands configuration
 const commands = [
-  // Simple ping command
   new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Replies with the bot latency')
-    .setDMPermission(true)
-    .setDefaultMemberPermissions(null), // Everyone can use this command
+    .setDescription('Replies with the bot latency'),
   
-  // Writer command with subcommands
   new SlashCommandBuilder()
     .setName('writer')
     .setDescription('Manage article writing')
-    .setDMPermission(true)  // Allow in DMs
-    .setDefaultMemberPermissions(null)  // Everyone can use this command
     .addSubcommand(subcommand => 
       subcommand
         .setName('list')
@@ -355,7 +338,7 @@ const commands = [
         .setName('create')
         .setDescription('Create a new article draft')
     )
-] as SlashCommandBuilder[];
+];
 
 /**
  * Initialize a new Discord bot with the provided token and client ID
@@ -368,12 +351,11 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
       client = null;
     }
 
-    // Create a new client with appropriate intents
-    // Only use essential non-privileged intents
+    // Create a new client
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMessages
       ]
     });
 
@@ -445,26 +427,10 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
 
     // Register commands with Discord API
     const rest = new REST().setToken(token);
-    
-    try {
-      console.log('Started refreshing application (/) commands...');
-      
-      // Convert commands to JSON format as required by the Discord API
-      const commandsJson = commands.map(command => command.toJSON());
-      
-      // Register commands with Discord API globally
-      // This makes them available in all servers the bot is in
-      console.log(`Registering global commands for application ID: ${clientId}`);
-      await rest.put(
-        Routes.applicationCommands(clientId),
-        { body: commandsJson }
-      );
-      
-      console.log('Successfully registered the following commands:');
-      commandsJson.forEach(cmd => console.log(`- /${cmd.name}`));
-    } catch (error) {
-      console.error('Error registering commands with Discord API:', error);
-    }
+    await rest.put(
+      Routes.applicationCommands(clientId),
+      { body: commands }
+    );
 
     // Store token and client ID in integration settings
     const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
