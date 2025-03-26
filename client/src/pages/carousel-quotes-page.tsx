@@ -77,6 +77,42 @@ export default function CarouselQuotesPage() {
     },
   });
   
+  // New mutation to update quotes directly in Airtable
+  const updateAirtableMutation = useMutation({
+    mutationFn: async (quote: Partial<CarouselQuote>) => {
+      if (!quote.id || !quote.externalId) {
+        throw new Error("Cannot update Airtable: Missing quote ID or external ID");
+      }
+      // Create a payload with only the fields needed for Airtable
+      const airtablePayload = {
+        id: quote.id,
+        externalId: quote.externalId,
+        main: quote.main || quote.carousel,
+        philo: quote.philo || quote.quote
+      };
+      const res = await apiRequest(
+        "POST", 
+        `/api/airtable/update-quote/${quote.id}`, 
+        airtablePayload
+      );
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
+      toast({
+        title: "Airtable updated",
+        description: "The quote has been successfully updated in Airtable.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error updating Airtable",
+        description: error.message || "An error occurred while updating Airtable. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
   // Group quotes by carousel
   const groupedQuotes = quotes?.reduce((acc, quote) => {
     if (!acc[quote.carousel]) {
@@ -113,6 +149,27 @@ export default function CarouselQuotesPage() {
     if (confirm("Are you sure you want to delete this quote?")) {
       deleteQuoteMutation.mutate(quote.id);
     }
+  };
+  
+  // Function to handle updating a quote directly in Airtable
+  const handleUpdateAirtable = (quote: CarouselQuote) => {
+    if (!quote.externalId) {
+      toast({
+        title: "Cannot update Airtable",
+        description: "This quote doesn't have an associated Airtable record.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    updateAirtableMutation.mutate({
+      id: quote.id,
+      externalId: quote.externalId,
+      main: quote.main || quote.carousel,
+      philo: quote.philo || quote.quote,
+      carousel: quote.carousel,
+      quote: quote.quote
+    });
   };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -211,14 +268,32 @@ export default function CarouselQuotesPage() {
                                     size="sm"
                                     variant="ghost"
                                     onClick={() => handleEditClick(quote)}
+                                    title="Edit Quote"
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
+                                  {quote.externalId && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="text-blue-500 hover:text-blue-700"
+                                      onClick={() => handleUpdateAirtable(quote)}
+                                      title="Update in Airtable"
+                                      disabled={updateAirtableMutation.isPending}
+                                    >
+                                      {updateAirtableMutation.isPending ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <CloudUpload className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="ghost"
                                     className="text-red-500 hover:text-red-700"
                                     onClick={() => handleDeleteClick(quote)}
+                                    title="Delete Quote"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
@@ -318,20 +393,48 @@ export default function CarouselQuotesPage() {
                     </div>
                   </div>
                   
-                  <DialogFooter>
-                    <Button variant="outline" type="button" onClick={handleCloseModal}>
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={createQuoteMutation.isPending}>
-                      {createQuoteMutation.isPending ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          {editQuote ? "Updating..." : "Creating..."}
-                        </>
-                      ) : (
-                        editQuote ? "Update Quote" : "Add Quote"
+                  <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                    <div className="flex-1 flex justify-start">
+                      {editQuote && editQuote.externalId && (
+                        <Button 
+                          type="button" 
+                          variant="outline" 
+                          className="flex items-center gap-2 text-blue-600 border-blue-200"
+                          onClick={() => {
+                            // Create and update a quote using the current form data
+                            const quoteToUpdate = {
+                              ...editQuote,
+                              main: formData.main,
+                              philo: formData.philo
+                            };
+                            handleUpdateAirtable(quoteToUpdate);
+                          }}
+                          disabled={updateAirtableMutation.isPending}
+                        >
+                          {updateAirtableMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CloudUpload className="h-4 w-4" />
+                          )}
+                          Update in Airtable
+                        </Button>
                       )}
-                    </Button>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" type="button" onClick={handleCloseModal}>
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={createQuoteMutation.isPending}>
+                        {createQuoteMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {editQuote ? "Updating..." : "Creating..."}
+                          </>
+                        ) : (
+                          editQuote ? "Update Quote" : "Add Quote"
+                        )}
+                      </Button>
+                    </div>
                   </DialogFooter>
                 </form>
               </DialogContent>
