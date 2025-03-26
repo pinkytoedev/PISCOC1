@@ -1323,6 +1323,17 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(400).json({ message: "No image file uploaded" });
       }
       
+      // Log debug information before uploading
+      console.log("Airtable Image Upload Debug:", {
+        articleId,
+        externalId: article.externalId,
+        fieldName,
+        title: article.title,
+        filePath: req.file.path,
+        fileSize: req.file.size,
+        fileMimetype: req.file.mimetype
+      });
+      
       // Upload the image to Airtable
       const result = await uploadImageToAirtable(
         {
@@ -1334,6 +1345,20 @@ export function setupAirtableRoutes(app: Express) {
         article.externalId,
         fieldName
       );
+      
+      // Log result or error
+      if (result) {
+        console.log("Airtable Image Upload Success:", {
+          url: result.url,
+          id: result.id,
+          filename: result.filename
+        });
+      } else {
+        console.error("Airtable Image Upload Failed for article:", {
+          articleId,
+          externalId: article.externalId
+        });
+      }
       
       // Clean up the uploaded file
       cleanupUploadedFile(req.file.path);
@@ -1417,6 +1442,16 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(400).json({ message: "This article is not from Airtable" });
       }
       
+      // Log debug information before uploading
+      console.log("Airtable Image URL Upload Debug:", {
+        articleId,
+        externalId: article.externalId,
+        fieldName,
+        title: article.title,
+        imageUrl,
+        filename
+      });
+      
       // Upload the image URL to Airtable
       const result = await uploadImageUrlToAirtable(
         imageUrl,
@@ -1424,6 +1459,20 @@ export function setupAirtableRoutes(app: Express) {
         fieldName,
         filename
       );
+      
+      // Log result or error
+      if (result) {
+        console.log("Airtable Image URL Upload Success:", {
+          url: result.url,
+          id: result.id,
+          filename: result.filename
+        });
+      } else {
+        console.error("Airtable Image URL Upload Failed for article:", {
+          articleId,
+          externalId: article.externalId
+        });
+      }
       
       if (!result) {
         return res.status(500).json({ message: "Failed to upload image URL to Airtable" });
