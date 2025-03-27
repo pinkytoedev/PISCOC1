@@ -270,6 +270,81 @@ export function setupDiscordRoutes(app: Express) {
       res.status(500).json({ message: "Failed to send test message to Discord" });
     }
   });
+  
+  // Send a custom message to Discord
+  app.post("/api/discord/send-message", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { message } = req.body;
+      
+      if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ message: "Message content is required" });
+      }
+      
+      const webhookUrlSetting = await storage.getIntegrationSettingByKey("discord", "webhook_url");
+      
+      if (!webhookUrlSetting || !webhookUrlSetting.enabled || !webhookUrlSetting.value) {
+        return res.status(400).json({ message: "Discord webhook URL not configured" });
+      }
+      
+      const webhookUrl = webhookUrlSetting.value;
+      
+      // Create the message payload
+      const discordMessage: DiscordWebhookData = {
+        content: message,
+        username: "Website User"
+      };
+      
+      // Send the message to Discord
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(discordMessage)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(response.status).json({
+          message: "Failed to send message to Discord",
+          error: errorText
+        });
+      }
+      
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "send_message",
+        resourceType: "integration",
+        resourceId: "discord",
+        details: { 
+          success: true,
+          messageContent: message.substring(0, 100) + (message.length > 100 ? '...' : '') // Log a truncated version
+        }
+      });
+      
+      res.json({ message: "Message sent to Discord successfully" });
+    } catch (error) {
+      console.error("Discord message send error:", error);
+      
+      // Log the failure
+      if (req.user) {
+        await storage.createActivityLog({
+          userId: req.user.id,
+          action: "send_message",
+          resourceType: "integration",
+          resourceId: "discord",
+          details: { success: false, error: String(error) }
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to send message to Discord" });
+    }
+  });
 
   // Submit an article to Discord
   app.post("/api/discord/publish/:articleId", async (req, res) => {
