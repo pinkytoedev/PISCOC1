@@ -197,7 +197,7 @@ export function setupInstagramRoutes(app: Express) {
     }
   });
 
-  // Instagram Login OAuth redirect handler 
+  // Facebook OAuth redirect handler for Instagram Business
   app.get("/api/instagram/auth/callback", async (req, res) => {
     try {
       const { code } = req.query;
@@ -218,55 +218,21 @@ export function setupInstagramRoutes(app: Express) {
       const clientSecret = clientSecretSetting.value;
       const redirectUri = redirectUriSetting.value;
       
-      console.log("Instagram auth: Exchanging authorization code for access token");
-      console.log("Instagram auth: Using redirect URI:", redirectUri);
-      console.log("Instagram auth: Using client ID:", clientId.substring(0, 4) + '...');
+      // Exchange code for access token from Facebook
+      const tokenResponse = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`, {
+        method: "GET"
+      });
       
-      // Define this variable in the outer scope so it's available throughout the function
-      let shortLivedAccessToken;
-      
-      try {
-        // Exchange code for access token from Facebook
-        const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
-        console.log("Instagram auth: Token exchange URL format:", 
-          `https://graph.facebook.com/v19.0/oauth/access_token?client_id=XXXX...&client_secret=XXXX...&redirect_uri=${encodeURIComponent(redirectUri)}&code=XXXX...`);
-        
-        const tokenResponse = await fetch(tokenUrl, {
-          method: "GET"
-        });
-        
-        if (!tokenResponse.ok) {
-          const errorText = await tokenResponse.text();
-          console.error("Instagram auth: Failed to exchange code for token:", {
-            status: tokenResponse.status,
-            statusText: tokenResponse.statusText,
-            response: errorText
-          });
-          return res.status(tokenResponse.status).json({
-            message: "Failed to exchange code for token",
-            error: errorText
-          });
-        }
-        
-        const tokenData = await tokenResponse.json();
-        console.log("Instagram auth: Successfully received short-lived token");
-        shortLivedAccessToken = tokenData.access_token;
-      } catch (error: any) {
-        console.error("Instagram auth: Error during token exchange:", error);
-        return res.status(500).json({
-          message: "Error exchanging authorization code",
-          error: error.message || "Unknown error during token exchange"
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        return res.status(tokenResponse.status).json({
+          message: "Failed to exchange code for token",
+          error: errorText
         });
       }
       
-      if (!shortLivedAccessToken) {
-        console.error("Instagram auth: No short-lived access token received");
-        return res.status(500).json({
-          message: "Failed to receive access token from Facebook"
-        });
-      }
-      
-      console.log("Instagram auth: Exchanging short-lived token for long-lived token");
+      const tokenData = await tokenResponse.json();
+      const shortLivedAccessToken = tokenData.access_token;
       
       // Exchange short-lived token for long-lived token
       const longLivedTokenResponse = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${shortLivedAccessToken}`, {
@@ -275,7 +241,6 @@ export function setupInstagramRoutes(app: Express) {
       
       if (!longLivedTokenResponse.ok) {
         const errorText = await longLivedTokenResponse.text();
-        console.error("Failed to exchange for long-lived token:", errorText);
         return res.status(longLivedTokenResponse.status).json({
           message: "Failed to exchange for long-lived token",
           error: errorText
@@ -285,120 +250,61 @@ export function setupInstagramRoutes(app: Express) {
       const longLivedTokenData = await longLivedTokenResponse.json();
       const longLivedAccessToken = longLivedTokenData.access_token;
       
-      console.log("Getting user's Instagram account information");
-      
-      // First get the user profile to get the Instagram Professional accounts
-      const userProfileResponse = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${longLivedAccessToken}`);
-      const userProfile = await userProfileResponse.json();
-      
-      if (!userProfile.id) {
-        console.error("Failed to retrieve user profile:", userProfile);
-        return res.status(400).json({ message: "Failed to retrieve Facebook user profile" });
-      }
-      
-      // Get the Instagram professional accounts directly from the user
-      const instagramAccountsResponse = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${longLivedAccessToken}`);
-      const accountsData = await instagramAccountsResponse.json();
+      // Get Facebook Page ID and access token
+      const accountsResponse = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${longLivedAccessToken}`);
+      const accountsData = await accountsResponse.json();
       
       if (!accountsData.data || accountsData.data.length === 0) {
-        console.error("No Facebook Pages found:", accountsData);
-        return res.status(400).json({ message: "No Facebook Pages found for this account. You need a Facebook Page linked to your Instagram Professional account." });
+        return res.status(400).json({ message: "No Facebook Pages found for this account" });
       }
       
-      // Get the first page that has an Instagram Business account connected
-      let pageWithInstagram = null;
-      let instagramBusinessId = null;
+      const pageId = accountsData.data[0].id;
+      const pageAccessToken = accountsData.data[0].access_token;
       
-      // Check each page for an Instagram business account
-      for (const page of accountsData.data) {
-        const pageId = page.id;
-        const pageAccessToken = page.access_token;
-        
-        // Check if this page has an Instagram business account
-        const instagramCheckResponse = await fetch(`https://graph.facebook.com/v19.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`);
-        const instagramCheckData = await instagramCheckResponse.json();
-        
-        if (instagramCheckData.instagram_business_account) {
-          pageWithInstagram = page;
-          instagramBusinessId = instagramCheckData.instagram_business_account.id;
-          break;
-        }
+      // Get Instagram business account ID
+      const instagramAccountsResponse = await fetch(`https://graph.facebook.com/v19.0/${pageId}/instagram_accounts?access_token=${pageAccessToken}`);
+      const instagramAccountsData = await instagramAccountsResponse.json();
+      
+      if (!instagramAccountsData.data || instagramAccountsData.data.length === 0) {
+        return res.status(400).json({ message: "No Instagram Business accounts found for this Facebook Page" });
       }
       
-      if (!pageWithInstagram || !instagramBusinessId) {
-        console.error("No Instagram Professional account found on any pages");
-        return res.status(400).json({ 
-          message: "No Instagram Professional account connected to any of your Facebook Pages",
-          detail: "You need to connect an Instagram Professional account to one of your Facebook Pages in the Instagram app or at business.facebook.com"
-        });
+      const instagramAccountId = instagramAccountsData.data[0].id;
+      
+      // Get Instagram business account
+      const instagramBusinessResponse = await fetch(`https://graph.facebook.com/v19.0/${pageId}?fields=instagram_business_account&access_token=${pageAccessToken}`);
+      const instagramBusinessData = await instagramBusinessResponse.json();
+      
+      if (!instagramBusinessData.instagram_business_account) {
+        return res.status(400).json({ message: "No Instagram Business account connected to this Facebook Page" });
       }
       
-      const pageId = pageWithInstagram.id;
-      const pageAccessToken = pageWithInstagram.access_token;
-      
-      // Get additional details about the Instagram business account
-      const instagramAccountResponse = await fetch(`https://graph.facebook.com/v19.0/${instagramBusinessId}?fields=username,profile_picture_url&access_token=${pageAccessToken}`);
-      const instagramAccountData = await instagramAccountResponse.json();
-      
-      if (!instagramAccountData.id) {
-        console.error("Failed to retrieve Instagram account details:", instagramAccountData);
-        return res.status(400).json({ message: "Failed to retrieve Instagram account details" });
-      }
-      
-      console.log("Successfully retrieved Instagram account:", instagramAccountData.username);
+      const instagramBusinessId = instagramBusinessData.instagram_business_account.id;
       
       // Save all the necessary tokens and IDs
-      console.log("Instagram authentication successful! Saving critical data:", {
-        hasLongLivedToken: !!longLivedAccessToken,
-        hasPageId: !!pageId,
-        hasPageAccessToken: !!pageAccessToken,
-        hasInstagramBusinessId: !!instagramBusinessId,
-        instagramUsername: instagramAccountData.username || "",
-      });
-      
       const settingsToSave = [
         { key: "facebook_access_token", value: longLivedAccessToken },
         { key: "page_id", value: pageId },
         { key: "page_access_token", value: pageAccessToken },
+        { key: "instagram_account_id", value: instagramAccountId },
         { key: "instagram_business_id", value: instagramBusinessId },
-        { key: "instagram_username", value: instagramAccountData.username || "" },
       ];
       
-      // Track settings operations for debugging
-      try {
-        for (const setting of settingsToSave) {
-          const existingSetting = await storage.getIntegrationSettingByKey("instagram", setting.key);
-          
-          console.log(`Processing Instagram setting '${setting.key}':`, {
-            exists: !!existingSetting,
-            hasValue: !!setting.value,
-            operation: existingSetting ? "update" : "create"
+      for (const setting of settingsToSave) {
+        const existingSetting = await storage.getIntegrationSettingByKey("instagram", setting.key);
+        
+        if (existingSetting) {
+          await storage.updateIntegrationSetting(existingSetting.id, {
+            value: setting.value
           });
-          
-          if (existingSetting) {
-            const updatedSetting = await storage.updateIntegrationSetting(existingSetting.id, {
-              value: setting.value
-            });
-            console.log(`Updated Instagram setting '${setting.key}':`, {
-              id: updatedSetting?.id || 'unknown',
-              hasValue: !!updatedSetting?.value
-            });
-          } else {
-            const newSetting = await storage.createIntegrationSetting({
-              service: "instagram",
-              key: setting.key,
-              value: setting.value,
-              enabled: true
-            });
-            console.log(`Created Instagram setting '${setting.key}':`, {
-              id: newSetting.id,
-              hasValue: !!newSetting.value
-            });
-          }
+        } else {
+          await storage.createIntegrationSetting({
+            service: "instagram",
+            key: setting.key,
+            value: setting.value,
+            enabled: true
+          });
         }
-      } catch (err) {
-        console.error("Error saving Instagram settings:", err);
-        throw err;
       }
       
       // Log the activity
@@ -438,9 +344,8 @@ export function setupInstagramRoutes(app: Express) {
       const clientId = clientIdSetting.value;
       const redirectUri = redirectUriSetting.value;
       
-      // Using the current scope values for Instagram Graph API
-      // Note: We're using the currently supported scopes that will continue to work until January 2025
-      const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=instagram_basic,instagram_content_publish,instagram_manage_comments,instagram_manage_insights,pages_show_list&response_type=code`;
+      // For business integration, we need permissions for Instagram Graph API via Facebook
+      const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts&response_type=code`;
       
       res.json({ authUrl });
     } catch (error) {
@@ -455,28 +360,10 @@ export function setupInstagramRoutes(app: Express) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      // Get all Instagram settings to help debug issues
-      const allSettings = await storage.getIntegrationSettings("instagram");
-      console.log("All Instagram settings:", allSettings.map(s => ({ 
-        key: s.key, 
-        hasValue: !!s.value, 
-        valueLength: s.value?.length || 0,
-        enabled: s.enabled
-      })));
-      
       const pageAccessTokenSetting = await storage.getIntegrationSettingByKey("instagram", "page_access_token");
       const instagramBusinessIdSetting = await storage.getIntegrationSettingByKey("instagram", "instagram_business_id");
-      const instagramUsernameSetting = await storage.getIntegrationSettingByKey("instagram", "instagram_username");
       
-      // Check if all necessary settings are present
       const connected = !!(pageAccessTokenSetting?.value && instagramBusinessIdSetting?.value);
-      
-      // Log the detected settings
-      console.log("Instagram connection check:", { 
-        hasPageToken: !!pageAccessTokenSetting?.value,
-        hasBusinessId: !!instagramBusinessIdSetting?.value,
-        username: instagramUsernameSetting?.value || 'not_set'
-      });
       
       // If connected, try to get some basic information to verify the connection
       if (connected) {
@@ -488,8 +375,6 @@ export function setupInstagramRoutes(app: Express) {
             { fields: 'username,profile_picture_url' }
           );
           
-          console.log("Instagram account verification successful:", response.username);
-          
           return res.json({ 
             connected: true,
             accountInfo: {
@@ -500,26 +385,14 @@ export function setupInstagramRoutes(app: Express) {
           });
         } catch (error: any) {
           console.error("Error verifying Instagram connection:", error);
-          
-          // If the token is invalid, clear the settings
-          if (error.message && (error.message.includes('Invalid OAuth access token') || error.message.includes('expired'))) {
-            console.log("Clearing invalid Instagram token settings");
-            
-            // Only clear token-related settings, keep client_id, client_secret, etc.
-            if (pageAccessTokenSetting) {
-              await storage.updateIntegrationSetting(pageAccessTokenSetting.id, { value: '' });
-            }
-          }
-          
           // If we can't connect, consider it disconnected
           return res.json({ connected: false, error: error.message });
         }
       }
       
       res.json({ connected });
-    } catch (error: any) {
-      console.error("Failed to check Instagram connection status:", error);
-      res.status(500).json({ message: "Failed to check Instagram connection status", error: error.message });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check Instagram connection status" });
     }
   });
 
