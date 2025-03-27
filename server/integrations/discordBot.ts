@@ -963,35 +963,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       }
       
       try {
-        // Use a message collector instead
-        const collector = channel.createMessageCollector({ 
-          filter, 
-          max: 1, // Only collect one message
-          time: 300000 // 5 minute timeout
-        });
+        // Use our helper function to collect the message with the image
+        const message = await collectImageMessage(channel, filter);
         
-        // Create a promise to handle the collection
-        const messagePromise = new Promise<Message<boolean> | null>((resolve) => {
-          // When we get a message
-          collector.on('collect', (message) => {
-            resolve(message);
-            collector.stop();
+        // If no message was received (timeout)
+        if (!message) {
+          await interaction.editReply({
+            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
           });
-          
-          // When the collection ends (timeout or limit reached)
-          collector.on('end', (collected) => {
-            if (collected.size === 0) {
-              interaction.editReply({
-                content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-              }).catch(console.error);
-              resolve(null);
-            }
-          });
-        });
-        
-        // Wait for a message or timeout
-        const message = await messagePromise;
-        if (!message) return;
+          return;
+        }
         
         // Get the first attachment
         const attachment = message.attachments.first();
@@ -1155,35 +1136,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       }
       
       try {
-        // Use a message collector instead
-        const collector = channel.createMessageCollector({ 
-          filter, 
-          max: 1, // Only collect one message
-          time: 300000 // 5 minute timeout
-        });
+        // Use our helper function to collect the message with the image
+        const message = await collectImageMessage(channel, filter);
         
-        // Create a promise to handle the collection
-        const messagePromise = new Promise<Message<boolean> | null>((resolve) => {
-          // When we get a message
-          collector.on('collect', (message) => {
-            resolve(message);
-            collector.stop();
+        // If no message was received (timeout)
+        if (!message) {
+          await interaction.editReply({
+            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
           });
-          
-          // When the collection ends (timeout or limit reached)
-          collector.on('end', (collected) => {
-            if (collected.size === 0) {
-              interaction.editReply({
-                content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-              }).catch(console.error);
-              resolve(null);
-            }
-          });
-        });
-        
-        // Wait for a message or timeout
-        const message = await messagePromise;
-        if (!message) return;
+          return;
+        }
         
         // Get the first attachment
         const attachment = message.attachments.first();
@@ -1346,7 +1308,9 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent, // Need this to read message content
+        GatewayIntentBits.GuildMessageReactions // Need this for message reactions
       ]
     });
 
@@ -1715,6 +1679,33 @@ export function setupArticleReceiveEndpoint(app: Express) {
         message: 'An error occurred while creating the article'
       });
     }
+  });
+}
+
+/**
+ * Helper function to create a type-safe message collector
+ * Used by both /insta and /web commands to collect image messages
+ */
+async function collectImageMessage(channel: any, filter: (m: any) => boolean, timeoutMs: number = 300000): Promise<any | null> {
+  // Create a collector that will listen for messages meeting the filter criteria
+  const collector = channel.createMessageCollector({
+    filter,
+    max: 1,
+    time: timeoutMs
+  });
+  
+  // Return a promise that resolves when a message is collected or timeout occurs
+  return new Promise<any | null>(resolve => {
+    collector.on('collect', (message: any) => {
+      resolve(message);
+      collector.stop();
+    });
+    
+    collector.on('end', (collected: any) => {
+      if (collected.size === 0) {
+        resolve(null);
+      }
+    });
   });
 }
 
