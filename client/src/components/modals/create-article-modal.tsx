@@ -295,11 +295,15 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         });
         
         // Update the form data with the new image URL from Imgur
+        // The response can have different structures based on the endpoint
+        const imageUrl = data.imgur?.link || data.imgurUrl || data.attachment?.url;
+        
         setFormData(prev => ({
           ...prev,
-          imageUrl: data.imgurUrl || data.attachment?.url
+          imageUrl: imageUrl
         }));
         
+        console.log("Imgur upload response:", data);
         setMainImageUploading(false);
       })
       .catch(error => {
@@ -351,11 +355,15 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         });
         
         // Update the form data with the new image URL from Imgur
+        // The response can have different structures based on the endpoint
+        const imageUrl = data.imgur?.link || data.imgurUrl || data.attachment?.url;
+        
         setFormData(prev => ({
           ...prev,
-          instagramImageUrl: data.imgurUrl || data.attachment?.url
+          instagramImageUrl: imageUrl
         }));
         
+        console.log("Imgur upload response for Instagram image:", data);
         setInstagramImageUploading(false);
       })
       .catch(error => {
