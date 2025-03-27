@@ -6,6 +6,150 @@ import { storage } from '../storage';
 // Constants
 const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'your_verify_token';
 const APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
+const APP_ID = process.env.FACEBOOK_APP_ID || '';
+
+/**
+ * Get an app access token for API calls that require it
+ * @returns App access token or null if unavailable
+ */
+async function getAppAccessToken(): Promise<string | null> {
+  try {
+    // First check if we have it cached
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "app_access_token");
+    if (tokenSetting?.value) {
+      return tokenSetting.value;
+    }
+    
+    // If not cached, we need to generate it
+    if (!APP_ID || !APP_SECRET) {
+      log('Cannot generate app access token: APP_ID or APP_SECRET missing', 'instagram');
+      return null;
+    }
+    
+    // Make the API call to get an app access token
+    const response = await fetch(
+      `https://graph.facebook.com/oauth/access_token?client_id=${APP_ID}&client_secret=${APP_SECRET}&grant_type=client_credentials`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get app access token: ${await response.text()}`);
+    }
+    
+    const data = await response.json();
+    const appAccessToken = data.access_token;
+    
+    if (!appAccessToken) {
+      throw new Error('No access_token in response');
+    }
+    
+    // Cache the token for future use
+    await storage.createIntegrationSetting({
+      service: "facebook",
+      key: "app_access_token",
+      value: appAccessToken,
+      enabled: true
+    });
+    
+    log('Generated and stored new app access token', 'instagram');
+    return appAccessToken;
+  } catch (error) {
+    log(`Error getting app access token: ${error}`, 'instagram');
+    return null;
+  }
+}
+
+/**
+ * Test if a webhook connection is properly configured with Facebook
+ * 
+ * @returns Object with test results
+ */
+export async function testWebhookConnection(): Promise<{
+  success: boolean;
+  appId: boolean;
+  appSecret: boolean;
+  accessToken: boolean;
+  appAccessToken: boolean;
+  message: string;
+  details?: any;
+}> {
+  try {
+    const results: {
+      success: boolean;
+      appId: boolean;
+      appSecret: boolean;
+      accessToken: boolean;
+      appAccessToken: boolean;
+      message: string;
+      details?: any;
+    } = {
+      success: false,
+      appId: !!APP_ID,
+      appSecret: !!APP_SECRET,
+      accessToken: false,
+      appAccessToken: false,
+      message: ""
+    };
+    
+    // Check user access token
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    results.accessToken = !!tokenSetting?.value;
+    
+    // Check app access token
+    const appAccessToken = await getAppAccessToken();
+    results.appAccessToken = !!appAccessToken;
+    
+    if (!results.appId) {
+      results.message = "Facebook App ID is missing";
+      return results;
+    }
+    
+    if (!results.appSecret) {
+      results.message = "Facebook App Secret is missing";
+      return results;
+    }
+    
+    if (!results.accessToken) {
+      results.message = "User Access Token is missing - please log in with Facebook";
+      return results;
+    }
+    
+    if (!results.appAccessToken) {
+      results.message = "Failed to generate App Access Token";
+      return results;
+    }
+    
+    // If we have all credentials, test a real API call
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v17.0/app/subscriptions?access_token=${appAccessToken}`
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        results.message = `API test failed: ${errorText}`;
+        results.details = { errorText };
+        return results;
+      }
+      
+      // Success!
+      results.success = true;
+      results.message = "Webhook connection is properly configured";
+      return results;
+    } catch (apiError) {
+      results.message = `API test failed: ${apiError instanceof Error ? apiError.message : String(apiError)}`;
+      return results;
+    }
+  } catch (error) {
+    return {
+      success: false,
+      appId: !!APP_ID,
+      appSecret: !!APP_SECRET,
+      accessToken: false,
+      appAccessToken: false,
+      message: `Error testing webhook connection: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+}
 
 // Helper to log Instagram webhook activities
 async function logWebhookActivity(action: string, data: any = {}) {
@@ -311,14 +455,13 @@ export async function subscribeToWebhook(
   try {
     log(`Subscribing to Instagram webhook: fields=${fields.join(',')}, callback=${callbackUrl}`, 'instagram');
     
-    // Get the access token from integration settings
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    const accessToken = tokenSetting?.value;
-    
     // Create a unique subscription ID
     const subscriptionId = `sub_${fields.join('_')}_${Date.now()}`;
     
-    if (accessToken) {
+    // Get app access token - required for webhook operations
+    const appAccessToken = await getAppAccessToken();
+    
+    if (appAccessToken) {
       try {
         // Setup the request to the Graph API
         const formData = new URLSearchParams();
@@ -326,7 +469,7 @@ export async function subscribeToWebhook(
         formData.append('callback_url', callbackUrl);
         formData.append('fields', fields.join(','));
         formData.append('verify_token', verifyToken);
-        formData.append('access_token', accessToken);
+        formData.append('access_token', appAccessToken);
         
         // Make the API call to Facebook Graph API
         const response = await fetch(
@@ -405,16 +548,15 @@ export async function getWebhookSubscriptions() {
   try {
     log('Getting Instagram webhook subscriptions', 'instagram');
     
-    // Get access token from integration settings if available
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    const accessToken = tokenSetting?.value;
+    // Get app access token - required for webhook operations
+    const appAccessToken = await getAppAccessToken();
     
-    // If we have an access token, attempt to call the Graph API
-    if (accessToken) {
+    // If we have an app access token, attempt to call the Graph API
+    if (appAccessToken) {
       try {
         // Make the API call to Facebook Graph API
         const response = await fetch(
-          `https://graph.facebook.com/v17.0/app/subscriptions?access_token=${accessToken}`
+          `https://graph.facebook.com/v17.0/app/subscriptions?access_token=${appAccessToken}`
         );
         
         if (!response.ok) {
@@ -487,12 +629,11 @@ export async function unsubscribeFromWebhook(subscriptionId: string) {
       log(`Error finding webhook subscription: ${dbError}`, 'instagram');
     }
     
-    // Get the access token from integration settings
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    const accessToken = tokenSetting?.value;
+    // Get app access token - required for webhook operations
+    const appAccessToken = await getAppAccessToken();
     
-    // Attempt to call the API if we have an access token
-    if (accessToken && subscriptionData) {
+    // Attempt to call the API if we have an app access token
+    if (appAccessToken && subscriptionData) {
       try {
         // We need to use the fields to properly identify the subscription to delete
         const fields = subscriptionData.fields;
@@ -501,7 +642,7 @@ export async function unsubscribeFromWebhook(subscriptionId: string) {
         const formData = new URLSearchParams();
         formData.append('object', 'instagram');
         formData.append('fields', fields.join(','));
-        formData.append('access_token', accessToken);
+        formData.append('access_token', appAccessToken);
         
         // Make the API call to Facebook Graph API
         const response = await fetch(
