@@ -146,13 +146,13 @@ export async function uploadImageToAirtable(
     // While this isn't ideal for production, it's a simple approach for prototyping
     const dataUrl = `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`;
     
-    // Create the attachment object with the data URL and all required properties
+    // For Airtable, we need to provide *just the URL* in a special format
+    // According to Airtable docs, the correct format for attachment fields is different
+    // We need to send URLs in this format: { "url": "https://example.com/image.jpg" }
+    
+    // Create the proper attachment format - just the URL property
     const attachment = {
-      id: `upload_${Date.now()}`, // Generate a unique ID
-      url: dataUrl,
-      filename: file.filename,
-      size: file.size, // Include the file size
-      type: file.mimetype // Include the MIME type
+      url: dataUrl
     };
     
     const payload = {
@@ -277,17 +277,17 @@ export async function uploadImageUrlToAirtable(
       mimeType = "image/webp";
     }
     
-    // Create the attachment object with the URL and required properties for UploadAttachment
-    const attachment = {
-      id: `airtable_${Date.now()}`, // Generate a unique ID
-      url: imageUrl, 
-      filename: filename,
-      size: 0, // Size is unknown for remote URLs
-      type: mimeType // Use the MIME type we determined
-    };
+    // For Airtable, we need to provide *just the URL* in a special format
+    // According to Airtable docs, the correct format for attachment fields is different
+    // We need to send URLs in this format: { "url": "https://example.com/image.jpg" }
     
     // Log URL being used (helps with debugging)
     console.log(`Using URL for Airtable attachment: ${imageUrl.substring(0, 100)}${imageUrl.length > 100 ? '...' : ''}`);
+    
+    // Create the proper attachment format - just the URL property
+    const attachment = {
+      url: imageUrl
+    };
     
     const payload = {
       fields: {
