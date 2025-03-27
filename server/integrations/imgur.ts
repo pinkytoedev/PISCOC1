@@ -252,11 +252,6 @@ export function setupImgurRoutes(app: Express) {
         return res.status(404).json({ message: 'Article not found' });
       }
       
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
       // Check if file was uploaded
       if (!req.file) {
         return res.status(400).json({ message: 'No image file uploaded' });
@@ -279,19 +274,19 @@ export function setupImgurRoutes(app: Express) {
         return res.status(500).json({ message: 'Failed to upload image to Imgur' });
       }
       
-      // Step 2: Upload Imgur URL to Airtable
-      const airtableResult = await uploadImageUrlToAirtable(
-        imgurResult.link,
-        article.externalId,
-        fieldName,
-        file.filename
-      );
-      
-      if (!airtableResult) {
-        return res.status(500).json({ 
-          message: 'Image uploaded to Imgur but failed to update Airtable',
-          imgurLink: imgurResult.link 
-        });
+      // Step 2: For Airtable articles, upload to Airtable
+      let airtableResult = null;
+      if (article.source === 'airtable' && article.externalId) {
+        airtableResult = await uploadImageUrlToAirtable(
+          imgurResult.link,
+          article.externalId,
+          fieldName,
+          file.filename
+        );
+        
+        if (!airtableResult) {
+          console.warn(`Failed to update Airtable for article ${articleId}, but continuing with local update`);
+        }
       }
       
       // Step 3: Update the article in the database with the new image URL
@@ -371,11 +366,6 @@ export function setupImgurRoutes(app: Express) {
         return res.status(404).json({ message: 'Article not found' });
       }
       
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
       // Step 1: Upload URL to Imgur
       const imgurResult = await uploadImageUrlToImgur(imageUrl, filename);
       
@@ -383,19 +373,19 @@ export function setupImgurRoutes(app: Express) {
         return res.status(500).json({ message: 'Failed to upload image URL to Imgur' });
       }
       
-      // Step 2: Upload Imgur URL to Airtable
-      const airtableResult = await uploadImageUrlToAirtable(
-        imgurResult.link,
-        article.externalId,
-        fieldName,
-        filename
-      );
-      
-      if (!airtableResult) {
-        return res.status(500).json({ 
-          message: 'Image uploaded to Imgur but failed to update Airtable',
-          imgurLink: imgurResult.link 
-        });
+      // Step 2: For Airtable articles, upload to Airtable
+      let airtableResult = null;
+      if (article.source === 'airtable' && article.externalId) {
+        airtableResult = await uploadImageUrlToAirtable(
+          imgurResult.link,
+          article.externalId,
+          fieldName,
+          filename
+        );
+        
+        if (!airtableResult) {
+          console.warn(`Failed to update Airtable for article ${articleId}, but continuing with local update`);
+        }
       }
       
       // Step 3: Update the article in the database with the new image URL
