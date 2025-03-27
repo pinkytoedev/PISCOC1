@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupDiscordRoutes } from "./integrations/discord";
+// Import only the simple Discord bot
 import { setupDiscordBotRoutes, autoStartDiscordBot } from "./integrations/simpleDiscordBot";
 import { setupAirtableRoutes } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagram";

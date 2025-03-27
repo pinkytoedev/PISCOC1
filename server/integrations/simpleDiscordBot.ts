@@ -67,20 +67,27 @@ async function processImageForArticle(
     // Validate there's an attachment
     const attachment = message.attachments.first();
     if (!attachment) {
-      await message.channel.isTextBased() ? message.channel.send('No valid image attachment found. Please try again.');
+      if (message.channel.isTextBased()) {
+        await message.channel.send('No valid image attachment found. Please try again.');
+      }
       return false;
     }
     
     // Ensure it's an image
     if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-      await message.channel.isTextBased() ? message.channel.send('The attachment must be an image file. Please try again with an image.');
+      if (message.channel.isTextBased()) {
+        await message.channel.send('The attachment must be an image file. Please try again with an image.');
+      }
       return false;
     }
     
     // Send processing message
-    const processingMsg = await message.channel.isTextBased() ? message.channel.send(
-      `Processing image for article: **${uploadRequest.articleTitle}**... Please wait.`
-    );
+    let processingMsg;
+    if (message.channel.isTextBased()) {
+      processingMsg = await message.channel.send(
+        `Processing image for article: **${uploadRequest.articleTitle}**... Please wait.`
+      );
+    }
     
     // Download the image from Discord
     const response = await fetch(attachment.url);
@@ -154,15 +161,17 @@ async function processImageForArticle(
       ? 'Instagram photo' 
       : 'Main web image';
       
-    await message.channel.isTextBased() ? message.channel.send(
-      `✅ ${fieldDescription} successfully updated for article: **${uploadRequest.articleTitle}**`
-    );
+    if (message.channel.isTextBased()) {
+      await message.channel.send(
+        `✅ ${fieldDescription} successfully updated for article: **${uploadRequest.articleTitle}**`
+      );
+    }
     
     return true;
   } catch (error) {
     console.error('Error processing image upload:', error);
     if (message.channel.isTextBased()) {
-      await message.channel.isTextBased() ? message.channel.send(
+      await message.channel.send(
         `⚠️ Error processing the image: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
     }
