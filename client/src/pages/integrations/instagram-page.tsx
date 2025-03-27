@@ -30,7 +30,8 @@ import {
   Coffee,
   MessageSquare,
   ImageIcon,
-  BarChart3
+  BarChart3,
+  ExternalLink
 } from "lucide-react";
 
 // Interface for Instagram account info
@@ -559,14 +560,32 @@ export default function InstagramPage() {
                             <p className="text-sm text-gray-600 text-center mt-2 mb-4">
                               You'll be redirected to Facebook to authorize this application and connect your Instagram Professional account.
                             </p>
-                            <Button 
-                              onClick={() => {
-                                window.location.href = authUrl.authUrl;
-                              }}
-                            >
-                              <SiFacebook className="h-4 w-4 mr-2" />
-                              Connect via Facebook
-                            </Button>
+                            <div className="space-y-4">
+                              <div className="rounded-md bg-blue-50 p-4 border border-blue-100">
+                                <div className="flex">
+                                  <div className="flex-shrink-0">
+                                    <Info className="h-5 w-5 text-blue-400" />
+                                  </div>
+                                  <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-blue-800">Instagram API with Instagram Login</h3>
+                                    <div className="mt-2 text-sm text-blue-700">
+                                      <p>
+                                        This integration uses the Instagram API with Instagram Login to connect to your Instagram Professional account. 
+                                        You need an Instagram Professional account (Business or Creator) to use this integration.
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <Button 
+                                onClick={() => {
+                                  window.location.href = authUrl.authUrl;
+                                }}
+                              >
+                                <SiFacebook className="h-4 w-4 mr-2" />
+                                Connect via Facebook
+                              </Button>
+                            </div>
                           </div>
                         ) : (
                           <div className="flex items-center justify-center p-6">
@@ -607,12 +626,12 @@ export default function InstagramPage() {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-4">
-                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
-                            <SiFacebook className="h-5 w-5 text-blue-600 mt-0.5 mr-3" />
+                          <div className="flex items-start p-3 border border-blue-100 bg-blue-50 rounded-md">
+                            <Info className="h-5 w-5 text-blue-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">Facebook Page Access</h3>
-                              <p className="text-sm text-gray-600">
-                                Access to manage content on your linked Facebook Page
+                              <h3 className="font-medium">Instagram API Update</h3>
+                              <p className="text-sm text-blue-700">
+                                This integration uses the latest Instagram API scopes that will replace the older versions by January 2025.
                               </p>
                             </div>
                           </div>
@@ -620,19 +639,9 @@ export default function InstagramPage() {
                           <div className="flex items-start p-3 bg-gray-50 rounded-md">
                             <User className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">Instagram Profile Data</h3>
+                              <h3 className="font-medium">instagram_business_basic</h3>
                               <p className="text-sm text-gray-600">
-                                Access to your professional account information
-                              </p>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
-                            <Grid className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
-                            <div>
-                              <h3 className="font-medium">Media Access</h3>
-                              <p className="text-sm text-gray-600">
-                                Read access to media (photos and videos) on your professional profile
+                                Access to your Instagram professional account information, profile data, and media
                               </p>
                             </div>
                           </div>
@@ -640,9 +649,29 @@ export default function InstagramPage() {
                           <div className="flex items-start p-3 bg-gray-50 rounded-md">
                             <ImagePlus className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">Content Publishing</h3>
+                              <h3 className="font-medium">instagram_business_content_publish</h3>
                               <p className="text-sm text-gray-600">
-                                Ability to publish content to your Instagram professional account
+                                Ability to publish photos, videos, and carousels to your Instagram professional account
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <MessageSquare className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">instagram_business_manage_comments</h3>
+                              <p className="text-sm text-gray-600">
+                                Permission to read, respond to, hide, and delete comments on media
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <MessageSquare className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">instagram_business_manage_messages</h3>
+                              <p className="text-sm text-gray-600">
+                                Permission to read and respond to private messages and story replies
                               </p>
                             </div>
                           </div>
@@ -1152,6 +1181,71 @@ export default function InstagramPage() {
                     </Card>
                   </TabsContent>
                 </Tabs>
+                
+                {/* Documentation and Resources Section */}
+                <div className="mt-12 space-y-4">
+                  <h3 className="text-xl font-semibold">Documentation & Resources</h3>
+                  <p className="text-gray-600">Learn more about the Instagram API with Instagram Login from these official resources:</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Instagram API Documentation</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600">
+                          Access Instagram's developer resources and documentation for technical details about the Instagram API with Instagram Login.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button asChild variant="outline" className="w-full">
+                          <a href="https://developers.facebook.com/docs/instagram-api" target="_blank" rel="noopener noreferrer">
+                            <ArrowUpRight className="h-4 w-4 mr-2" />
+                            View Documentation
+                          </a>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Permission Changes (Jan 2025)</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600">
+                          Learn about the upcoming permission changes to Instagram API with Instagram Login that take effect in January 2025.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button asChild variant="outline" className="w-full">
+                          <a href="https://developers.facebook.com/blog/post/2023/01/19/updated-instagram-permissions/" target="_blank" rel="noopener noreferrer">
+                            <ArrowUpRight className="h-4 w-4 mr-2" />
+                            View Update
+                          </a>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                    
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Content Publishing Guide</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-gray-600">
+                          Learn about best practices for publishing content to Instagram professional accounts using the Graph API.
+                        </p>
+                      </CardContent>
+                      <CardFooter>
+                        <Button asChild variant="outline" className="w-full">
+                          <a href="https://developers.facebook.com/docs/instagram-api/guides/content-publishing" target="_blank" rel="noopener noreferrer">
+                            <ArrowUpRight className="h-4 w-4 mr-2" />
+                            View Guide
+                          </a>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  </div>
+                </div>
               </div>
             )}
           </div>
