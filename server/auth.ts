@@ -5,7 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser } from "@shared/schema";
+import { User as SelectUser, InsertUser } from "@shared/schema";
 
 declare global {
   namespace Express {
@@ -153,5 +153,112 @@ export function setupAuth(app: Express) {
       return res.sendStatus(401);
     }
     res.json(req.user);
+  });
+  
+  // Get all users - Only for admins
+  app.get("/api/users", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    if (!req.user?.isAdmin) {
+      return res.status(403).json({ message: "Admin privileges required to view all users" });
+    }
+    
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+  
+  // Update a user - Only for admins
+  app.put("/api/users/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    if (!req.user?.isAdmin) {
+      return res.status(403).json({ message: "Admin privileges required to update users" });
+    }
+    
+    const userId = parseInt(req.params.id);
+    
+    try {
+      // Check if the user exists
+      const existingUser = await storage.getUser(userId);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Handle password changes separately - hash the password
+      let updateData: Partial<InsertUser> = { ...req.body };
+      
+      if (updateData.password) {
+        updateData.password = await hashPassword(updateData.password);
+      }
+      
+      const updatedUser = await storage.updateUser(userId, updateData);
+      
+      // Log the update activity
+      await storage.createActivityLog({
+        userId: req.user.id,
+        action: "update_user",
+        resourceType: "user",
+        resourceId: userId.toString(),
+        details: { updatedBy: req.user.username }
+      });
+      
+      res.json(updatedUser);
+    } catch (error) {
+      next(error);
+    }
+  });
+  
+  // Delete a user - Only for admins
+  app.delete("/api/users/:id", async (req, res, next) => {
+    if (!req.isAuthenticated()) {
+      return res.sendStatus(401);
+    }
+    
+    if (!req.user?.isAdmin) {
+      return res.status(403).json({ message: "Admin privileges required to delete users" });
+    }
+    
+    const userId = parseInt(req.params.id);
+    
+    // Prevent admins from deleting themselves
+    if (userId === req.user.id) {
+      return res.status(400).json({ message: "You cannot delete your own account" });
+    }
+    
+    try {
+      // Check if the user exists
+      const existingUser = await storage.getUser(userId);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const deleted = await storage.deleteUser(userId);
+      
+      if (deleted) {
+        // Log the delete activity
+        await storage.createActivityLog({
+          userId: req.user.id,
+          action: "delete_user",
+          resourceType: "user",
+          resourceId: userId.toString(),
+          details: { username: existingUser.username, deletedBy: req.user.username }
+        });
+        
+        res.status(200).json({ message: "User deleted successfully" });
+      } else {
+        res.status(500).json({ message: "Failed to delete user" });
+      }
+    } catch (error) {
+      next(error);
+    }
   });
 }
