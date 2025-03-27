@@ -278,7 +278,7 @@ export function setupDiscordRoutes(app: Express) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { message } = req.body;
+      const { message, username } = req.body;
       
       if (!message || typeof message !== 'string' || !message.trim()) {
         return res.status(400).json({ message: "Message content is required" });
@@ -295,7 +295,7 @@ export function setupDiscordRoutes(app: Express) {
       // Create the message payload
       const discordMessage: DiscordWebhookData = {
         content: message,
-        username: "Website User"
+        username: username || "Website User"
       };
       
       // Send the message to Discord
@@ -323,6 +323,7 @@ export function setupDiscordRoutes(app: Express) {
         resourceId: "discord",
         details: { 
           success: true,
+          username: username,
           messageContent: message.substring(0, 100) + (message.length > 100 ? '...' : '') // Log a truncated version
         }
       });
