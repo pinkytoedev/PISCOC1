@@ -60,12 +60,41 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
     setStatus(newStatus);
     
     if (newStatus === 'connected' && response.authResponse) {
-      setAccessToken(response.authResponse.accessToken);
+      const token = response.authResponse.accessToken;
+      setAccessToken(token);
+      
       // Fetch user information
-      fetchUserInfo(response.authResponse.accessToken);
+      fetchUserInfo(token);
+      
+      // Store the access token in our backend for webhook API calls
+      storeAccessToken(token, response.authResponse.userID);
     } else {
       setUser(null);
       setAccessToken(null);
+    }
+  };
+  
+  // Store access token in our backend
+  const storeAccessToken = async (token: string, userID?: string) => {
+    try {
+      const response = await fetch('/api/instagram/auth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          accessToken: token,
+          userId: userID
+        })
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to store Facebook access token:', await response.text());
+      } else {
+        console.log('Successfully stored Facebook access token for Instagram API use');
+      }
+    } catch (error) {
+      console.error('Error storing Facebook access token:', error);
     }
   };
 

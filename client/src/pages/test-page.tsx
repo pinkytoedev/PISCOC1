@@ -10,13 +10,28 @@ export default function TestPage() {
     // Fetch Facebook App ID from our API
     fetch('/api/config/facebook')
       .then(response => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch config: ${response.status}`);
-        }
-        return response.json();
+        // We'll parse the JSON even for error responses
+        return response.json().then(data => {
+          if (!response.ok) {
+            // Check if we have a structured error response
+            if (data && data.status === 'error' && data.message) {
+              throw new Error(data.message);
+            } else {
+              throw new Error(`Failed to fetch config: ${response.status}`);
+            }
+          }
+          return data;
+        });
       })
       .then(data => {
-        setApiAppId(data.appId || 'Not returned from API');
+        if (data.status === 'success' && data.appId) {
+          setApiAppId(data.appId);
+        } else if (data.appId) {
+          // Legacy support for old API format
+          setApiAppId(data.appId);
+        } else {
+          setApiAppId('Not returned from API');
+        }
       })
       .catch(err => {
         console.error('Error fetching Facebook App ID:', err);

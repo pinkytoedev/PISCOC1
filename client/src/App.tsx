@@ -52,16 +52,30 @@ function App() {
     // Fetch Facebook App ID from our backend API
     fetch('/api/config/facebook')
       .then(response => {
-        if (!response.ok) {
-          throw new Error(`Failed to fetch Facebook config: ${response.status}`);
-        }
-        return response.json();
+        // We'll still try to get the JSON even if the status is not OK, 
+        // as the error response should contain a structured error message
+        return response.json().then(data => {
+          if (!response.ok) {
+            // Check if we have a proper error response with message
+            if (data && data.status === 'error' && data.message) {
+              throw new Error(data.message);
+            } else {
+              // Otherwise just throw a generic error with the status
+              throw new Error(`Failed to fetch Facebook config: ${response.status}`);
+            }
+          }
+          return data;
+        });
       })
       .then(data => {
-        if (data.appId) {
+        if (data.status === 'success' && data.appId) {
+          setFacebookAppId(data.appId);
+        } else if (data.appId) {
+          // Legacy support for old API format
           setFacebookAppId(data.appId);
         } else {
           // Fallback to the environment variable if the API doesn't return a value
+          console.warn('Facebook App ID not provided in API response, using environment variable');
           setFacebookAppId(import.meta.env.VITE_FACEBOOK_APP_ID || '');
         }
       })

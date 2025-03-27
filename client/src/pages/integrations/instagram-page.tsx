@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -17,7 +18,9 @@ import {
   MessageCircle,
   Image,
   BookOpen,
-  AlertTriangle 
+  AlertTriangle,
+  Clock,
+  Calendar
 } from 'lucide-react';
 
 /**
@@ -39,15 +42,35 @@ export default function InstagramPage() {
   
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [webhookFields, setWebhookFields] = useState<{[key: string]: string[]}>({});
+  const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState(false);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch webhook subscriptions and field groups on component mount
   useEffect(() => {
     if (isInitialized) {
       fetchWebhookData();
+      fetchWebhookEvents();
     }
   }, [isInitialized]);
+  
+  // Function to fetch webhook events
+  const fetchWebhookEvents = async () => {
+    setIsLoadingEvents(true);
+    
+    try {
+      const response = await fetch('/api/instagram/webhooks/logs');
+      const data = await response.json();
+      
+      setWebhookEvents(data);
+    } catch (err) {
+      console.error('Error fetching webhook events:', err);
+      // Don't set error here, as it would display on the main page
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  };
 
   // Fetch webhook subscriptions and field groups
   const fetchWebhookData = async () => {
@@ -125,15 +148,33 @@ export default function InstagramPage() {
         })
       });
       
-      if (!response.ok) {
-        throw new Error(`Failed to subscribe: ${response.statusText}`);
+      // Try to get JSON response even for error cases
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        // If we can't parse JSON, use text
+        const text = await response.text();
+        responseData = { message: text || response.statusText };
       }
       
-      // Refresh webhook list
+      if (!response.ok) {
+        // Format specific error codes from backend
+        if (responseData.code === 'NO_ACCESS_TOKEN') {
+          throw new Error('Facebook access token is missing. Please connect with Facebook first.');
+        } else if (responseData.message) {
+          throw new Error(responseData.message);
+        } else {
+          throw new Error(`Failed to subscribe: ${response.statusText}`);
+        }
+      }
+      
+      // Success!
+      setError(null);
       fetchWebhookData();
     } catch (err) {
       console.error('Error creating webhook subscription:', err);
-      setError('Failed to create webhook subscription.');
+      setError(err instanceof Error ? err.message : 'Failed to create webhook subscription.');
     }
   };
 
@@ -144,15 +185,30 @@ export default function InstagramPage() {
         method: 'DELETE'
       });
       
-      if (!response.ok) {
-        throw new Error(`Failed to unsubscribe: ${response.statusText}`);
+      // Try to get JSON response even for error cases
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        // If we can't parse JSON, use text
+        const text = await response.text();
+        responseData = { message: text || response.statusText };
       }
       
-      // Refresh webhook list
+      if (!response.ok) {
+        if (responseData.message) {
+          throw new Error(responseData.message);
+        } else {
+          throw new Error(`Failed to unsubscribe: ${response.statusText}`);
+        }
+      }
+      
+      // Success!
+      setError(null);
       fetchWebhookData();
     } catch (err) {
       console.error('Error deleting webhook subscription:', err);
-      setError('Failed to delete webhook subscription.');
+      setError(err instanceof Error ? err.message : 'Failed to delete webhook subscription.');
     }
   };
 
@@ -398,10 +454,49 @@ export default function InstagramPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-10 text-muted-foreground">
-                Event log will appear here when events are received.
-              </div>
+              {isLoadingEvents ? (
+                <div className="flex justify-center py-10">
+                  <RefreshCcw className="animate-spin h-6 w-6" />
+                </div>
+              ) : webhookEvents.length > 0 ? (
+                <ScrollArea className="h-[500px] rounded-md border">
+                  <div className="p-4 space-y-4">
+                    {webhookEvents.map((event, index) => (
+                      <div key={index} className="rounded-lg border p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex items-center">
+                            <Badge className="mr-2">{event.object || 'instagram'}</Badge>
+                            <Badge variant="outline">{event.field || 'webhook'}</Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {new Date(event.timestamp || Date.now()).toLocaleString()}
+                          </div>
+                        </div>
+                        
+                        <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
+                          {JSON.stringify(event.payload || event, null, 2)}
+                        </pre>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="text-center py-10 text-muted-foreground">
+                  No webhook events received yet. Events will appear here when received.
+                </div>
+              )}
             </CardContent>
+            <CardFooter>
+              <Button 
+                variant="outline" 
+                onClick={fetchWebhookEvents} 
+                disabled={isLoadingEvents}
+              >
+                <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingEvents ? 'animate-spin' : ''}`} />
+                Refresh Events
+              </Button>
+            </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>

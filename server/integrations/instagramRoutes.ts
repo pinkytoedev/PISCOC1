@@ -33,6 +33,17 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
+      // Check if we have an access token
+      const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+      
+      if (!tokenSetting?.value) {
+        return res.status(403).json({
+          error: 'Authorization required',
+          message: 'Facebook access token is required. Please log in with Facebook and try again.',
+          code: 'NO_ACCESS_TOKEN'
+        });
+      }
+      
       const result = await subscribeToWebhook(
         fields, 
         callbackUrl, 
@@ -94,6 +105,63 @@ export function setupInstagramRoutes(app: Express) {
       log(`Error getting webhook logs: ${error}`, 'instagram');
       res.status(500).json({ 
         error: 'Failed to get logs', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Store Facebook access token from the frontend
+  app.post('/api/instagram/auth/token', async (req: Request, res: Response) => {
+    try {
+      const { accessToken, userId } = req.body;
+      
+      if (!accessToken) {
+        return res.status(400).json({
+          error: 'Invalid request',
+          message: 'Access token is required'
+        });
+      }
+      
+      // Check if we already have a token
+      const existingToken = await storage.getIntegrationSettingByKey("facebook", "access_token");
+      
+      if (existingToken) {
+        // Update the existing token
+        await storage.updateIntegrationSetting(existingToken.id, {
+          value: accessToken,
+          enabled: true
+        });
+        
+        log(`Updated Facebook access token`, 'instagram');
+      } else {
+        // Create a new token entry
+        await storage.createIntegrationSetting({
+          service: "facebook",
+          key: "access_token",
+          value: accessToken,
+          enabled: true
+        });
+        
+        log(`Stored new Facebook access token`, 'instagram');
+      }
+      
+      // Log the activity
+      await storage.createActivityLog({
+        action: 'facebook_auth_token_updated',
+        userId: userId || null,
+        resourceType: 'integration_setting',
+        resourceId: 'facebook_access_token',
+        details: { timestamp: new Date().toISOString() }
+      });
+      
+      res.status(200).json({
+        success: true,
+        message: 'Access token stored successfully'
+      });
+    } catch (error) {
+      log(`Error storing Facebook access token: ${error}`, 'instagram');
+      res.status(500).json({
+        error: 'Failed to store access token',
         message: error instanceof Error ? error.message : String(error)
       });
     }

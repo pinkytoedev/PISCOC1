@@ -655,8 +655,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Expose Facebook App ID to frontend
   app.get('/api/config/facebook', (req, res) => {
-    const appId = process.env.FACEBOOK_APP_ID || '';
-    res.json({ appId });
+    const appId = process.env.FACEBOOK_APP_ID;
+    
+    if (!appId) {
+      // Return a structured error response
+      return res.status(503).json({
+        status: 'error',
+        message: 'Facebook integration is not configured',
+        code: 'FB_APP_ID_MISSING'
+      });
+    }
+    
+    res.json({ 
+      status: 'success',
+      appId 
+    });
   });
 
   // Set up integration-specific routes
