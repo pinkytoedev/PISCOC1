@@ -971,6 +971,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         const userId = interaction.user.id;
         let uploadChannel: DMChannel | TextChannel | NewsChannel | null = null;
         
+        if (interaction.channel if (interaction.channel.type === ChannelType.DM) {if (interaction.channel.type === ChannelType.DM) { interaction.channel.type === ChannelType.DM) {
           // If we're already in a DM, use the current channel
           uploadChannel = interaction.channel as DMChannel;
         } else {
@@ -1199,6 +1200,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         const userId = interaction.user.id;
         let uploadChannel: DMChannel | TextChannel | NewsChannel | null = null;
         
+        if (interaction.channel if (interaction.channel.type === ChannelType.DM) {if (interaction.channel.type === ChannelType.DM) { interaction.channel.type === ChannelType.DM) {
           // If we're already in a DM, use the current channel
           uploadChannel = interaction.channel as DMChannel;
         } else {
