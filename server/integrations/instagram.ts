@@ -381,9 +381,9 @@ export function setupInstagramRoutes(app: Express) {
       const clientId = clientIdSetting.value;
       const redirectUri = redirectUriSetting.value;
       
-      // Using the new scope values for Instagram API with Instagram Login
-      // These new scope values replace the old ones that will be deprecated on January 27, 2025
-      const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments,instagram_business_manage_messages&response_type=code`;
+      // Using the current scope values for Instagram Graph API
+      // Note: We're using the currently supported scopes that will continue to work until January 2025
+      const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=instagram_basic,instagram_content_publish,instagram_manage_comments,instagram_manage_insights,pages_show_list&response_type=code`;
       
       res.json({ authUrl });
     } catch (error) {

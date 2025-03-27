@@ -629,9 +629,9 @@ export default function InstagramPage() {
                           <div className="flex items-start p-3 border border-blue-100 bg-blue-50 rounded-md">
                             <Info className="h-5 w-5 text-blue-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">Instagram API Update</h3>
+                              <h3 className="font-medium">Instagram API Permissions</h3>
                               <p className="text-sm text-blue-700">
-                                This integration uses the latest Instagram API scopes that will replace the older versions by January 2025.
+                                These permissions are required to access the Instagram Graph API for professional accounts.
                               </p>
                             </div>
                           </div>
@@ -639,7 +639,7 @@ export default function InstagramPage() {
                           <div className="flex items-start p-3 bg-gray-50 rounded-md">
                             <User className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">instagram_business_basic</h3>
+                              <h3 className="font-medium">instagram_basic</h3>
                               <p className="text-sm text-gray-600">
                                 Access to your Instagram professional account information, profile data, and media
                               </p>
@@ -649,7 +649,7 @@ export default function InstagramPage() {
                           <div className="flex items-start p-3 bg-gray-50 rounded-md">
                             <ImagePlus className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">instagram_business_content_publish</h3>
+                              <h3 className="font-medium">instagram_content_publish</h3>
                               <p className="text-sm text-gray-600">
                                 Ability to publish photos, videos, and carousels to your Instagram professional account
                               </p>
@@ -659,7 +659,7 @@ export default function InstagramPage() {
                           <div className="flex items-start p-3 bg-gray-50 rounded-md">
                             <MessageSquare className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">instagram_business_manage_comments</h3>
+                              <h3 className="font-medium">instagram_manage_comments</h3>
                               <p className="text-sm text-gray-600">
                                 Permission to read, respond to, hide, and delete comments on media
                               </p>
@@ -667,11 +667,21 @@ export default function InstagramPage() {
                           </div>
                           
                           <div className="flex items-start p-3 bg-gray-50 rounded-md">
-                            <MessageSquare className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <BarChart className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
                             <div>
-                              <h3 className="font-medium">instagram_business_manage_messages</h3>
+                              <h3 className="font-medium">instagram_manage_insights</h3>
                               <p className="text-sm text-gray-600">
-                                Permission to read and respond to private messages and story replies
+                                Access to engagement and performance metrics of your Instagram content
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start p-3 bg-gray-50 rounded-md">
+                            <Grid className="h-5 w-5 text-gray-500 mt-0.5 mr-3" />
+                            <div>
+                              <h3 className="font-medium">pages_show_list</h3>
+                              <p className="text-sm text-gray-600">
+                                Access to the list of Facebook Pages that you manage (required for Instagram API)
                               </p>
                             </div>
                           </div>
@@ -1213,7 +1223,7 @@ export default function InstagramPage() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-gray-600">
-                          Learn about the upcoming permission changes to Instagram API with Instagram Login that take effect in January 2025.
+                          Current permissions (instagram_basic, instagram_content_publish, etc.) will be replaced with new ones (instagram_business_basic, instagram_business_content_publish, etc.) by January 2025.
                         </p>
                       </CardContent>
                       <CardFooter>
