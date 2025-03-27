@@ -5,7 +5,7 @@ import { setupAuth } from "./auth";
 import { setupDiscordRoutes } from "./integrations/discord";
 import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot } from "./integrations/discordBot";
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
-import { setupInstagramRoutes } from "./integrations/instagram";
+import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgurRoutes } from "./integrations/imgur";
 import * as path from "path";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
