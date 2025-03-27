@@ -926,14 +926,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Instagram image upload button
     else if (interaction.customId.startsWith('upload_insta_image_')) {
-      // Extract article ID from the custom ID
-      const idPart = interaction.customId.replace('upload_insta_image_', '');
+      // Extract article ID from the custom ID - be careful with the exact string match
+      const fullId = interaction.customId;
+      const idPart = fullId.substring('upload_insta_image_'.length);
+      console.log('Instagram image upload - full ID:', fullId);
       console.log('Instagram image upload - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -994,14 +996,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Instagram image upload now button
     else if (interaction.customId.startsWith('upload_insta_image_now_')) {
-      // Extract article ID from the custom ID
-      const idPart = interaction.customId.replace('upload_insta_image_now_', '');
+      // Extract article ID from the custom ID - be careful with the exact string match
+      const fullId = interaction.customId;
+      const idPart = fullId.substring('upload_insta_image_now_'.length);
+      console.log('Instagram image upload NOW - full ID:', fullId);
       console.log('Instagram image upload NOW - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1110,14 +1114,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Web image upload now button
     else if (interaction.customId.startsWith('upload_web_image_now_')) {
-      // Extract article ID from the custom ID
-      const idPart = interaction.customId.replace('upload_web_image_now_', '');
+      // Extract article ID from the custom ID - be careful with the exact string match
+      const fullId = interaction.customId;
+      const idPart = fullId.substring('upload_web_image_now_'.length);
+      console.log('Web image upload NOW - full ID:', fullId);
       console.log('Web image upload NOW - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1224,14 +1230,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Web image upload button
     else if (interaction.customId.startsWith('upload_web_image_')) {
-      // Extract article ID from the custom ID
-      const idPart = interaction.customId.replace('upload_web_image_', '');
+      // Extract article ID from the custom ID - be careful with the exact string match
+      const fullId = interaction.customId;
+      const idPart = fullId.substring('upload_web_image_'.length);
+      console.log('Web image upload - full ID:', fullId);
       console.log('Web image upload - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
