@@ -400,8 +400,17 @@ export function setupInstagramRoutes(app: Express) {
       
       const pageAccessTokenSetting = await storage.getIntegrationSettingByKey("instagram", "page_access_token");
       const instagramBusinessIdSetting = await storage.getIntegrationSettingByKey("instagram", "instagram_business_id");
+      const instagramUsernameSetting = await storage.getIntegrationSettingByKey("instagram", "instagram_username");
       
+      // Check if all necessary settings are present
       const connected = !!(pageAccessTokenSetting?.value && instagramBusinessIdSetting?.value);
+      
+      // Log the detected settings
+      console.log("Instagram connection check:", { 
+        hasPageToken: !!pageAccessTokenSetting?.value,
+        hasBusinessId: !!instagramBusinessIdSetting?.value,
+        username: instagramUsernameSetting?.value || 'not_set'
+      });
       
       // If connected, try to get some basic information to verify the connection
       if (connected) {
@@ -413,6 +422,8 @@ export function setupInstagramRoutes(app: Express) {
             { fields: 'username,profile_picture_url' }
           );
           
+          console.log("Instagram account verification successful:", response.username);
+          
           return res.json({ 
             connected: true,
             accountInfo: {
@@ -423,14 +434,26 @@ export function setupInstagramRoutes(app: Express) {
           });
         } catch (error: any) {
           console.error("Error verifying Instagram connection:", error);
+          
+          // If the token is invalid, clear the settings
+          if (error.message && (error.message.includes('Invalid OAuth access token') || error.message.includes('expired'))) {
+            console.log("Clearing invalid Instagram token settings");
+            
+            // Only clear token-related settings, keep client_id, client_secret, etc.
+            if (pageAccessTokenSetting) {
+              await storage.updateIntegrationSetting(pageAccessTokenSetting.id, { value: '' });
+            }
+          }
+          
           // If we can't connect, consider it disconnected
           return res.json({ connected: false, error: error.message });
         }
       }
       
       res.json({ connected });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to check Instagram connection status" });
+    } catch (error: any) {
+      console.error("Failed to check Instagram connection status:", error);
+      res.status(500).json({ message: "Failed to check Instagram connection status", error: error.message });
     }
   });
 

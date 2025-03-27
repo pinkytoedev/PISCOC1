@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting, Article } from "@shared/schema";
 import { SiInstagram, SiFacebook } from "react-icons/si";
+import { useLocation } from "wouter";
 import { 
   CheckCircle, 
   AlertCircle, 
@@ -22,8 +23,8 @@ import {
   ImagePlus,
   Info,
   Loader2,
-  Grid,
   RefreshCw,
+  Grid,
   BarChart,
   User,
   Newspaper,
@@ -78,6 +79,7 @@ interface InstagramInsights {
 export default function InstagramPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("settings");
+  const [, params] = useLocation();
   
   // Get settings
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
@@ -102,14 +104,49 @@ export default function InstagramPage() {
   const isConfigured = hasClientId && hasClientSecret && hasRedirectUri;
   
   // Get connection status
-  const { data: connectionStatus, isLoading: isLoadingStatus } = useQuery<InstagramConnectionStatus>({
+  const { data: connectionStatus, isLoading: isLoadingStatus, refetch: refetchStatus } = useQuery<InstagramConnectionStatus>({
     queryKey: ['/api/instagram/status'],
     enabled: !isLoading && hasClientId && hasClientSecret,
     refetchInterval: 300000, // Refresh every 5 minutes
+    refetchOnWindowFocus: true,
+    retry: 2,
   });
   
   // Check connection status
   const isConnected = connectionStatus?.connected === true;
+  
+  // Check for connected=true in URL parameters
+  useEffect(() => {
+    // Parse the URL to check for connected=true
+    const url = new URL(window.location.href);
+    const connected = url.searchParams.get('connected');
+    
+    if (connected === 'true') {
+      // Remove the query parameter to avoid showing the message again on refresh
+      window.history.replaceState({}, document.title, '/integrations/instagram');
+      
+      // Show success message
+      toast({
+        title: "Instagram Connected!",
+        description: "Your Instagram professional account has been successfully connected.",
+        variant: "default",
+      });
+      
+      // Set tab to authentication
+      setActiveTab("auth");
+      
+      // Refresh the connection status immediately
+      console.log("Refreshing Instagram connection status after authentication redirect");
+      refetchStatus();
+      queryClient.invalidateQueries({ queryKey: ['/api/instagram/status'] });
+      
+      // Also set a timeout to check again after a brief delay
+      setTimeout(() => {
+        console.log("Delayed refresh of Instagram connection status");
+        refetchStatus();
+      }, 2000);
+    }
+  }, [toast, refetchStatus, setActiveTab]);
   
   // Get recent posts
   const { data: recentPostsData, isLoading: isLoadingPosts } = useQuery<{ data: InstagramPost[]; fallback?: boolean; error?: string }>({
@@ -494,10 +531,29 @@ export default function InstagramPage() {
                     {/* Instagram Authentication */}
                     <Card>
                       <CardHeader>
-                        <CardTitle>Instagram Authentication</CardTitle>
-                        <CardDescription>
-                          Connect your Instagram professional account to enable integration features.
-                        </CardDescription>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle>Instagram Authentication</CardTitle>
+                            <CardDescription>
+                              Connect your Instagram professional account to enable integration features.
+                            </CardDescription>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => {
+                              console.log("Manually refreshing Instagram connection status");
+                              refetchStatus();
+                              toast({
+                                title: "Refreshing connection status",
+                                description: "Checking Instagram connection status...",
+                              });
+                            }}
+                          >
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh Status
+                          </Button>
+                        </div>
                       </CardHeader>
                       <CardContent className="space-y-6">
                         {!isConfigured ? (
