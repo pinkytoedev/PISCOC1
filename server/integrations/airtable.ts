@@ -1065,9 +1065,7 @@ export function setupAirtableRoutes(app: Express) {
         fields: airtableFields,
         originalData: {
           main: quoteData.main,
-          philo: quoteData.philo,
-          carousel: quoteData.carousel,
-          quote: quoteData.quote
+          philo: quoteData.philo
         }
       });
       
@@ -1234,6 +1232,150 @@ export function setupAirtableRoutes(app: Express) {
     } catch (error) {
       console.error("Airtable sync error:", error);
       res.status(500).json({ message: "Failed to sync carousel quotes from Airtable" });
+    }
+  });
+  
+  // Push all carousel quotes to Airtable (batch)
+  app.post("/api/airtable/push/carousel-quotes", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      // Get Airtable settings
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
+      
+      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+        return res.status(400).json({ 
+          success: false,
+          message: "Airtable settings are not fully configured" 
+        });
+      }
+      
+      const apiKey = apiKeySetting.value;
+      const baseId = baseIdSetting.value;
+      const tableName = tableNameSetting.value;
+      
+      // Get all quotes from the database
+      const quotes = await storage.getCarouselQuotes();
+      
+      // Split into create (no externalId) and update (with externalId) operations
+      const quotesToCreate = quotes.filter(q => !q.externalId);
+      const quotesToUpdate = quotes.filter(q => q.externalId);
+      
+      const results = {
+        created: 0,
+        updated: 0,
+        errors: 0,
+        details: [] as string[]
+      };
+      
+      // Process updates first (Airtable has a limit on batch operations, so we need to be careful)
+      if (quotesToUpdate.length > 0) {
+        // Convert quotes to Airtable format
+        const updateRecords = await Promise.all(
+          quotesToUpdate.map(async (quote) => {
+            const fields = await convertCarouselQuoteToAirtableFormat(quote);
+            return {
+              id: quote.externalId,
+              fields
+            };
+          })
+        );
+        
+        // Batch update records in Airtable (max 10 at a time)
+        for (let i = 0; i < updateRecords.length; i += 10) {
+          const batch = updateRecords.slice(i, i + 10);
+          try {
+            await airtableRequest(
+              apiKey,
+              baseId,
+              tableName,
+              "PATCH",
+              { records: batch }
+            );
+            results.updated += batch.length;
+            results.details.push(`Updated ${batch.length} quotes in batch ${Math.floor(i/10) + 1}`);
+          } catch (error) {
+            console.error(`Error updating batch ${Math.floor(i/10) + 1}:`, error);
+            results.errors += batch.length;
+            results.details.push(`Error updating batch ${Math.floor(i/10) + 1}: ${String(error)}`);
+          }
+        }
+      }
+      
+      // Process creates next (for quotes without externalId)
+      if (quotesToCreate.length > 0) {
+        // Convert quotes to Airtable format
+        const createRecords = await Promise.all(
+          quotesToCreate.map(async (quote) => {
+            const fields = await convertCarouselQuoteToAirtableFormat(quote);
+            return { fields };
+          })
+        );
+        
+        // Batch create records in Airtable (max 10 at a time)
+        for (let i = 0; i < createRecords.length; i += 10) {
+          const batch = createRecords.slice(i, i + 10);
+          try {
+            const response = await airtableRequest(
+              apiKey,
+              baseId,
+              tableName,
+              "POST",
+              { records: batch }
+            ) as AirtableResponse<AirtableCarouselQuote>;
+            
+            // Update local records with the new external IDs
+            for (let j = 0; j < response.records.length; j++) {
+              const record = response.records[j];
+              const quoteIndex = i + j;
+              if (quoteIndex < quotesToCreate.length) {
+                const quote = quotesToCreate[quoteIndex];
+                // Update the quote with the externalId
+                await storage.updateCarouselQuote(quote.id, {
+                  externalId: record.id
+                });
+              }
+            }
+            
+            results.created += batch.length;
+            results.details.push(`Created ${batch.length} quotes in batch ${Math.floor(i/10) + 1}`);
+          } catch (error) {
+            console.error(`Error creating batch ${Math.floor(i/10) + 1}:`, error);
+            results.errors += batch.length;
+            results.details.push(`Error creating batch ${Math.floor(i/10) + 1}: ${String(error)}`);
+          }
+        }
+      }
+      
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "push",
+        resourceType: "carousel_quotes",
+        details: { 
+          source: "airtable",
+          results
+        }
+      });
+      
+      res.json({
+        message: "Carousel quotes pushed to Airtable",
+        updated: results.updated,
+        created: results.created,
+        errors: results.errors,
+        details: results.details
+      });
+    } catch (error) {
+      console.error("Error pushing carousel quotes to Airtable:", error);
+      res.status(500).json({ 
+        success: false,
+        message: "Failed to push carousel quotes to Airtable",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
