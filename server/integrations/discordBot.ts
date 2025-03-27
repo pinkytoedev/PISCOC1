@@ -685,7 +685,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       
       // Confirm selection and prompt for image upload
       await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nPlease upload an Instagram image using the button below:`,
+        content: `Selected article: **${article.title}**\n\nPlease click the button below, then upload an Instagram image in your next message:`,
         components: [buttonRow]
       });
     }
@@ -947,37 +947,27 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         content: `Please upload an Instagram image for the article: **${article.title}**\n\nAttach your image to your next message in this channel. The image will be automatically uploaded.`
       });
       
-      // This will be limited to the channel where the interaction occurred
-      const filter = (msg: any) => {
-        return msg.author.id === interaction.user.id && msg.attachments.size > 0;
-      };
-      
       const channel = interaction.channel;
       if (!channel) {
         await interaction.editReply('Error: Could not access the channel. Please try again later.');
         return;
       }
       
-      try {
-        // Use awaitMessages instead of createMessageCollector
-        const collected = await channel.awaitMessages({ 
-          filter, 
-          max: 1, // Only collect one message
-          time: 300000, // 5 minute timeout
-          errors: ['time']
-        }).catch(() => {
-          // Handle timeout
-          interaction.editReply({
-            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-          }).catch(console.error);
-          return null;
-        });
-        
-        if (!collected || collected.size === 0) return;
-        
-        // Get the message with the attachment
-        const message = collected.first();
-        if (!message) return;
+      // Create a message listener for this specific user
+      const messageHandler = async (message: Message) => {
+        // Check if this message is from the user and has attachments
+        if (message.author.id === interaction.user.id && 
+            message.channelId === channel.id && 
+            message.attachments.size > 0) {
+          
+          console.log(`Received image upload from ${message.author.tag} for article ID ${articleId}`);
+          
+          // Remove the listener to stop processing other messages
+          if (client) {
+            client.off(Events.MessageCreate, messageHandler);
+          }
+          
+          try {
         
         // Get the first attachment
         const attachment = message.attachments.first();
@@ -1318,6 +1308,8 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMessages
       ]
     });
