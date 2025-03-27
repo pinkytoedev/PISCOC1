@@ -645,12 +645,12 @@ export default function InstagramPage() {
                                   <div className="ml-3">
                                     <h3 className="text-sm font-medium text-amber-800">Important Connection Steps</h3>
                                     <div className="mt-2 text-sm text-amber-700">
-                                      <ol className="list-decimal pl-5 space-y-1">
-                                        <li>You'll be redirected to Facebook Login</li>
-                                        <li>Select the Facebook Page connected to your Instagram account</li>
-                                        <li>Approve all requested permissions</li>
-                                        <li>You'll be redirected back automatically</li>
-                                        <li>If not redirected, use the "Refresh Status" button above</li>
+                                      <ol className="list-decimal pl-5 space-y-2">
+                                        <li>You'll be redirected to Facebook Login. Make sure to log in with the Facebook account that manages your Instagram Professional account.</li>
+                                        <li>Select the Facebook Page that is connected to your Instagram Professional account. <span className="font-semibold">Important:</span> Your page must be linked to an Instagram Professional account (Business or Creator).</li>
+                                        <li>Approve <span className="font-semibold">all requested permissions</span> - they're necessary for the integration to work properly.</li>
+                                        <li>You'll be redirected back automatically after successful authentication.</li>
+                                        <li>If your connection status doesn't update automatically, click the "Refresh Status" button above.</li>
                                       </ol>
                                     </div>
                                   </div>
@@ -669,6 +669,27 @@ export default function InstagramPage() {
                                         This integration uses the Instagram API with Instagram Login to connect to your Instagram Professional account. 
                                         You need an Instagram Professional account (Business or Creator) to use this integration.
                                       </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="rounded-md bg-gray-50 p-4 border border-gray-100">
+                                <div className="flex">
+                                  <div className="flex-shrink-0">
+                                    <AlertCircle className="h-5 w-5 text-gray-500" />
+                                  </div>
+                                  <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-gray-800">Troubleshooting Connection Issues</h3>
+                                    <div className="mt-2 text-sm text-gray-700">
+                                      <h4 className="font-semibold">Common Issues:</h4>
+                                      <ul className="list-disc pl-5 space-y-1 mt-1">
+                                        <li>You must have an <span className="font-semibold">Instagram Professional account</span> (not a personal account).</li>
+                                        <li>Your Instagram account must be <span className="font-semibold">connected to a Facebook Page</span> you manage.</li>
+                                        <li>Your Facebook app must have the <span className="font-semibold">Instagram Graph API enabled</span>.</li>
+                                        <li>You must approve <span className="font-semibold">all requested permissions</span> during the authentication flow.</li>
+                                        <li>If the connection fails, try logging out of Facebook completely and retry the process.</li>
+                                      </ul>
                                     </div>
                                   </div>
                                 </div>
