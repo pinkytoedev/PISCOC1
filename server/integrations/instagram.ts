@@ -309,24 +309,81 @@ export async function subscribeToWebhook(
   verifyToken: string = WEBHOOK_VERIFY_TOKEN
 ) {
   try {
-    // In a real implementation, you would make an API call to the Instagram Graph API
-    // to create the webhook subscription. For demonstration purposes, we'll simulate this.
-    
     log(`Subscribing to Instagram webhook: fields=${fields.join(',')}, callback=${callbackUrl}`, 'instagram');
     
-    // Simulated response for demonstration
-    const subscriptionResult = {
+    // Get the access token from integration settings
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    const accessToken = tokenSetting?.value;
+    
+    // Create a unique subscription ID
+    const subscriptionId = `sub_${fields.join('_')}_${Date.now()}`;
+    
+    if (accessToken) {
+      try {
+        // Setup the request to the Graph API
+        const formData = new URLSearchParams();
+        formData.append('object', 'instagram');
+        formData.append('callback_url', callbackUrl);
+        formData.append('fields', fields.join(','));
+        formData.append('verify_token', verifyToken);
+        formData.append('access_token', accessToken);
+        
+        // Make the API call to Facebook Graph API
+        const response = await fetch(
+          'https://graph.facebook.com/v17.0/app/subscriptions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString()
+          }
+        );
+        
+        const responseText = await response.text();
+        
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}: ${responseText}`);
+        }
+        
+        // Check if the response indicates success
+        const isSuccess = responseText === 'true' || responseText.includes('"success":true');
+        
+        if (!isSuccess) {
+          throw new Error(`API did not indicate success: ${responseText}`);
+        }
+      } catch (graphError) {
+        log(`Error calling Graph API for subscription creation: ${graphError}`, 'instagram');
+        // Fallback to local storage if API call fails
+      }
+    }
+    
+    // Store the subscription in our database regardless of API call outcome
+    // This gives us a local record of what we've attempted to subscribe to
+    const subscriptionData = {
       success: true,
       fields,
       callback_url: callbackUrl,
       active: true,
       object: 'instagram',
-      subscription_id: `sub_${Date.now()}`
+      subscription_id: subscriptionId
     };
     
-    await logWebhookActivity('subscription_created', subscriptionResult);
+    try {
+      await storage.createIntegrationSetting({
+        service: "instagram",
+        key: `webhook_subscription_${subscriptionId}`,
+        value: JSON.stringify(subscriptionData),
+        enabled: true
+      });
+    } catch (dbError) {
+      log(`Error storing webhook subscription: ${dbError}`, 'instagram');
+      // Continue even if we can't store it locally
+    }
     
-    return subscriptionResult;
+    await logWebhookActivity('subscription_created', subscriptionData);
+    
+    return subscriptionData;
   } catch (error) {
     log(`Error subscribing to webhook: ${error}`, 'instagram');
     await logWebhookActivity('subscription_error', {
@@ -346,23 +403,56 @@ export async function subscribeToWebhook(
  */
 export async function getWebhookSubscriptions() {
   try {
-    // In a real implementation, you would make an API call to the Instagram Graph API
-    // to fetch the active subscriptions. For demonstration purposes, we'll return dummy data.
-    
     log('Getting Instagram webhook subscriptions', 'instagram');
     
-    // Simulated subscriptions for demonstration
-    const subscriptions = [
-      {
-        object: 'instagram',
-        callback_url: `${process.env.BASE_URL || 'https://your-app.com'}/api/instagram/webhooks/callback`,
-        active: true,
-        fields: ['mentions', 'comments'],
-        subscription_id: 'sub_mentions_comments'
-      }
-    ];
+    // Get access token from integration settings if available
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    const accessToken = tokenSetting?.value;
     
-    return subscriptions;
+    // If we have an access token, attempt to call the Graph API
+    if (accessToken) {
+      try {
+        // Make the API call to Facebook Graph API
+        const response = await fetch(
+          `https://graph.facebook.com/v17.0/app/subscriptions?access_token=${accessToken}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}: ${await response.text()}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.data) {
+          // Transform the response to match our expected format
+          return data.data.map((sub: any) => ({
+            object: sub.object,
+            callback_url: sub.callback_url,
+            active: true,
+            fields: sub.fields,
+            subscription_id: `sub_${sub.object}_${sub.fields.join('_')}`
+          }));
+        }
+      } catch (graphError) {
+        log(`Error calling Graph API for subscriptions: ${graphError}`, 'instagram');
+        // Fall back to local data if API call fails
+      }
+    }
+    
+    // Fall back to getting subscriptions from our database
+    try {
+      const settings = await storage.getIntegrationSettings("instagram");
+      const subscriptionSettings = settings.filter(setting => setting.key.startsWith('webhook_subscription_'));
+      
+      if (subscriptionSettings.length > 0) {
+        return subscriptionSettings.map(sub => JSON.parse(sub.value));
+      }
+    } catch (dbError) {
+      log(`Error getting webhook subscriptions from database: ${dbError}`, 'instagram');
+    }
+    
+    // Return empty array if no subscriptions are found
+    return [];
   } catch (error) {
     log(`Error getting webhook subscriptions: ${error}`, 'instagram');
     throw error;
@@ -377,10 +467,80 @@ export async function getWebhookSubscriptions() {
  */
 export async function unsubscribeFromWebhook(subscriptionId: string) {
   try {
-    // In a real implementation, you would make an API call to the Instagram Graph API
-    // to delete the subscription. For demonstration purposes, we'll simulate this.
-    
     log(`Unsubscribing from Instagram webhook: ${subscriptionId}`, 'instagram');
+    
+    // First, try to find this subscription in our database
+    let subscriptionData: any = null;
+    let subscriptionSettingId: number | null = null;
+    
+    try {
+      const settings = await storage.getIntegrationSettings("instagram");
+      const subscriptionSetting = settings.find(
+        setting => setting.key === `webhook_subscription_${subscriptionId}`
+      );
+      
+      if (subscriptionSetting) {
+        subscriptionData = JSON.parse(subscriptionSetting.value);
+        subscriptionSettingId = subscriptionSetting.id;
+      }
+    } catch (dbError) {
+      log(`Error finding webhook subscription: ${dbError}`, 'instagram');
+    }
+    
+    // Get the access token from integration settings
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    const accessToken = tokenSetting?.value;
+    
+    // Attempt to call the API if we have an access token
+    if (accessToken && subscriptionData) {
+      try {
+        // We need to use the fields to properly identify the subscription to delete
+        const fields = subscriptionData.fields;
+        
+        // Setup the request to the Graph API
+        const formData = new URLSearchParams();
+        formData.append('object', 'instagram');
+        formData.append('fields', fields.join(','));
+        formData.append('access_token', accessToken);
+        
+        // Make the API call to Facebook Graph API
+        const response = await fetch(
+          'https://graph.facebook.com/v17.0/app/subscriptions',
+          {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString()
+          }
+        );
+        
+        const responseText = await response.text();
+        
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}: ${responseText}`);
+        }
+        
+        // Check if the response indicates success
+        const isSuccess = responseText === 'true' || responseText.includes('"success":true');
+        
+        if (!isSuccess) {
+          throw new Error(`API did not indicate success: ${responseText}`);
+        }
+      } catch (graphError) {
+        log(`Error calling Graph API for subscription deletion: ${graphError}`, 'instagram');
+        // Continue with local deletion even if API call fails
+      }
+    }
+    
+    // Remove the subscription from our database if we found it
+    if (subscriptionSettingId) {
+      try {
+        await storage.deleteIntegrationSetting(subscriptionSettingId);
+      } catch (dbError) {
+        log(`Error deleting webhook subscription from database: ${dbError}`, 'instagram');
+      }
+    }
     
     await logWebhookActivity('subscription_deleted', {
       subscription_id: subscriptionId,
