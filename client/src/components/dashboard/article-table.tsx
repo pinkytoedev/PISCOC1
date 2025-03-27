@@ -37,6 +37,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   const instaImageFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingArticleId, setUploadingArticleId] = useState<number | null>(null);
   const [uploadingField, setUploadingField] = useState<'MainImage' | 'instaPhoto' | null>(null);
+  const [pushingArticleId, setPushingArticleId] = useState<number | null>(null);
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
@@ -82,6 +83,34 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       toast({
         title: "Airtable update failed",
         description: error.message || "Failed to update article in Airtable.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Add mutation for pushing non-Airtable articles to Airtable
+  const pushToAirtableMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      setPushingArticleId(articleId);
+      const response = await apiRequest(
+        "POST", 
+        `/api/airtable/push/article/${articleId}`
+      );
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      setPushingArticleId(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({
+        title: "Pushed to Airtable",
+        description: "The article was successfully pushed to Airtable.",
+      });
+    },
+    onError: (error) => {
+      setPushingArticleId(null);
+      toast({
+        title: "Airtable push failed",
+        description: error.message || "Failed to push article to Airtable.",
         variant: "destructive",
       });
     },
@@ -563,7 +592,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         </Tooltip>
                       </TooltipProvider>
                       
-                      {article.source === 'airtable' && article.externalId && (
+                      {article.source === 'airtable' && article.externalId ? (
+                        // Update button for existing Airtable articles
                         <Button
                           variant="ghost"
                           size="icon"
@@ -578,6 +608,30 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                             <RefreshCw className="h-4 w-4" />
                           )}
                         </Button>
+                      ) : (
+                        // Push to Airtable button for non-Airtable articles
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => pushToAirtableMutation.mutate(article.id)}
+                                className="text-purple-600 hover:text-purple-800"
+                                disabled={pushToAirtableMutation.isPending && pushingArticleId === article.id}
+                              >
+                                {pushToAirtableMutation.isPending && pushingArticleId === article.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Upload className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              <p>Push to Airtable</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                       <Button
                         variant="ghost"
