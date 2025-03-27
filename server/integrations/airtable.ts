@@ -1,6 +1,9 @@
-import { Express } from "express";
+import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
+import { upload } from "../utils/fileUpload";
+import { uploadImageToAirtable, uploadImageUrlToAirtable, cleanupUploadedFile } from "../utils/imageUploader";
+import { uploadImageToImgur, uploadImageUrlToImgur } from "../utils/imgurUploader";
 
 // Type definitions for Airtable responses
 interface AirtableRecord<T> {
@@ -357,15 +360,6 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   
   return airtableData;
 }
-
-import { upload } from '../utils/fileUpload';
-import { 
-  uploadImageToAirtable, 
-  uploadImageUrlToAirtable, 
-  cleanupUploadedFile, 
-  createAirtableAttachmentFromFile 
-} from '../utils/imageUploader';
-import { Request, Response } from 'express';
 
 // Helper function to convert from database model to Airtable format
 async function convertCarouselQuoteToAirtableFormat(quote: any): Promise<Partial<AirtableCarouselQuote>> {
@@ -1443,6 +1437,85 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(400).json({ message: "No image file uploaded" });
       }
       
+      // Check if Imgur integration is enabled
+      const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
+      const isImgurEnabled = imgurClientIdSetting?.enabled && !!imgurClientIdSetting?.value;
+      
+      if (isImgurEnabled) {
+        // Imgur integration is enabled, using Imgur as intermediary
+        console.log("Imgur integration is enabled, using Imgur as intermediary for upload");
+        
+        // We can't use redirect here because we need to forward the file
+        // So we'll call the Imgur upload function directly
+        const file = {
+          path: req.file.path,
+          filename: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size
+        };
+        
+        // Step 1: Upload to Imgur
+        const imgurResult = await uploadImageToImgur(file);
+        
+        // Always cleanup the uploaded file after processing
+        cleanupUploadedFile(file.path);
+        
+        if (!imgurResult) {
+          return res.status(500).json({ message: 'Failed to upload image to Imgur' });
+        }
+        
+        // Step 2: Upload Imgur URL to Airtable
+        const airtableResult = await uploadImageUrlToAirtable(
+          imgurResult.link,
+          article.externalId,
+          fieldName,
+          file.filename
+        );
+        
+        if (!airtableResult) {
+          return res.status(500).json({ 
+            message: 'Image uploaded to Imgur but failed to update Airtable',
+            imgurLink: imgurResult.link 
+          });
+        }
+        
+        // Step 3: Update the article in the database with the new image URL
+        const updateData: Partial<InsertArticle> = {};
+        
+        if (fieldName === 'MainImage') {
+          updateData.imageUrl = imgurResult.link;
+          updateData.imageType = 'url';
+        } else if (fieldName === 'instaPhoto') {
+          updateData.instagramImageUrl = imgurResult.link;
+        }
+        
+        await storage.updateArticle(articleId, updateData);
+        
+        // Log the activity
+        await storage.createActivityLog({
+          userId: req.user?.id,
+          action: 'upload',
+          resourceType: 'image',
+          resourceId: articleId.toString(),
+          details: {
+            fieldName,
+            imgurId: imgurResult.id,
+            imgurLink: imgurResult.link,
+            filename: file.filename
+          }
+        });
+        
+        return res.json({
+          message: `Image uploaded successfully to Imgur and then to ${fieldName}`,
+          imgur: {
+            id: imgurResult.id,
+            link: imgurResult.link,
+            deletehash: imgurResult.deletehash
+          },
+          airtable: airtableResult
+        });
+      }
+      
       // Log debug information before uploading
       console.log("Airtable Image Upload Debug:", {
         articleId,
@@ -1560,6 +1633,75 @@ export function setupAirtableRoutes(app: Express) {
       // Check if this is an Airtable article
       if (article.source !== "airtable" || !article.externalId) {
         return res.status(400).json({ message: "This article is not from Airtable" });
+      }
+      
+      // Check if Imgur integration is enabled
+      const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
+      const isImgurEnabled = imgurClientIdSetting?.enabled && !!imgurClientIdSetting?.value;
+      
+      if (isImgurEnabled) {
+        // Imgur integration is enabled, using Imgur as intermediary
+        console.log("Imgur integration is enabled, using Imgur as intermediary for URL upload");
+        
+        // We'll call the Imgur upload function directly rather than redirecting
+        // Step 1: Upload URL to Imgur
+        const imgurResult = await uploadImageUrlToImgur(imageUrl, filename);
+        
+        if (!imgurResult) {
+          return res.status(500).json({ message: 'Failed to upload image URL to Imgur' });
+        }
+        
+        // Step 2: Upload Imgur URL to Airtable
+        const airtableResult = await uploadImageUrlToAirtable(
+          imgurResult.link,
+          article.externalId,
+          fieldName,
+          filename
+        );
+        
+        if (!airtableResult) {
+          return res.status(500).json({ 
+            message: 'Image uploaded to Imgur but failed to update Airtable',
+            imgurLink: imgurResult.link 
+          });
+        }
+        
+        // Step 3: Update the article in the database with the new image URL
+        const updateData: Partial<InsertArticle> = {};
+        
+        if (fieldName === 'MainImage') {
+          updateData.imageUrl = imgurResult.link;
+          updateData.imageType = 'url';
+        } else if (fieldName === 'instaPhoto') {
+          updateData.instagramImageUrl = imgurResult.link;
+        }
+        
+        await storage.updateArticle(articleId, updateData);
+        
+        // Log the activity
+        await storage.createActivityLog({
+          userId: req.user?.id,
+          action: 'upload',
+          resourceType: 'image_url',
+          resourceId: articleId.toString(),
+          details: {
+            fieldName,
+            originalUrl: imageUrl,
+            imgurId: imgurResult.id,
+            imgurLink: imgurResult.link,
+            filename
+          }
+        });
+        
+        return res.json({
+          message: `Image URL uploaded successfully to Imgur and then to ${fieldName}`,
+          imgur: {
+            id: imgurResult.id,
+            link: imgurResult.link,
+            deletehash: imgurResult.deletehash
+          },
+          airtable: airtableResult
+        });
       }
       
       // Log debug information before uploading
