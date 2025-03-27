@@ -28,6 +28,7 @@ export default function DiscordPage() {
   const [tab, setTab] = useState("webhook");
   const [botToken, setBotToken] = useState("");
   const [clientId, setClientId] = useState("");
+  const [discordMessage, setDiscordMessage] = useState("");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
@@ -161,6 +162,27 @@ export default function DiscordPage() {
     },
   });
   
+  const sendDiscordMessageMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const res = await apiRequest("POST", "/api/discord/send-message", { message });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Message sent",
+        description: "Your message was successfully sent to Discord.",
+      });
+      setDiscordMessage(""); // Clear the input after successful send
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to send message",
+        description: error.message || "An error occurred while sending the message to Discord.",
+        variant: "destructive",
+      });
+    },
+  });
+  
   const getSettingValue = (key: string): string => {
     const setting = settings?.find(s => s.key === key);
     return setting?.value || "";
@@ -182,6 +204,12 @@ export default function DiscordPage() {
   
   const handleTestDiscord = () => {
     testDiscordMutation.mutate();
+  };
+  
+  const handleSendDiscordMessage = () => {
+    if (discordMessage.trim()) {
+      sendDiscordMessageMutation.mutate(discordMessage);
+    }
   };
   
   const copyToClipboard = (text: string) => {
@@ -407,6 +435,51 @@ export default function DiscordPage() {
                             Add this secret to your webhook requests as a query parameter or 'x-discord-signature' header for added security.
                           </p>
                         </div>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Send Message to Discord */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Send Message to Discord</CardTitle>
+                        <CardDescription>
+                          Send a custom message directly to your Discord channel.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="discord_message">Message</Label>
+                          <Input
+                            id="discord_message"
+                            type="text"
+                            placeholder="Enter your message here..."
+                            value={discordMessage}
+                            onChange={(e) => setDiscordMessage(e.target.value)}
+                            className="flex-1"
+                          />
+                          <p className="text-xs text-gray-500">
+                            This message will be sent to the Discord channel associated with your webhook URL.
+                          </p>
+                        </div>
+                        
+                        <Button 
+                          variant="default" 
+                          size="sm" 
+                          onClick={handleSendDiscordMessage}
+                          disabled={!getSettingValue('webhook_url') || !discordMessage || sendDiscordMessageMutation.isPending}
+                        >
+                          {sendDiscordMessageMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            <>
+                              <Webhook className="mr-2 h-4 w-4" />
+                              Send to Discord
+                            </>
+                          )}
+                        </Button>
                       </CardContent>
                     </Card>
                   </TabsContent>
