@@ -18,7 +18,7 @@ export default function CarouselQuotesPage() {
   const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editQuote, setEditQuote] = useState<CarouselQuote | null>(null);
-  const [formData, setFormData] = useState<InsertCarouselQuote & {main?: string, philo?: string, externalId?: string}>({
+  const [formData, setFormData] = useState<InsertCarouselQuote & {externalId?: string}>({
     carousel: "",
     quote: "",
     main: "",
@@ -182,10 +182,12 @@ export default function CarouselQuotesPage() {
   const handleEditClick = (quote: CarouselQuote) => {
     setEditQuote(quote);
     setFormData({
+      // Keep carousel and quote for compatibility with the API
       carousel: quote.carousel,
       quote: quote.quote,
-      main: quote.main ?? quote.carousel, // Use existing main or carousel as fallback
-      philo: quote.philo ?? quote.quote,  // Use existing philo or quote as fallback
+      // Display main and philo in the form
+      main: quote.main ?? quote.carousel,
+      philo: quote.philo ?? quote.quote,
       externalId: quote.externalId ?? undefined,
     });
     setIsModalOpen(true);
@@ -223,7 +225,16 @@ export default function CarouselQuotesPage() {
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createQuoteMutation.mutate(formData);
+    
+    // Make sure to copy main to carousel and philo to quote for API compatibility
+    const quoteData = {
+      ...formData,
+      // Ensure both carousel and quote fields have values for the API
+      carousel: formData.main,
+      quote: formData.philo
+    };
+    
+    createQuoteMutation.mutate(quoteData);
   };
   
   const handleCloseModal = () => {
@@ -348,22 +359,6 @@ export default function CarouselQuotesPage() {
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  {quote.externalId && (
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="text-blue-500 hover:text-blue-700"
-                                      onClick={() => handleUpdateAirtable(quote)}
-                                      title="Update in Airtable"
-                                      disabled={updateAirtableMutation.isPending}
-                                    >
-                                      {updateAirtableMutation.isPending ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <CloudUpload className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  )}
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -411,13 +406,13 @@ export default function CarouselQuotesPage() {
                 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label htmlFor="carousel">Carousel Identifier</Label>
+                    <Label htmlFor="main">Main Field</Label>
                     <Input
-                      id="carousel"
-                      name="carousel"
-                      value={formData.carousel}
+                      id="main"
+                      name="main"
+                      value={formData.main || ""}
                       onChange={handleInputChange}
-                      placeholder="e.g. testimonials, home-page, about-us"
+                      placeholder="Main field value (carousel identifier)"
                       required
                     />
                     <p className="text-xs text-gray-500 mt-1">
@@ -426,91 +421,32 @@ export default function CarouselQuotesPage() {
                   </div>
                   
                   <div>
-                    <Label htmlFor="quote">Quote Content</Label>
+                    <Label htmlFor="philo">Quote Content</Label>
                     <Textarea
-                      id="quote"
-                      name="quote"
-                      value={formData.quote}
+                      id="philo"
+                      name="philo"
+                      value={formData.philo || ""}
                       onChange={handleInputChange}
                       placeholder="Enter the quote text here"
                       rows={4}
                       required
                     />
                   </div>
-
-                  {/* Airtable specific fields */}
-                  <div className="space-y-4 border rounded-md p-4 bg-gray-50">
-                    <div className="text-sm font-medium text-gray-700">Airtable Fields</div>
-                    <p className="text-xs text-gray-500">
-                      These fields are used when synchronizing with Airtable. If left empty, the carousel and quote values will be used.
-                    </p>
-                    
-                    <div>
-                      <Label htmlFor="main">Airtable Main Field</Label>
-                      <Input
-                        id="main"
-                        name="main"
-                        value={formData.main || ""}
-                        onChange={handleInputChange}
-                        placeholder="Main field value for Airtable"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor="philo">Airtable Philo Field</Label>
-                      <Textarea
-                        id="philo"
-                        name="philo"
-                        value={formData.philo || ""}
-                        onChange={handleInputChange}
-                        placeholder="Philo field value for Airtable"
-                        rows={3}
-                      />
-                    </div>
-                  </div>
                   
-                  <DialogFooter className="flex flex-col sm:flex-row gap-2">
-                    <div className="flex-1 flex justify-start">
-                      {editQuote && editQuote.externalId && (
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          className="flex items-center gap-2 text-blue-600 border-blue-200"
-                          onClick={() => {
-                            // Create and update a quote using the current form data
-                            const quoteToUpdate = {
-                              ...editQuote,
-                              main: formData.main || null,
-                              philo: formData.philo || null
-                            };
-                            handleUpdateAirtable(quoteToUpdate);
-                          }}
-                          disabled={updateAirtableMutation.isPending}
-                        >
-                          {updateAirtableMutation.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <CloudUpload className="h-4 w-4" />
-                          )}
-                          Update in Airtable
-                        </Button>
+                  <DialogFooter className="flex gap-2 justify-end">
+                    <Button variant="outline" type="button" onClick={handleCloseModal}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={createQuoteMutation.isPending}>
+                      {createQuoteMutation.isPending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {editQuote ? "Updating..." : "Creating..."}
+                        </>
+                      ) : (
+                        editQuote ? "Update Quote" : "Add Quote"
                       )}
-                    </div>
-                    <div className="flex gap-2 justify-end">
-                      <Button variant="outline" type="button" onClick={handleCloseModal}>
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={createQuoteMutation.isPending}>
-                        {createQuoteMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            {editQuote ? "Updating..." : "Creating..."}
-                          </>
-                        ) : (
-                          editQuote ? "Update Quote" : "Add Quote"
-                        )}
-                      </Button>
-                    </div>
+                    </Button>
                   </DialogFooter>
                 </form>
               </DialogContent>
