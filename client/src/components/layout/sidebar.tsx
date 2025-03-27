@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  Shield,
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,11 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           name: "Documentation",
           path: "/docs",
           icon: <BookOpen className="w-5 h-5" />
+        },
+        {
+          name: "Privacy Policy",
+          path: "/privacy-policy",
+          icon: <Shield className="w-5 h-5" />
         }
       ]
     }

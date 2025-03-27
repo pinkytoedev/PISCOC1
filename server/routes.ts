@@ -7,6 +7,7 @@ import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagram";
 import { setupImgurRoutes } from "./integrations/imgur";
+import * as path from "path";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
@@ -32,6 +33,11 @@ const handleZodError = (error: ZodError) => {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+  
+  // Serve Privacy Policy without authentication
+  app.get("/privacy", (req, res) => {
+    res.sendFile(path.join(process.cwd(), "client/public/privacy.html"));
+  });
 
   // Team member routes
   app.get("/api/team-members", async (req, res) => {
