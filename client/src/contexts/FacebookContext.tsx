@@ -20,6 +20,7 @@ interface FacebookContextType {
   status: FacebookAuthStatus;
   user: FacebookUser | null;
   accessToken: string | null;
+  initializationError: string | null;
   login: (onSuccess?: () => void, onError?: (error: any) => void) => void;
   logout: (onSuccess?: () => void) => void;
   // Add more methods as needed for Instagram functionality
@@ -31,6 +32,7 @@ const FacebookContext = createContext<FacebookContextType>({
   status: 'initializing',
   user: null,
   accessToken: null,
+  initializationError: null,
   login: () => {},
   logout: () => {}
 });
@@ -51,6 +53,7 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
   const [status, setStatus] = useState<FacebookAuthStatus>('initializing');
   const [user, setUser] = useState<FacebookUser | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
 
   // Handle status change from Facebook SDK
   const handleStatusChange = (newStatus: FacebookAuthStatus, response: any) => {
@@ -79,37 +82,46 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
 
   // Login method
   const login = (onSuccess?: () => void, onError?: (error: any) => void) => {
-    if (!window.FB) {
-      console.error('Facebook SDK not loaded');
-      onError && onError('Facebook SDK not loaded');
+    if (!isInitialized || !window.FB) {
+      console.error('Facebook SDK not initialized yet');
+      onError && onError('Facebook SDK not initialized yet');
       return;
     }
 
-    window.FB.login((response) => {
-      if (response.status === 'connected') {
-        handleStatusChange('connected', response);
-        onSuccess && onSuccess();
-      } else {
-        onError && onError(response);
-      }
-    }, {
-      scope: 'email,public_profile,instagram_basic,pages_show_list'
-    });
+    try {
+      window.FB.login((response) => {
+        if (response.status === 'connected') {
+          handleStatusChange('connected', response);
+          onSuccess && onSuccess();
+        } else {
+          onError && onError(response);
+        }
+      }, {
+        scope: 'email,public_profile,instagram_basic,pages_show_list'
+      });
+    } catch (error) {
+      console.error('Facebook login error:', error);
+      onError && onError(error);
+    }
   };
 
   // Logout method
   const logout = (onSuccess?: () => void) => {
-    if (!window.FB) {
-      console.error('Facebook SDK not loaded');
+    if (!isInitialized || !window.FB) {
+      console.error('Facebook SDK not initialized yet');
       return;
     }
 
-    window.FB.logout((response) => {
-      setStatus('unknown');
-      setUser(null);
-      setAccessToken(null);
-      onSuccess && onSuccess();
-    });
+    try {
+      window.FB.logout((response) => {
+        setStatus('unknown');
+        setUser(null);
+        setAccessToken(null);
+        onSuccess && onSuccess();
+      });
+    } catch (error) {
+      console.error('Facebook logout error:', error);
+    }
   };
 
   // Initialize the SDK
@@ -123,6 +135,7 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
     status,
     user,
     accessToken,
+    initializationError,
     login,
     logout
   };

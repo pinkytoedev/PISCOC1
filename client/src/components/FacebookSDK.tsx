@@ -58,37 +58,55 @@ export function FacebookSDK({
   onInit
 }: FacebookSDKProps) {
   useEffect(() => {
-    // Only load the SDK once
-    if (document.getElementById('facebook-jssdk')) {
+    // Check if we already have the FB SDK script
+    const existingScript = document.getElementById('facebook-jssdk');
+    
+    if (existingScript) {
+      // If the script is already loaded and FB is available, initialize
+      if (window.FB) {
+        console.log('Facebook SDK already loaded, initializing...');
+        initializeFacebookSDK();
+      }
       return;
     }
 
-    // Initialize Facebook SDK
+    // Initialize Facebook SDK when it loads
     window.fbAsyncInit = function() {
-      window.FB.init({
-        appId,
-        cookie: true,
-        xfbml: true,
-        version,
-      });
-      
-      // Log page view
-      window.FB.AppEvents.logPageView();
-      
-      // Check login status
-      window.FB.getLoginStatus(function(response) {
-        if (onStatusChange) {
-          onStatusChange(response.status, response);
-        }
-      });
-      
-      // Trigger init callback
-      if (onInit) {
-        onInit();
-      }
+      initializeFacebookSDK();
     };
 
+    // Function to initialize the SDK
+    function initializeFacebookSDK() {
+      console.log('Initializing Facebook SDK...', { appId });
+      try {
+        window.FB.init({
+          appId,
+          cookie: true,
+          xfbml: true,
+          version,
+        });
+        
+        // Log page view
+        window.FB.AppEvents.logPageView();
+        
+        // Check login status
+        window.FB.getLoginStatus(function(response) {
+          if (onStatusChange) {
+            onStatusChange(response.status, response);
+          }
+        });
+        
+        // Trigger init callback
+        if (onInit) {
+          onInit();
+        }
+      } catch (error) {
+        console.error('Error initializing Facebook SDK:', error);
+      }
+    }
+
     // Load the SDK asynchronously
+    console.log('Loading Facebook SDK...');
     (function(d, s, id) {
       var js, fjs = d.getElementsByTagName(s)[0];
       if (d.getElementById(id)) return;
