@@ -32,6 +32,10 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const [mainImageUploading, setMainImageUploading] = useState(false);
   const [instagramImageUploading, setInstagramImageUploading] = useState(false);
   
+  // Imgur integration status
+  const [imgurEnabled, setImgurEnabled] = useState(false);
+  const [imgurClientId, setImgurClientId] = useState("");
+  
   // Default values for new article
   const defaultForm: Partial<InsertArticle> = {
     title: "",
@@ -58,6 +62,34 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   );
   
   // Reset form when modal opens/closes or article changes
+  // Fetch Imgur settings when modal opens
+  useEffect(() => {
+    const fetchImgurSettings = async () => {
+      try {
+        const response = await fetch('/api/imgur/settings');
+        if (response.ok) {
+          const settings = await response.json();
+          const clientIdSetting = settings.find((s: any) => s.key === 'client_id');
+          const enabledSetting = settings.find((s: any) => s.key === 'enabled');
+          
+          if (clientIdSetting) {
+            setImgurClientId(clientIdSetting.value);
+          }
+          
+          if (enabledSetting) {
+            setImgurEnabled(enabledSetting.value === 'true');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch Imgur settings:', error);
+      }
+    };
+    
+    if (isOpen) {
+      fetchImgurSettings();
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen) {
       let formDataToUse = editArticle ? { ...editArticle } : defaultForm;
@@ -239,7 +271,49 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     formData.append('image', file);
     
     setMainImageUploading(true);
-    uploadMainImageMutation.mutate(formData);
+    
+    // Use Imgur integration if enabled, otherwise use direct Airtable upload
+    if (imgurEnabled) {
+      // Use the imgur-to-airtable endpoint which handles the Imgur upload and Airtable update
+      fetch(`/api/imgur/upload-to-airtable/${editArticle.id}/MainImage`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(errorData => {
+            throw new Error(errorData.message || "Failed to upload image via Imgur");
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        toast({
+          title: "Image uploaded via Imgur successfully",
+          description: "The image was uploaded to Imgur and linked to Airtable",
+        });
+        
+        // Update the form data with the new image URL from Imgur
+        setFormData(prev => ({
+          ...prev,
+          imageUrl: data.imgurUrl || data.attachment?.url
+        }));
+        
+        setMainImageUploading(false);
+      })
+      .catch(error => {
+        toast({
+          title: "Failed to upload image via Imgur",
+          description: error.message || "There was an error uploading the image",
+          variant: "destructive",
+        });
+        setMainImageUploading(false);
+      });
+    } else {
+      // Use direct Airtable upload
+      uploadMainImageMutation.mutate(formData);
+    }
   };
   
   // Handle Instagram image file selection
@@ -253,7 +327,49 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     formData.append('image', file);
     
     setInstagramImageUploading(true);
-    uploadInstagramImageMutation.mutate(formData);
+    
+    // Use Imgur integration if enabled, otherwise use direct Airtable upload
+    if (imgurEnabled) {
+      // Use the imgur-to-airtable endpoint which handles the Imgur upload and Airtable update
+      fetch(`/api/imgur/upload-to-airtable/${editArticle.id}/instaPhoto`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      .then(response => {
+        if (!response.ok) {
+          return response.json().then(errorData => {
+            throw new Error(errorData.message || "Failed to upload image via Imgur");
+          });
+        }
+        return response.json();
+      })
+      .then(data => {
+        toast({
+          title: "Instagram image uploaded via Imgur successfully",
+          description: "The image was uploaded to Imgur and linked to Airtable",
+        });
+        
+        // Update the form data with the new image URL from Imgur
+        setFormData(prev => ({
+          ...prev,
+          instagramImageUrl: data.imgurUrl || data.attachment?.url
+        }));
+        
+        setInstagramImageUploading(false);
+      })
+      .catch(error => {
+        toast({
+          title: "Failed to upload image via Imgur",
+          description: error.message || "There was an error uploading the image",
+          variant: "destructive",
+        });
+        setInstagramImageUploading(false);
+      });
+    } else {
+      // Use direct Airtable upload
+      uploadInstagramImageMutation.mutate(formData);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -338,6 +454,33 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             <span className="text-xs text-blue-600 mt-3 block">
               <span className="font-semibold">Airtable ID:</span> <code className="px-1 py-0.5 bg-white rounded text-xs font-mono">{editArticle.externalId}</code>
             </span>
+          </div>
+        )}
+        
+        {/* Imgur Integration Status */}
+        {isFromAirtable && (
+          <div className={`mb-4 p-4 border rounded-md ${imgurEnabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+            <div className="flex items-center">
+              <Image className={`h-4 w-4 mr-2 ${imgurEnabled ? 'text-green-500' : 'text-gray-500'}`} />
+              <h5 className={`text-sm font-medium ${imgurEnabled ? 'text-green-700' : 'text-gray-700'}`}>
+                Imgur Integration {imgurEnabled ? 'Enabled' : 'Disabled'}
+              </h5>
+            </div>
+            <p className={`text-sm mt-1 ${imgurEnabled ? 'text-green-600' : 'text-gray-600'}`}>
+              {imgurEnabled 
+                ? 'Images will be uploaded to Imgur first, then the URL will be sent to Airtable.' 
+                : 'Images will be uploaded directly to Airtable. To enable Imgur integration, visit the Imgur settings page.'}
+            </p>
+            {imgurEnabled && (
+              <div className="mt-2 text-xs text-green-600">
+                <p><span className="font-semibold">Benefits:</span></p>
+                <ul className="list-disc pl-5 mt-1 space-y-1">
+                  <li>Faster uploads with better reliability</li>
+                  <li>CDN-optimized image delivery</li>
+                  <li>No Airtable attachment size limits</li>
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -479,9 +622,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                     </span>
                   )}
                   {mainImageUploading ? (
-                    <span className="font-medium text-amber-600">Uploading image to Airtable...</span>
+                    <span className="font-medium text-amber-600">
+                      Uploading image {imgurEnabled ? 'via Imgur to Airtable' : 'to Airtable'}...
+                    </span>
                   ) : (
-                    <span>You can directly upload images to the MainImage field in Airtable using the Upload button</span>
+                    <span>
+                      You can {imgurEnabled ? 'upload images via Imgur to the' : 'directly upload images to the'} MainImage field in Airtable using the Upload button
+                    </span>
                   )}
                 </p>
               )}
@@ -550,9 +697,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                     </span>
                   )}
                   {instagramImageUploading ? (
-                    <span className="font-medium text-amber-600">Uploading image to Airtable instaPhoto field...</span>
+                    <span className="font-medium text-amber-600">
+                      Uploading image {imgurEnabled ? 'via Imgur to Airtable' : 'to Airtable'} instaPhoto field...
+                    </span>
                   ) : (
-                    <span>You can directly upload images to the instaPhoto field in Airtable using the Upload button</span>
+                    <span>
+                      You can {imgurEnabled ? 'upload images via Imgur to the' : 'directly upload images to the'} instaPhoto field in Airtable using the Upload button
+                    </span>
                   )}
                 </p>
               )}

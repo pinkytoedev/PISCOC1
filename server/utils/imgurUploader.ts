@@ -80,6 +80,7 @@ export async function uploadImageToImgur(file: UploadedFileInfo): Promise<ImgurU
     // Upload to Imgur
     console.log(`Uploading image to Imgur: ${file.filename}`);
     
+    // Use the correct format for the upload method
     const response = await client.upload({
       image: base64Image,
       type: 'base64',
