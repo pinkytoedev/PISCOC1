@@ -6,7 +6,6 @@ import { FacebookProvider } from "@/contexts/FacebookContext";
 import { Toaster } from "@/components/ui/toaster";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { useState, useEffect } from "react";
-import { MainLayout } from "@/components/layout/MainLayout";
 
 // Pages
 import AuthPage from "@/pages/auth-page";
@@ -28,96 +27,17 @@ function Router() {
   return (
     <Switch>
       <Route path="/auth" component={AuthPage} />
-      
-      {/* Protected routes with MainLayout */}
-      <Route path="/">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/" component={Dashboard} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/articles">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/articles" component={ArticlesPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/team-members">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/team-members" component={TeamMembersPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/carousel-quotes">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/users">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/users" component={UserManagementPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/integrations/discord">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/integrations/discord" component={DiscordPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/integrations/airtable">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/integrations/airtable" component={AirtablePage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/integrations/instagram">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/integrations/instagram" component={InstagramPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/integrations/imgur">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/integrations/imgur" component={ImgurPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/docs">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/docs" component={DocsPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
-      <Route path="/privacy-policy">
-        {(params) => (
-          <MainLayout>
-            <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
-          </MainLayout>
-        )}
-      </Route>
-      
+      <ProtectedRoute path="/" component={Dashboard} />
+      <ProtectedRoute path="/articles" component={ArticlesPage} />
+      <ProtectedRoute path="/team-members" component={TeamMembersPage} />
+      <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
+      <ProtectedRoute path="/users" component={UserManagementPage} />
+      <ProtectedRoute path="/integrations/discord" component={DiscordPage} />
+      <ProtectedRoute path="/integrations/airtable" component={AirtablePage} />
+      <ProtectedRoute path="/integrations/instagram" component={InstagramPage} />
+      <ProtectedRoute path="/integrations/imgur" component={ImgurPage} />
+      <ProtectedRoute path="/docs" component={DocsPage} />
+      <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
       <Route component={NotFound} />
     </Switch>
