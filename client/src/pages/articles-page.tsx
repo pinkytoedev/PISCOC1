@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ArticleTable } from "@/components/dashboard/article-table";
 import { CreateArticleModal } from "@/components/modals/create-article-modal";
+import { ViewArticleModal } from "@/components/modals/view-article-modal";
 import { Button } from "@/components/ui/button";
 import { Article } from "@shared/schema";
 import { Plus, Filter, ArrowUpDown, CalendarClock } from "lucide-react";
@@ -24,6 +25,8 @@ export default function ArticlesPage() {
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editArticle, setEditArticle] = useState<Article | null>(null);
+  const [viewArticle, setViewArticle] = useState<Article | null>(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [sortBy, setSortBy] = useState<string>(sortParam || "newest");
   
   const { data: articles, isLoading } = useQuery<Article[]>({
@@ -41,8 +44,8 @@ export default function ArticlesPage() {
   };
   
   const handleViewClick = (article: Article) => {
-    // Implement view functionality - could navigate to article detail page
-    console.log("View article:", article);
+    setViewArticle(article);
+    setIsViewModalOpen(true);
   };
   
   const handleFilterClick = (status: string | null) => {
@@ -184,6 +187,13 @@ export default function ArticlesPage() {
               isOpen={isCreateModalOpen}
               onClose={() => setIsCreateModalOpen(false)}
               editArticle={editArticle}
+            />
+            
+            {/* View Article Modal */}
+            <ViewArticleModal 
+              isOpen={isViewModalOpen}
+              onClose={() => setIsViewModalOpen(false)}
+              article={viewArticle}
             />
           </div>
         </main>
