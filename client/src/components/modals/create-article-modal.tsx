@@ -296,11 +296,56 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         
         // Update the form data with the new image URL from Imgur
         // The response can have different structures based on the endpoint
-        const imageUrl = data.imgur?.link || data.imgurUrl || data.attachment?.url;
+        let imageUrl: string | null = null;
+        
+        // Handle different response formats from various endpoints
+        if (data.imgur && data.imgur.link) {
+          imageUrl = data.imgur.link;
+        } else if (data.imgurUrl) {
+          imageUrl = data.imgurUrl;
+        } else if (data.imgurLink) {
+          imageUrl = data.imgurLink;
+        } else if (data.airtable && data.airtable.url) {
+          imageUrl = data.airtable.url;
+        } else if (data.attachment && data.attachment.url) {
+          imageUrl = data.attachment.url;
+        } else if (data.link) {
+          imageUrl = data.link;
+        }
+        
+        // Fallback to any URL field in the response
+        if (!imageUrl) {
+          console.log("Trying to find URL in response data:", data);
+          if (typeof data === 'object') {
+            Object.keys(data).forEach(key => {
+              if (!imageUrl && typeof data[key] === 'string' && data[key].startsWith('http')) {
+                imageUrl = data[key] as string;
+              } else if (!imageUrl && typeof data[key] === 'object' && data[key] !== null) {
+                if (data[key].url && typeof data[key].url === 'string') {
+                  imageUrl = data[key].url as string;
+                } else if (data[key].link && typeof data[key].link === 'string') {
+                  imageUrl = data[key].link as string;
+                }
+              }
+            });
+          }
+        }
+        
+        // If all attempts fail, use a default message
+        if (!imageUrl) {
+          console.error("Could not extract image URL from response:", data);
+          toast({
+            title: "Warning: Image URL not found in response",
+            description: "The image was uploaded, but we couldn't extract its URL from the response",
+            variant: "destructive",
+          });
+          setMainImageUploading(false);
+          return;
+        }
         
         setFormData(prev => ({
           ...prev,
-          imageUrl: imageUrl
+          imageUrl: imageUrl as string
         }));
         
         console.log("Imgur upload response for Main image:", data);
@@ -356,11 +401,56 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         
         // Update the form data with the new image URL from Imgur
         // The response can have different structures based on the endpoint
-        const imageUrl = data.imgur?.link || data.imgurUrl || data.attachment?.url;
+        let imageUrl: string | null = null;
+        
+        // Handle different response formats from various endpoints
+        if (data.imgur && data.imgur.link) {
+          imageUrl = data.imgur.link;
+        } else if (data.imgurUrl) {
+          imageUrl = data.imgurUrl;
+        } else if (data.imgurLink) {
+          imageUrl = data.imgurLink;
+        } else if (data.airtable && data.airtable.url) {
+          imageUrl = data.airtable.url;
+        } else if (data.attachment && data.attachment.url) {
+          imageUrl = data.attachment.url;
+        } else if (data.link) {
+          imageUrl = data.link;
+        }
+        
+        // Fallback to any URL field in the response
+        if (!imageUrl) {
+          console.log("Trying to find URL in response data:", data);
+          if (typeof data === 'object') {
+            Object.keys(data).forEach(key => {
+              if (!imageUrl && typeof data[key] === 'string' && data[key].startsWith('http')) {
+                imageUrl = data[key] as string;
+              } else if (!imageUrl && typeof data[key] === 'object' && data[key] !== null) {
+                if (data[key].url && typeof data[key].url === 'string') {
+                  imageUrl = data[key].url as string;
+                } else if (data[key].link && typeof data[key].link === 'string') {
+                  imageUrl = data[key].link as string;
+                }
+              }
+            });
+          }
+        }
+        
+        // If all attempts fail, use a default message
+        if (!imageUrl) {
+          console.error("Could not extract image URL from response:", data);
+          toast({
+            title: "Warning: Image URL not found in response",
+            description: "The image was uploaded, but we couldn't extract its URL from the response",
+            variant: "destructive",
+          });
+          setInstagramImageUploading(false);
+          return;
+        }
         
         setFormData(prev => ({
           ...prev,
-          instagramImageUrl: imageUrl
+          instagramImageUrl: imageUrl as string
         }));
         
         console.log("Imgur upload response for Instagram image:", data);
