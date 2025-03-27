@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2, Info, RefreshCw, Loader2 } from "lucide-react";
+import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus } from "lucide-react";
 import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
 import { 
   DropdownMenu,
@@ -33,6 +33,10 @@ interface ArticleTableProps {
 export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: ArticleTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  const mainImageFileInputRef = useRef<HTMLInputElement>(null);
+  const instaImageFileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingArticleId, setUploadingArticleId] = useState<number | null>(null);
+  const [uploadingField, setUploadingField] = useState<'MainImage' | 'instaPhoto' | null>(null);
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
@@ -82,6 +86,71 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       });
     },
   });
+  
+  // Add mutation for uploading images to Imgur (both main and insta images)
+  const uploadImageMutation = useMutation({
+    mutationFn: async ({ articleId, file, fieldName }: { articleId: number, file: File, fieldName: 'MainImage' | 'instaPhoto' }) => {
+      const formData = new FormData();
+      formData.append('image', file);
+      
+      const response = await fetch(`/api/imgur/upload-to-airtable/${articleId}/${fieldName}`, {
+        method: "POST",
+        body: formData,
+        credentials: 'include'
+      });
+      
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      setUploadingArticleId(null);
+      setUploadingField(null);
+      
+      toast({
+        title: "Image uploaded",
+        description: `Image was successfully uploaded to Imgur${data.airtable ? ' and Airtable' : ''}.`,
+      });
+    },
+    onError: (error) => {
+      setUploadingArticleId(null);
+      setUploadingField(null);
+      
+      toast({
+        title: "Image upload failed",
+        description: error.message || "Failed to upload image. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Handle clicking the upload button for main image
+  const handleMainImageUpload = (article: Article) => {
+    setUploadingArticleId(article.id);
+    setUploadingField('MainImage');
+    mainImageFileInputRef.current?.click();
+  };
+  
+  // Handle clicking the upload button for Instagram image
+  const handleInstaImageUpload = (article: Article) => {
+    setUploadingArticleId(article.id);
+    setUploadingField('instaPhoto');
+    instaImageFileInputRef.current?.click();
+  };
+  
+  // Handle file selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && uploadingArticleId && uploadingField) {
+      uploadImageMutation.mutate({
+        articleId: uploadingArticleId,
+        file,
+        fieldName: uploadingField
+      });
+    }
+    
+    // Reset the file input
+    e.target.value = '';
+  };
   
   const handleDelete = (article: Article) => {
     if (onDelete) {
@@ -273,6 +342,22 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
+      {/* Hidden file inputs for image uploads */}
+      <input
+        type="file"
+        ref={mainImageFileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden"
+      />
+      <input
+        type="file"
+        ref={instaImageFileInputRef}
+        onChange={handleFileChange}
+        accept="image/*"
+        className="hidden"
+      />
+      
       <div className="flex justify-between items-center p-4 border-b border-gray-200">
         <h2 className="text-lg font-medium text-gray-900">
           {filter ? `${filter.charAt(0).toUpperCase() + filter.slice(1)} Articles` : 'All Articles'}
@@ -429,6 +514,55 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      
+                      {/* Main image upload button */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleMainImageUpload(article)}
+                              className="text-green-600 hover:text-green-800"
+                              disabled={uploadImageMutation.isPending && uploadingArticleId === article.id && uploadingField === 'MainImage'}
+                            >
+                              {uploadImageMutation.isPending && uploadingArticleId === article.id && uploadingField === 'MainImage' ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Image className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>Upload Main Image</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      {/* Instagram image upload button */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleInstaImageUpload(article)}
+                              className="text-pink-500 hover:text-pink-700"
+                              disabled={uploadImageMutation.isPending && uploadingArticleId === article.id && uploadingField === 'instaPhoto'}
+                            >
+                              {uploadImageMutation.isPending && uploadingArticleId === article.id && uploadingField === 'instaPhoto' ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <ImagePlus className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            <p>Upload Instagram Image</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      
                       {article.source === 'airtable' && article.externalId && (
                         <Button
                           variant="ghost"
