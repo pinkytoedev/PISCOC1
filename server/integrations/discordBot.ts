@@ -18,7 +18,11 @@ import {
   AttachmentBuilder,
   Collection,
   Message,
-  ChannelType
+  ChannelType,
+  TextBasedChannel,
+  DMChannel,
+  NewsChannel,
+  TextChannel
 } from 'discord.js';
 import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
@@ -959,24 +963,34 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       }
       
       try {
-        // Use awaitMessages instead of createMessageCollector
-        const collected = await channel.awaitMessages({ 
+        // Use a message collector instead
+        const collector = channel.createMessageCollector({ 
           filter, 
           max: 1, // Only collect one message
-          time: 300000, // 5 minute timeout
-          errors: ['time']
-        }).catch(() => {
-          // Handle timeout
-          interaction.editReply({
-            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-          }).catch(console.error);
-          return null;
+          time: 300000 // 5 minute timeout
         });
         
-        if (!collected || collected.size === 0) return;
+        // Create a promise to handle the collection
+        const messagePromise = new Promise<Message<boolean> | null>((resolve) => {
+          // When we get a message
+          collector.on('collect', (message) => {
+            resolve(message);
+            collector.stop();
+          });
+          
+          // When the collection ends (timeout or limit reached)
+          collector.on('end', (collected) => {
+            if (collected.size === 0) {
+              interaction.editReply({
+                content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
+              }).catch(console.error);
+              resolve(null);
+            }
+          });
+        });
         
-        // Get the message with the attachment
-        const message = collected.first();
+        // Wait for a message or timeout
+        const message = await messagePromise;
         if (!message) return;
         
         // Get the first attachment
@@ -1010,7 +1024,9 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
           throw new Error(`Failed to download image: ${response.statusText}`);
         }
         
-        const buffer = await response.buffer();
+        // Use arrayBuffer instead of buffer
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         
         // Create a temporary file to save the image
         const tempDir = path.join(process.cwd(), 'temp');
@@ -1139,24 +1155,34 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       }
       
       try {
-        // Use awaitMessages instead of createMessageCollector
-        const collected = await channel.awaitMessages({ 
+        // Use a message collector instead
+        const collector = channel.createMessageCollector({ 
           filter, 
           max: 1, // Only collect one message
-          time: 300000, // 5 minute timeout
-          errors: ['time']
-        }).catch(() => {
-          // Handle timeout
-          interaction.editReply({
-            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-          }).catch(console.error);
-          return null;
+          time: 300000 // 5 minute timeout
         });
         
-        if (!collected || collected.size === 0) return;
+        // Create a promise to handle the collection
+        const messagePromise = new Promise<Message<boolean> | null>((resolve) => {
+          // When we get a message
+          collector.on('collect', (message) => {
+            resolve(message);
+            collector.stop();
+          });
+          
+          // When the collection ends (timeout or limit reached)
+          collector.on('end', (collected) => {
+            if (collected.size === 0) {
+              interaction.editReply({
+                content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
+              }).catch(console.error);
+              resolve(null);
+            }
+          });
+        });
         
-        // Get the message with the attachment
-        const message = collected.first();
+        // Wait for a message or timeout
+        const message = await messagePromise;
         if (!message) return;
         
         // Get the first attachment
@@ -1190,7 +1216,9 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
           throw new Error(`Failed to download image: ${response.statusText}`);
         }
         
-        const buffer = await response.buffer();
+        // Use arrayBuffer instead of buffer
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
         
         // Create a temporary file to save the image
         const tempDir = path.join(process.cwd(), 'temp');
