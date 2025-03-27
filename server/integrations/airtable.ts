@@ -39,6 +39,11 @@ interface Attachment {
 interface UploadAttachment {
   url: string;        // The actual image URL
   filename: string;   // Name of the file
+  thumbnails?: {
+    small?: { url: string; width?: number; height?: number };
+    large?: { url: string; width?: number; height?: number };
+    full?: { url: string; width?: number; height?: number };
+  };
 }
 
 interface UrlObject {
