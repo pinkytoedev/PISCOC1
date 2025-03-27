@@ -9,7 +9,21 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { SiInstagram } from 'react-icons/si';
-import { AppLayout } from '@/components/app-layout';
+
+// Define a basic layout component if AppLayout is not found
+const AppLayout = ({ children, title }: { children: React.ReactNode, title: string }) => (
+  <div className="container mx-auto py-6">
+    <title>{title}</title>
+    {children}
+  </div>
+);
+
+// Add the checkLoginState function to the window object
+declare global {
+  interface Window {
+    checkLoginState: () => void;
+  }
+}
 
 /**
  * InstagramPage - Handles Instagram integration and webhook management
@@ -19,6 +33,45 @@ export default function InstagramPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userData, setUserData] = useState<any>(null);
   const { toast } = useToast();
+  
+  // Function to handle the status change after login
+  const statusChangeCallback = (response: any) => {
+    console.log('Facebook login status:', response);
+    if (response.status === 'connected') {
+      setIsLoggedIn(true);
+      getFacebookUserData().then((userData) => {
+        setUserData(userData);
+        toast({
+          title: "Login Successful",
+          description: `Welcome, ${userData.name}!`,
+        });
+      }).catch(console.error);
+    } else if (response.status === 'not_authorized') {
+      toast({
+        variant: "destructive",
+        title: "Not Authorized",
+        description: "You're logged into Facebook, but not authorized for this app.",
+      });
+    } else {
+      // User is not logged into Facebook
+      setIsLoggedIn(false);
+    }
+  };
+  
+  // Set up the global checkLoginState function
+  useEffect(() => {
+    // Define the global function that Facebook Login Button will call
+    window.checkLoginState = () => {
+      if (window.FB) {
+        window.FB.getLoginStatus(statusChangeCallback);
+      }
+    };
+    
+    return () => {
+      // Clean up the global function when component unmounts
+      delete window.checkLoginState;
+    };
+  }, []);
 
   // Check if the user is already logged in to Facebook
   useEffect(() => {
@@ -55,19 +108,31 @@ export default function InstagramPage() {
     }
   };
 
+  // Define a type for subscription data
+  interface InstagramSubscription {
+    object: string;
+    fields: string | string[];
+    callback_url?: string;
+    active?: boolean;
+  }
+
   // Fetch webhook subscriptions
-  const { data: subscriptions, isLoading: isLoadingSubscriptions } = useQuery({
+  const { data: subscriptions = [], isLoading: isLoadingSubscriptions } = useQuery<InstagramSubscription[]>({
     queryKey: ['/api/instagram/webhooks/subscriptions'],
     enabled: isLoggedIn,
   });
 
   // Create webhook subscription mutation
   const createSubscription = useMutation({
-    mutationFn: (data: any) => {
+    mutationFn: (data: {
+      fields: string[];
+      callback_url: string;
+      verify_token: string;
+    }) => {
       return apiRequest('/api/instagram/webhooks/subscribe', {
         method: 'POST',
         body: JSON.stringify(data),
-      });
+      }) as Promise<any>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/instagram/webhooks/subscriptions'] });
@@ -125,10 +190,26 @@ export default function InstagramPage() {
                 and interact with your Instagram Business accounts.
               </p>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col items-start gap-4">
+              {/* Custom Button */}
               <Button onClick={handleLogin} className="w-full sm:w-auto">
-                Login with Facebook
+                Login with Custom Button
               </Button>
+              
+              {/* Facebook Login Button */}
+              <div className="mt-2">
+                <div id="fb-root"></div>
+                <div className="fb-login-button" 
+                  data-width="280"
+                  data-size="large" 
+                  data-button-type="login_with" 
+                  data-layout="rounded" 
+                  data-auto-logout-link="false" 
+                  data-use-continue-as="true"
+                  data-scope="public_profile,email,instagram_basic,instagram_content_publish,pages_show_list"
+                  data-onlogin="checkLoginState">
+                </div>
+              </div>
             </CardFooter>
           </Card>
         ) : (
