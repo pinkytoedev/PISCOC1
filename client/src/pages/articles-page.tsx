@@ -105,18 +105,18 @@ export default function ArticlesPage() {
             </nav>
 
             {/* Page Header */}
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Articles</h1>
                 <p className="mt-1 text-sm text-gray-500">
                   Manage and publish article content from Discord and Airtable.
                 </p>
               </div>
-              <div className="flex space-x-3">
+              <div className="flex flex-wrap gap-3 w-full md:w-auto">
                 {/* Sort dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
+                    <Button variant="outline" className="w-full md:w-auto justify-between">
                       <ArrowUpDown className="mr-2 h-4 w-4" />
                       {sortBy === "newest" 
                         ? "Sort: Newest" 
@@ -143,7 +143,7 @@ export default function ArticlesPage() {
                 {/* Filter dropdown */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline">
+                    <Button variant="outline" className="w-full md:w-auto justify-between">
                       <Filter className="mr-2 h-4 w-4" />
                       {statusFilter ? `Filter: ${statusFilter}` : "Filters"}
                     </Button>
@@ -164,7 +164,7 @@ export default function ArticlesPage() {
                   </DropdownMenuContent>
                 </DropdownMenu>
                 
-                <Button onClick={handleCreateClick}>
+                <Button onClick={handleCreateClick} className="w-full md:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
                   New Article
                 </Button>

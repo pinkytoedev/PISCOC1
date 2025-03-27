@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus } from "lucide-react";
+import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown } from "lucide-react";
 import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
 import { 
   DropdownMenu,
@@ -387,15 +387,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         className="hidden"
       />
       
-      <div className="flex justify-between items-center p-4 border-b border-gray-200">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center p-4 border-b border-gray-200 gap-4">
         <h2 className="text-lg font-medium text-gray-900">
           {filter ? `${filter.charAt(0).toUpperCase() + filter.slice(1)} Articles` : 'All Articles'}
         </h2>
-        <div className="relative">
+        <div className="relative w-full md:w-auto">
           <input
             type="text" 
             placeholder="Search articles..." 
-            className="border border-gray-300 rounded-md px-4 py-2 text-sm w-64 focus:ring-primary focus:border-primary"
+            className="border border-gray-300 rounded-md px-4 py-2 text-sm w-full md:w-64 focus:ring-primary focus:border-primary"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -406,7 +406,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto">
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -654,6 +655,166 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden">
+        {isLoading ? (
+          <div className="space-y-4 p-4">
+            {Array(3).fill(0).map((_, i) => (
+              <div key={i} className="bg-white rounded-lg shadow p-4">
+                <div className="animate-pulse space-y-3">
+                  <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                  <div className="flex justify-end">
+                    <div className="h-8 bg-gray-200 rounded w-20"></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : sortedArticles && sortedArticles.length === 0 ? (
+          <div className="p-8 text-center text-gray-500 bg-white rounded-lg shadow">
+            {searchQuery ? (
+              <div>
+                <p className="text-lg font-medium">No articles found</p>
+                <p className="text-sm">Try adjusting your search query or filters</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-lg font-medium">No articles available</p>
+                <p className="text-sm">Create your first article to get started</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4 p-4">
+            {sortedArticles.map((article) => (
+              <div key={article.id} className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center space-x-3 mb-3">
+                  {article.imageUrl ? (
+                    <img 
+                      src={article.imageUrl} 
+                      alt="" 
+                      className="h-12 w-12 rounded-md object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="h-12 w-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium text-gray-900 truncate">
+                      {article.title}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      ID: {article.id} • {article.source || 'Local'}
+                    </p>
+                  </div>
+                  <StatusBadge status={article.status || 'draft'} />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3">
+                  <div>
+                    <span className="font-medium">Author:</span> {article.author || 'Unassigned'}
+                  </div>
+                  <div>
+                    <span className="font-medium">Photo:</span> {article.photo || 'N/A'}
+                  </div>
+                  <div>
+                    <span className="font-medium">Published:</span> {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Unpublished'}
+                  </div>
+                  <div>
+                    {article.hashtags && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {formatTags(article.hashtags).slice(0, 2).map((tag, index) => (
+                          <Badge key={index} variant="outline" className="text-xs py-0">
+                            {tag}
+                          </Badge>
+                        ))}
+                        {formatTags(article.hashtags).length > 2 && (
+                          <Badge variant="outline" className="text-xs py-0">
+                            +{formatTags(article.hashtags).length - 2}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-wrap justify-end gap-2 mt-2 border-t pt-3">
+                  {/* Primary actions */}
+                  {onEdit && (
+                    <Button 
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onEdit(article)}
+                      className="flex-1"
+                    >
+                      <Edit className="h-4 w-4 mr-2" /> Edit
+                    </Button>
+                  )}
+                  
+                  {onView && (
+                    <Button 
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onView(article)}
+                      className="flex-1"
+                    >
+                      <Eye className="h-4 w-4 mr-2" /> View
+                    </Button>
+                  )}
+                  
+                  {/* Secondary actions in dropdown */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline">
+                        More <ChevronDown className="h-4 w-4 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {article.source === 'airtable' ? (
+                        <DropdownMenuItem onClick={() => updateAirtableMutation.mutate(article.id)}>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          <span>Update from Airtable</span>
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => pushToAirtableMutation.mutate(article.id)}>
+                          <Upload className="mr-2 h-4 w-4" />
+                          <span>Push to Airtable</span>
+                        </DropdownMenuItem>
+                      )}
+                      
+                      <DropdownMenuItem onClick={() => handleMainImageUpload(article)}>
+                        <Image className="mr-2 h-4 w-4" />
+                        <span>Upload main image</span>
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuItem onClick={() => handleInstaImageUpload(article)}>
+                        <ImagePlus className="mr-2 h-4 w-4" />
+                        <span>Upload Instagram image</span>
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      <DropdownMenuItem 
+                        onClick={() => handleDelete(article)}
+                        className="text-red-500 focus:text-red-500"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
