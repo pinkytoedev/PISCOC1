@@ -29,6 +29,7 @@ export default function DiscordPage() {
   const [botToken, setBotToken] = useState("");
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
+  const [webhookUsername, setWebhookUsername] = useState("Website User");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
@@ -163,8 +164,8 @@ export default function DiscordPage() {
   });
   
   const sendDiscordMessageMutation = useMutation({
-    mutationFn: async (message: string) => {
-      const res = await apiRequest("POST", "/api/discord/send-message", { message });
+    mutationFn: async ({ message, username }: { message: string, username: string }) => {
+      const res = await apiRequest("POST", "/api/discord/send-message", { message, username });
       return await res.json();
     },
     onSuccess: () => {
@@ -208,7 +209,10 @@ export default function DiscordPage() {
   
   const handleSendDiscordMessage = () => {
     if (discordMessage.trim()) {
-      sendDiscordMessageMutation.mutate(discordMessage);
+      sendDiscordMessageMutation.mutate({
+        message: discordMessage,
+        username: webhookUsername
+      });
     }
   };
   
@@ -447,6 +451,21 @@ export default function DiscordPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        <div className="grid gap-2">
+                          <Label htmlFor="webhook_username">Display Name</Label>
+                          <Input
+                            id="webhook_username"
+                            type="text"
+                            placeholder="Display name in Discord"
+                            value={webhookUsername}
+                            onChange={(e) => setWebhookUsername(e.target.value)}
+                            className="flex-1"
+                          />
+                          <p className="text-xs text-gray-500">
+                            The name that will appear as the sender in Discord.
+                          </p>
+                        </div>
+                      
                         <div className="grid gap-2">
                           <Label htmlFor="discord_message">Message</Label>
                           <Input
