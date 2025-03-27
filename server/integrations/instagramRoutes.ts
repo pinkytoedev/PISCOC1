@@ -1,7 +1,15 @@
 import { Express, Request, Response } from 'express';
 import { log } from '../vite';
 import { storage } from '../storage';
-import { handleWebhookVerification, handleWebhookEvent, subscribeToWebhook, getWebhookSubscriptions, unsubscribeFromWebhook, WEBHOOK_FIELD_GROUPS } from './instagram';
+import { 
+  handleWebhookVerification, 
+  handleWebhookEvent, 
+  subscribeToWebhook, 
+  getWebhookSubscriptions, 
+  unsubscribeFromWebhook, 
+  WEBHOOK_FIELD_GROUPS, 
+  testWebhookConnection 
+} from './instagram';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -92,6 +100,20 @@ export function setupInstagramRoutes(app: Express) {
   // API route to get webhook field groups (for UI)
   app.get('/api/instagram/webhooks/field-groups', (req: Request, res: Response) => {
     res.status(200).json(WEBHOOK_FIELD_GROUPS);
+  });
+  
+  // API route to test webhook connection
+  app.get('/api/instagram/webhooks/test', async (req: Request, res: Response) => {
+    try {
+      const result = await testWebhookConnection();
+      res.status(200).json(result);
+    } catch (error) {
+      log(`Error testing webhook connection: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to test webhook connection', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
   });
 
   // Log instagram webhook activity

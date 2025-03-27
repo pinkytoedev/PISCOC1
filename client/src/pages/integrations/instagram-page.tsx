@@ -20,7 +20,9 @@ import {
   BookOpen,
   AlertTriangle,
   Clock,
-  Calendar
+  Calendar,
+  TestTube,
+  Info
 } from 'lucide-react';
 
 /**
@@ -43,8 +45,10 @@ export default function InstagramPage() {
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [webhookFields, setWebhookFields] = useState<{[key: string]: string[]}>({});
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
+  const [webhookTestResult, setWebhookTestResult] = useState<any>(null);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState(false);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch webhook subscriptions and field groups on component mount
@@ -212,6 +216,43 @@ export default function InstagramPage() {
     }
   };
 
+  // Test webhook configuration
+  const testWebhookConnection = async () => {
+    setIsTestingWebhook(true);
+    setWebhookTestResult(null);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/instagram/webhooks/test');
+      
+      // Try to get JSON response even for error cases
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        // If we can't parse JSON, use text
+        const text = await response.text();
+        responseData = { message: text || response.statusText, success: false };
+      }
+      
+      if (!response.ok) {
+        if (responseData.message) {
+          throw new Error(responseData.message);
+        } else {
+          throw new Error(`Failed to test webhook connection: ${response.statusText}`);
+        }
+      }
+      
+      // Success!
+      setWebhookTestResult(responseData);
+    } catch (err) {
+      console.error('Error testing webhook connection:', err);
+      setError(err instanceof Error ? err.message : 'Failed to test webhook connection.');
+    } finally {
+      setIsTestingWebhook(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <h1 className="text-3xl font-bold mb-6 flex items-center">
@@ -295,6 +336,7 @@ export default function InstagramPage() {
         <TabsList className="mb-6">
           <TabsTrigger value="subscriptions">Webhook Subscriptions</TabsTrigger>
           <TabsTrigger value="events">Recent Events</TabsTrigger>
+          <TabsTrigger value="test">Diagnostic Tests</TabsTrigger>
         </TabsList>
         
         <TabsContent value="subscriptions">
@@ -495,6 +537,131 @@ export default function InstagramPage() {
               >
                 <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingEvents ? 'animate-spin' : ''}`} />
                 Refresh Events
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="test">
+          <Card>
+            <CardHeader>
+              <CardTitle>Webhook Connection Test</CardTitle>
+              <CardDescription>
+                Test your webhook configuration to diagnose any issues
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {webhookTestResult && (
+                  <div className={`rounded-lg border p-4 ${webhookTestResult.success ? 'border-green-500' : 'border-red-500'}`}>
+                    <h3 className="font-medium flex items-center mb-4">
+                      {webhookTestResult.success ? (
+                        <CheckCircle2 className="mr-2 h-5 w-5 text-green-500" />
+                      ) : (
+                        <AlertTriangle className="mr-2 h-5 w-5 text-amber-500" />
+                      )}
+                      {webhookTestResult.message}
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center">
+                          {webhookTestResult.appId ? (
+                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                          ) : (
+                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                          )}
+                          <span>Facebook App ID</span>
+                        </div>
+                        
+                        <div className="flex items-center">
+                          {webhookTestResult.appSecret ? (
+                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                          ) : (
+                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                          )}
+                          <span>Facebook App Secret</span>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center">
+                          {webhookTestResult.accessToken ? (
+                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                          ) : (
+                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                          )}
+                          <span>User Access Token</span>
+                        </div>
+                        
+                        <div className="flex items-center">
+                          {webhookTestResult.appAccessToken ? (
+                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                          ) : (
+                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                          )}
+                          <span>App Access Token</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {webhookTestResult.details && (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium mb-2">Additional Details</h4>
+                        <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
+                          {JSON.stringify(webhookTestResult.details, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium flex items-center">
+                    <TestTube className="mr-2 h-4 w-4" />
+                    Configuration Test
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Check if your Facebook App is correctly configured for Instagram webhooks
+                  </p>
+                  <Button
+                    onClick={testWebhookConnection}
+                    disabled={isTestingWebhook}
+                  >
+                    {isTestingWebhook ? (
+                      <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <TestTube className="mr-2 h-4 w-4" />
+                    )}
+                    Run Test
+                  </Button>
+                </div>
+                
+                <div className="rounded-lg border p-4">
+                  <h3 className="font-medium flex items-center">
+                    <Info className="mr-2 h-4 w-4" />
+                    Webhook Requirements
+                  </h3>
+                  <div className="text-sm text-muted-foreground mt-2 space-y-1">
+                    <p>To use Instagram webhooks, you need:</p>
+                    <ul className="list-disc pl-6 mt-2 space-y-1">
+                      <li>A Facebook App with Instagram permissions</li>
+                      <li>Facebook App ID and App Secret environment variables</li>
+                      <li>User authentication via Facebook login</li>
+                      <li>A public URL for your webhook endpoint</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => setWebhookTestResult(null)}
+                disabled={!webhookTestResult || isTestingWebhook}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Clear Results
               </Button>
             </CardFooter>
           </Card>
