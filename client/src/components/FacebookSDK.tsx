@@ -26,7 +26,7 @@ declare global {
           userID: string;
         }
       }) => void) => void;
-      login: (callback: (response: any) => void, options?: { scope: string }) => void;
+      login: (callback: (response: any) => void, options?: { scope: string, auth_type?: string, return_scopes?: boolean }) => void;
       logout: (callback: (response: any) => void) => void;
       api: (path: string, callback: (response: any) => void) => void;
     };
@@ -94,9 +94,14 @@ export function FacebookSDK({
     function initializeFacebookSDK() {
       console.log('Initializing Facebook SDK...', { appId });
       try {
+        // Add debugging for domain issue
+        console.log('Current domain:', window.location.hostname);
+        console.log('Current origin:', window.location.origin);
+        
+        // Initialize with cookie set to false to prevent domain cookie errors
         window.FB.init({
           appId,
-          cookie: true,
+          cookie: false, // Changed from true to prevent domain-related cookie errors
           xfbml: true,
           version,
         });
@@ -106,6 +111,7 @@ export function FacebookSDK({
         
         // Check login status
         window.FB.getLoginStatus(function(response) {
+          console.log('FB login status response:', response);
           if (onStatusChange) {
             onStatusChange(response.status, response);
           }
