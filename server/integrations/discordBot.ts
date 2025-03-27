@@ -31,7 +31,8 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
-import { uploadImageToImgur } from '../utils/imgurUploader';
+import { uploadImageToImgur, uploadImageUrlToImgur } from '../utils/imgurUploader';
+import { uploadImageUrlToAirtable } from '../utils/imageUploader';
 
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
@@ -959,27 +960,196 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       await interaction.deferReply({ ephemeral: true });
       
       try {
-        // Since we can't use message collectors due to intent limitations,
-        // provide users with alternative ways to upload images
-        
-        // Create a button that will take the user to the article in the dashboard
+        // Create a button that will take the user to the article in the dashboard (as fallback)
         const viewInDashboardButton = new ButtonBuilder()
           .setLabel('View in Dashboard')
           .setStyle(ButtonStyle.Link)
           .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
         
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(viewInDashboardButton);
+        // Now we can actually handle image uploads with the updated intents
+        // We'll use a DM to collect the image if in a guild channel
+        const userId = interaction.user.id;
+        let uploadChannel: DMChannel | TextChannel | NewsChannel | null = null;
         
+        if (interaction.channel if (interaction.channel.type === ChannelType.DM) {if (interaction.channel.type === ChannelType.DM) { interaction.channel.type === ChannelType.DM) {
+          // If we're already in a DM, use the current channel
+          uploadChannel = interaction.channel as DMChannel;
+        } else {
+          // If we're in a guild channel, try to create a DM with the user
+          try {
+            uploadChannel = await interaction.user.createDM();
+          } catch (dmError) {
+            console.error('Could not create DM channel:', dmError);
+            // Fallback to the same channel if DM fails
+            uploadChannel = interaction.channel as DMChannel;
+          }
+        }
+        
+        // Ask the user to send an image
         await interaction.editReply({
-          content: `Due to Discord permission constraints, image upload via the bot is not available.\n\nTo upload an Instagram image for article **${article.title}**, please:\n\n1. Go to the website dashboard and find the article\n2. Use the upload button in the article details view\n3. Select an image to upload for Instagram\n\nNote: You can also upload directly through Airtable if you have access.`,
-          components: [buttonRow]
+          content: `Please send the Instagram image for article **${article.title}** in the next 5 minutes.\n\nImportant instructions:\n- Send the image as an attachment (not a link)\n- Send only one image\n- The image will be uploaded to Imgur and then linked to your article\n\nI'll send you a private message where you can upload the image.`,
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
         });
+        
+        if (uploadChannel && interaction.channel && uploadChannel.id !== interaction.channel.id) {
+          // If using DM, send a message there to prompt for the image
+          await uploadChannel.send({
+            content: `Please send the Instagram image for article **${article.title}** now. Simply attach the image to your next message.`
+          });
+        }
+        
+        // Set up a filter to only accept messages with images from the original user
+        const filter = (m: Message) => {
+          return m.author.id === userId && m.attachments.size > 0;
+        };
+        
+        // Collect the image message
+        const imageMessage = await collectImageMessage(uploadChannel, filter, 5 * 60 * 1000); // 5 minute timeout
+        
+        if (!imageMessage) {
+          if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
+            // If using DM, send timeout message there
+            await uploadChannel.send('No image received within the time limit. Please try again.');
+          }
+          
+          // Also notify in the original channel
+          await interaction.followUp({
+            content: 'No image was received within the time limit. Please try again or use the dashboard.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Get the first attachment
+        const attachment = imageMessage.attachments.first();
+        
+        if (!attachment) {
+          await uploadChannel.send('No valid image attachment found. Please try again with a proper image file.');
+          return;
+        }
+        
+        // Download the attachment
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+        }
+        
+        // Create a temporary directory for the download if it doesn't exist
+        const tempDir = path.join(process.cwd(), 'temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        
+        // Create a temporary file to store the image
+        const tempFilePath = path.join(tempDir, attachment.name);
+        const fileStream = fs.createWriteStream(tempFilePath);
+        
+        // Wait for the image to be fully downloaded
+        await new Promise<void>((resolve, reject) => {
+          response.body!.pipe(fileStream);
+          response.body!.on('error', (err) => {
+            reject(err);
+          });
+          fileStream.on('finish', () => {
+            resolve();
+          });
+        });
+        
+        // Prepare file info for Imgur upload
+        const fileInfo = {
+          path: tempFilePath,
+          filename: attachment.name,
+          mimetype: attachment.contentType || 'application/octet-stream',
+          size: attachment.size
+        };
+        
+        // Send a status message
+        await uploadChannel.send('Processing your image... This might take a moment.');
+        
+        // Check if Imgur integration is enabled
+        const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
+        if (!imgurClientIdSetting?.enabled || !imgurClientIdSetting?.value) {
+          throw new Error('Imgur integration is not enabled. Please configure it in the dashboard.');
+        }
+        
+        // Upload to Imgur
+        const imgurResult = await uploadImageToImgur(fileInfo);
+        
+        // Always clean up the temp file
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (cleanupError) {
+          console.error('Error cleaning up temp file:', cleanupError);
+        }
+        
+        if (!imgurResult) {
+          throw new Error('Failed to upload image to Imgur');
+        }
+        
+        // If article is from Airtable, update it there too
+        let airtableResult = null;
+        if (article.source === 'airtable' && article.externalId) {
+          // Upload the Imgur URL to Airtable
+          airtableResult = await uploadImageUrlToAirtable(
+            imgurResult.link,
+            article.externalId,
+            'instaPhoto',
+            fileInfo.filename
+          );
+        }
+        
+        // Update the article in our database
+        const updateData: Partial<InsertArticle> = {
+          instagramImageUrl: imgurResult.link
+        };
+        
+        await storage.updateArticle(articleId, updateData);
+        
+        // Log the activity
+        await storage.createActivityLog({
+          userId: null, // Since we don't have access to the user ID in the Discord context
+          action: 'upload',
+          resourceType: 'image',
+          resourceId: articleId.toString(),
+          details: {
+            fieldName: 'instaPhoto',
+            imgurId: imgurResult.id,
+            imgurLink: imgurResult.link,
+            filename: fileInfo.filename,
+            discordUserId: interaction.user.id,
+            discordUsername: interaction.user.username
+          }
+        });
+        
+        // Success message with preview
+        const successEmbed = new EmbedBuilder()
+          .setTitle('Instagram Image Uploaded')
+          .setDescription(`Successfully uploaded Instagram image for article **${article.title}**`)
+          .setImage(imgurResult.link)
+          .setColor('#00FF00')
+          .addFields(
+            { name: 'Article ID', value: article.id.toString(), inline: true },
+            { name: 'Status', value: article.status, inline: true }
+          )
+          .setFooter({ text: 'Discord-Airtable Integration System' })
+          .setTimestamp();
+        
+        // Send success messages
+        await uploadChannel.send({ embeds: [successEmbed] });
+        
+        if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
+          await interaction.followUp({
+            content: `✅ Instagram image uploaded successfully! Check your DMs for details and preview.`,
+            ephemeral: true,
+            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
+          });
+        }
         
       } catch (error) {
         console.error('Error processing Instagram image upload:', error);
-        await interaction.editReply({
-          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
+        await interaction.followUp({
+          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`,
+          ephemeral: true
         });
       }
     }
@@ -1019,27 +1189,197 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       await interaction.deferReply({ ephemeral: true });
       
       try {
-        // Since we can't use message collectors due to intent limitations,
-        // provide users with alternative ways to upload images
-        
-        // Create a button that will take the user to the article in the dashboard
+        // Create a button that will take the user to the article in the dashboard (as fallback)
         const viewInDashboardButton = new ButtonBuilder()
           .setLabel('View in Dashboard')
           .setStyle(ButtonStyle.Link)
           .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
         
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(viewInDashboardButton);
+        // Now we can actually handle image uploads with the updated intents
+        // We'll use a DM to collect the image if in a guild channel
+        const userId = interaction.user.id;
+        let uploadChannel: DMChannel | TextChannel | NewsChannel | null = null;
         
+        if (interaction.channel if (interaction.channel.type === ChannelType.DM) {if (interaction.channel.type === ChannelType.DM) { interaction.channel.type === ChannelType.DM) {
+          // If we're already in a DM, use the current channel
+          uploadChannel = interaction.channel as DMChannel;
+        } else {
+          // If we're in a guild channel, try to create a DM with the user
+          try {
+            uploadChannel = await interaction.user.createDM();
+          } catch (dmError) {
+            console.error('Could not create DM channel:', dmError);
+            // Fallback to the same channel if DM fails
+            uploadChannel = interaction.channel as DMChannel;
+          }
+        }
+        
+        // Ask the user to send an image
         await interaction.editReply({
-          content: `Due to Discord permission constraints, image upload via the bot is not available.\n\nTo upload a web (main) image for article **${article.title}**, please:\n\n1. Go to the website dashboard and find the article\n2. Use the upload button in the article details view\n3. Select an image to upload for the main web display\n\nNote: You can also upload directly through Airtable if you have access.`,
-          components: [buttonRow]
+          content: `Please send the main web image for article **${article.title}** in the next 5 minutes.\n\nImportant instructions:\n- Send the image as an attachment (not a link)\n- Send only one image\n- The image will be uploaded to Imgur and then linked to your article\n\nI'll send you a private message where you can upload the image.`,
+          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
         });
+        
+        if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
+          // If using DM, send a message there to prompt for the image
+          await uploadChannel.send({
+            content: `Please send the main web image for article **${article.title}** now. Simply attach the image to your next message.`
+          });
+        }
+        
+        // Set up a filter to only accept messages with images from the original user
+        const filter = (m: Message) => {
+          return m.author.id === userId && m.attachments.size > 0;
+        };
+        
+        // Collect the image message
+        const imageMessage = await collectImageMessage(uploadChannel, filter, 5 * 60 * 1000); // 5 minute timeout
+        
+        if (!imageMessage) {
+          if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
+            // If using DM, send timeout message there
+            await uploadChannel.send('No image received within the time limit. Please try again.');
+          }
+          
+          // Also notify in the original channel
+          await interaction.followUp({
+            content: 'No image was received within the time limit. Please try again or use the dashboard.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Get the first attachment
+        const attachment = imageMessage.attachments.first();
+        
+        if (!attachment) {
+          await uploadChannel.send('No valid image attachment found. Please try again with a proper image file.');
+          return;
+        }
+        
+        // Download the attachment
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+        }
+        
+        // Create a temporary directory for the download if it doesn't exist
+        const tempDir = path.join(process.cwd(), 'temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        
+        // Create a temporary file to store the image
+        const tempFilePath = path.join(tempDir, attachment.name);
+        const fileStream = fs.createWriteStream(tempFilePath);
+        
+        // Wait for the image to be fully downloaded
+        await new Promise<void>((resolve, reject) => {
+          response.body!.pipe(fileStream);
+          response.body!.on('error', (err) => {
+            reject(err);
+          });
+          fileStream.on('finish', () => {
+            resolve();
+          });
+        });
+        
+        // Prepare file info for Imgur upload
+        const fileInfo = {
+          path: tempFilePath,
+          filename: attachment.name,
+          mimetype: attachment.contentType || 'application/octet-stream',
+          size: attachment.size
+        };
+        
+        // Send a status message
+        await uploadChannel.send('Processing your image... This might take a moment.');
+        
+        // Check if Imgur integration is enabled
+        const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
+        if (!imgurClientIdSetting?.enabled || !imgurClientIdSetting?.value) {
+          throw new Error('Imgur integration is not enabled. Please configure it in the dashboard.');
+        }
+        
+        // Upload to Imgur
+        const imgurResult = await uploadImageToImgur(fileInfo);
+        
+        // Always clean up the temp file
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (cleanupError) {
+          console.error('Error cleaning up temp file:', cleanupError);
+        }
+        
+        if (!imgurResult) {
+          throw new Error('Failed to upload image to Imgur');
+        }
+        
+        // If article is from Airtable, update it there too
+        let airtableResult = null;
+        if (article.source === 'airtable' && article.externalId) {
+          // Upload the Imgur URL to Airtable
+          airtableResult = await uploadImageUrlToAirtable(
+            imgurResult.link,
+            article.externalId,
+            'MainImage',
+            fileInfo.filename
+          );
+        }
+        
+        // Update the article in our database
+        const updateData: Partial<InsertArticle> = {
+          imageUrl: imgurResult.link,
+          imageType: 'url'
+        };
+        
+        await storage.updateArticle(articleId, updateData);
+        
+        // Log the activity
+        await storage.createActivityLog({
+          userId: null, // Since we don't have access to the user ID in the Discord context
+          action: 'upload',
+          resourceType: 'image',
+          resourceId: articleId.toString(),
+          details: {
+            fieldName: 'MainImage',
+            imgurId: imgurResult.id,
+            imgurLink: imgurResult.link,
+            filename: fileInfo.filename,
+            discordUserId: interaction.user.id,
+            discordUsername: interaction.user.username
+          }
+        });
+        
+        // Success message with preview
+        const successEmbed = new EmbedBuilder()
+          .setTitle('Main Web Image Uploaded')
+          .setDescription(`Successfully uploaded main web image for article **${article.title}**`)
+          .setImage(imgurResult.link)
+          .setColor('#00FF00')
+          .addFields(
+            { name: 'Article ID', value: article.id.toString(), inline: true },
+            { name: 'Status', value: article.status, inline: true }
+          )
+          .setFooter({ text: 'Discord-Airtable Integration System' })
+          .setTimestamp();
+        
+        // Send success messages
+        await uploadChannel.send({ embeds: [successEmbed] });
+        
+        if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
+          await interaction.followUp({
+            content: `✅ Main web image uploaded successfully! Check your DMs for details and preview.`,
+            ephemeral: true,
+            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
+          });
+        }
         
       } catch (error) {
         console.error('Error processing web image upload:', error);
-        await interaction.editReply({
-          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
+        await interaction.followUp({
+          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`,
+          ephemeral: true
         });
       }
     }
@@ -1090,12 +1430,14 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
       client = null;
     }
 
-    // Create a new client with minimal required intents
-    // Note: MessageContent is a privileged intent and must be enabled in the Discord Developer Portal
+    // Create a new client with required intents
+    // Note: MessageContent and MessageAttachments are privileged intents and must be enabled in the Discord Developer Portal
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,  // Required for accessing message content and attachments
+        GatewayIntentBits.DirectMessages   // Required for DM-based image uploads
       ]
     });
 
