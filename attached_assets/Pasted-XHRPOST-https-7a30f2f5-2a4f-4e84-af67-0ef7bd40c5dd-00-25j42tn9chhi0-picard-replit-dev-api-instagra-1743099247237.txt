@@ -1,0 +1,194 @@
+XHRPOST
+https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/api/instagram/auth/token
+[HTTP/1.1 500 Internal Server Error 311ms]
+
+	
+POST
+	https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/api/instagram/auth/token
+Status
+500
+Internal Server Error
+VersionHTTP/1.1
+Transferred501 B (111 B size)
+Referrer Policystrict-origin-when-cross-origin
+DNS ResolutionDNS over HTTPS
+
+	
+Content-Length
+	111
+Content-Type
+	application/json; charset=utf-8
+Date
+	Thu, 27 Mar 2025 18:13:24 GMT
+Etag
+	W/"6f-gMj4RyunOm/Y1ggji2RaO1ASJiE"
+Replit-Cluster
+	picard
+X-Powered-By
+	Express
+X-Robots-Tag
+	none, noindex, noarchive, nofollow, nositelinkssearchbox, noimageindex
+X-Robots-Tag
+	none, noindex, noarchive, nofollow, nositelinkssearchbox, noimageindex
+	
+Accept
+	*/*
+Accept-Encoding
+	gzip, deflate, br, zstd
+Accept-Language
+	en-US,en;q=0.5
+Cache-Control
+	no-cache
+Connection
+	keep-alive
+Content-Length
+	275
+Content-Type
+	application/json
+Cookie
+	connect.sid=s%3A0E9NC5faKvL4mS7bnYc4X22dR8ZM-JfD.QMWPiWpoV5RbVyk1ra7ZlsoPTpnr%2FaridbtikTi4Cyc; fblo_1776254399859599=y; fbsr_1776254399859599=1x1D3pW5aNqtm08A0oMx1IjqAF4EwBTJqeUlgZwzyCc.eyJ1c2VyX2lkIjoiNTYzMjEwNzYzMjM0MTc4IiwiY29kZSI6IkFRQTJlSERqYUhURUZtRXdSanRFN2dmRmotVm4zYVlIaWUzUWxaOHFZTlNTYldKWEd5MEtobHVYZ1JWTVdnUFo5V291MDFVM1Zta0xaSlRvMjhiVWx2VjBOV0FPd1ZqalQ1TzBxVm14UzZVeE9EN3oyT3hXSmZfQkZFTmdyQUQySjNmMHpJZExnMk9ZbjQtRGk1ZFpaSDhmSl80SjRzS3dYNnBvU1dOd2l1aXZITEtzM1RjaHpKdmZXYmpQMzczNDRyLU1ZcEtDbTd1aGVhSWpOYTRYWEhwNTVnc2hYbDNkd1FSRmdhVlZiOGpKYTR0R2ZkOXZia2hub0lSYUc3Q3llbzNyS3VaNElmNU9KdjlySXFfaWhZSm5mMllENGhkNTNjZ0FQb012WWVjWGpldmpyS3pibmtFRTN4b3hDTnplZHEydkZkM05JSDVFQnpsUElmZ1hNNlRSIiwiYWxnb3JpdGhtIjoiSE1BQy1TSEEyNTYiLCJpc3N1ZWRfYXQiOjE3NDMwOTkxMTF9
+Host
+	7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev
+Origin
+	https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev
+Pragma
+	no-cache
+Priority
+	u=4
+Referer
+	https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/integrations/instagram
+Sec-Fetch-Dest
+	empty
+Sec-Fetch-Mode
+	cors
+Sec-Fetch-Site
+	same-origin
+User-Agent
+	Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0
+XHRPOST
+https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/api/instagram/auth/token
+[HTTP/1.1 500 Internal Server Error 314ms]
+
+	
+POST
+	https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/api/instagram/auth/token
+Status
+500
+Internal Server Error
+VersionHTTP/1.1
+Transferred501 B (111 B size)
+Referrer Policystrict-origin-when-cross-origin
+DNS ResolutionDNS over HTTPS
+
+	
+Content-Length
+	111
+Content-Type
+	application/json; charset=utf-8
+Date
+	Thu, 27 Mar 2025 18:13:24 GMT
+Etag
+	W/"6f-gMj4RyunOm/Y1ggji2RaO1ASJiE"
+Replit-Cluster
+	picard
+X-Powered-By
+	Express
+X-Robots-Tag
+	none, noindex, noarchive, nofollow, nositelinkssearchbox, noimageindex
+X-Robots-Tag
+	none, noindex, noarchive, nofollow, nositelinkssearchbox, noimageindex
+	
+Accept
+	*/*
+Accept-Encoding
+	gzip, deflate, br, zstd
+Accept-Language
+	en-US,en;q=0.5
+Cache-Control
+	no-cache
+Connection
+	keep-alive
+Content-Length
+	275
+Content-Type
+	application/json
+Cookie
+	connect.sid=s%3A0E9NC5faKvL4mS7bnYc4X22dR8ZM-JfD.QMWPiWpoV5RbVyk1ra7ZlsoPTpnr%2FaridbtikTi4Cyc; fblo_1776254399859599=y; fbsr_1776254399859599=1x1D3pW5aNqtm08A0oMx1IjqAF4EwBTJqeUlgZwzyCc.eyJ1c2VyX2lkIjoiNTYzMjEwNzYzMjM0MTc4IiwiY29kZSI6IkFRQTJlSERqYUhURUZtRXdSanRFN2dmRmotVm4zYVlIaWUzUWxaOHFZTlNTYldKWEd5MEtobHVYZ1JWTVdnUFo5V291MDFVM1Zta0xaSlRvMjhiVWx2VjBOV0FPd1ZqalQ1TzBxVm14UzZVeE9EN3oyT3hXSmZfQkZFTmdyQUQySjNmMHpJZExnMk9ZbjQtRGk1ZFpaSDhmSl80SjRzS3dYNnBvU1dOd2l1aXZITEtzM1RjaHpKdmZXYmpQMzczNDRyLU1ZcEtDbTd1aGVhSWpOYTRYWEhwNTVnc2hYbDNkd1FSRmdhVlZiOGpKYTR0R2ZkOXZia2hub0lSYUc3Q3llbzNyS3VaNElmNU9KdjlySXFfaWhZSm5mMllENGhkNTNjZ0FQb012WWVjWGpldmpyS3pibmtFRTN4b3hDTnplZHEydkZkM05JSDVFQnpsUElmZ1hNNlRSIiwiYWxnb3JpdGhtIjoiSE1BQy1TSEEyNTYiLCJpc3N1ZWRfYXQiOjE3NDMwOTkxMTF9
+Host
+	7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev
+Origin
+	https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev
+Pragma
+	no-cache
+Priority
+	u=4
+Referer
+	https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/integrations/instagram
+Sec-Fetch-Dest
+	empty
+Sec-Fetch-Mode
+	cors
+Sec-Fetch-Site
+	same-origin
+User-Agent
+	Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:136.0) Gecko/20100101 Firefox/136.0
+Failed to store Facebook access token: {"error":"Failed to store access token","message":"value \"563210763234178\" is out of range for type integer"} <anonymous code>:1:145535
+    overrideMethod <anonymous code>:1
+    storeAccessToken FacebookContext.tsx:92
+    handleStatusChange FacebookContext.tsx:70
+    initializeFacebookSDK FacebookSDK.tsx:110
+    __wrapper sdk.js:63
+    l sdk.js:108
+    getLoginStatus sdk.js:153
+    j sdk.js:73
+    f sdk.js:63
+    initializeFacebookSDK FacebookSDK.tsx:108
+    fbAsyncInit FacebookSDK.tsx:89
+    __wrapper sdk.js:63
+    a sdk.js:194
+    (Async: setTimeout handler)
+    a sdk.js:194
+    <anonymous> sdk.js:197
+    k sdk.js:24
+    l sdk.js:24
+    o sdk.js:24
+    <anonymous> sdk.js:197
+    <anonymous> sdk.js:198
+    <anonymous> sdk.js:198
+Failed to store Facebook access token: {"error":"Failed to store access token","message":"value \"563210763234178\" is out of range for type integer"} <anonymous code>:1:145535
+    overrideMethod <anonymous code>:1
+    storeAccessToken FacebookContext.tsx:92
+    handleStatusChange FacebookContext.tsx:70
+    initializeFacebookSDK FacebookSDK.tsx:110
+    __wrapper sdk.js:63
+    l sdk.js:108
+    getLoginStatus sdk.js:153
+    j sdk.js:73
+    f sdk.js:63
+    initializeFacebookSDK FacebookSDK.tsx:108
+    FacebookSDK FacebookSDK.tsx:78
+    React 13
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+    (Async: EventHandlerNonNull)
+    js scheduler.development.js:571
+    js scheduler.development.js:633
+    __require chunk-4MBMRILA.js:11
+    js index.js:6
+    __require chunk-4MBMRILA.js:11
+    React 2
+    __require chunk-4MBMRILA.js:11
+    js React
+    __require chunk-4MBMRILA.js:11
+    js React
+    __require chunk-4MBMRILA.js:11
+    <anonymous> react-dom_client.js:38
+Source map error: Error: JSON.parse: unexpected character at line 1 column 1 of the JSON data
+Stack in the worker:parseSourceMapInput@resource://devtools/client/shared/vendor/source-map/lib/util.js:163:15
+_factory@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:1066:22
+SourceMapConsumer@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:26:12
+_fetch@resource://devtools/client/shared/source-map-loader/utils/fetchSourceMap.js:83:19
+
+Resource URL: https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/integrations/%3Canonymous%20code%3E
+Source Map URL: installHook.js.map

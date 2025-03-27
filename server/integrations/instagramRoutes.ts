@@ -145,13 +145,16 @@ export function setupInstagramRoutes(app: Express) {
         log(`Stored new Facebook access token`, 'instagram');
       }
       
-      // Log the activity
+      // Log the activity - store userId as string in details since it's a Facebook ID, not our app's user ID
       await storage.createActivityLog({
         action: 'facebook_auth_token_updated',
-        userId: userId || null,
+        userId: null, // Don't use Facebook's userId as our user ID
         resourceType: 'integration_setting',
         resourceId: 'facebook_access_token',
-        details: { timestamp: new Date().toISOString() }
+        details: { 
+          timestamp: new Date().toISOString(),
+          facebookUserId: userId ? String(userId) : null 
+        }
       });
       
       res.status(200).json({
