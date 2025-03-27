@@ -32,6 +32,7 @@ export default function InstagramPage() {
     status, 
     user, 
     accessToken, 
+    initializationError,
     login, 
     logout 
   } = useFacebook();
@@ -75,10 +76,9 @@ export default function InstagramPage() {
   // Handle Facebook login
   const handleLogin = () => {
     console.log('Login requested, SDK initialized:', isInitialized);
-    if (!isInitialized) {
-      setError('Facebook SDK is still initializing. Please wait a moment and try again.');
-      return;
-    }
+    
+    // Clear any previous errors
+    setError(null);
     
     login(
       () => {
@@ -87,7 +87,7 @@ export default function InstagramPage() {
       },
       (error) => {
         console.error('Login failed:', error);
-        setError('Facebook login failed. Please try again.');
+        setError(typeof error === 'string' ? error : 'Facebook login failed. Please try again.');
       }
     );
   };
@@ -95,10 +95,9 @@ export default function InstagramPage() {
   // Handle Facebook logout
   const handleLogout = () => {
     console.log('Logout requested, SDK initialized:', isInitialized);
-    if (!isInitialized) {
-      setError('Facebook SDK is still initializing. Please wait a moment and try again.');
-      return;
-    }
+    
+    // Clear any previous errors
+    setError(null);
     
     logout(() => {
       console.log('Logout successful');
@@ -203,6 +202,16 @@ export default function InstagramPage() {
             </div>
           )}
           
+          {/* Display SDK initialization errors */}
+          {initializationError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Facebook SDK Error</AlertTitle>
+              <AlertDescription>{initializationError}</AlertDescription>
+            </Alert>
+          )}
+          
+          {/* Display other errors */}
           {error && (
             <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
