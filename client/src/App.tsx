@@ -22,6 +22,7 @@ import InstagramPage from "@/pages/integrations/instagram-page";
 import ImgurPage from "@/pages/integrations/imgur-page";
 import DocsPage from "@/pages/docs-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
+import TestPage from "@/pages/test-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -39,6 +40,7 @@ function Router() {
       <ProtectedRoute path="/integrations/imgur" component={ImgurPage} />
       <ProtectedRoute path="/docs" component={DocsPage} />
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
+      <Route path="/test" component={TestPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -82,13 +82,48 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
 
   // Login method
   const login = (onSuccess?: () => void, onError?: (error: any) => void) => {
-    if (!isInitialized || !window.FB) {
+    // Double-check SDK initialization
+    if (!window.FB) {
       console.error('Facebook SDK not initialized yet');
+      setInitializationError('Facebook SDK not initialized. Please refresh the page and try again.');
       onError && onError('Facebook SDK not initialized yet');
       return;
     }
 
+    // Make sure we don't proceed if the SDK is still initializing
+    if (!isInitialized) {
+      console.warn('Facebook SDK initialization in progress, waiting...');
+      
+      // Wait a short time and try again if FB is available
+      setTimeout(() => {
+        if (window.FB) {
+          console.log('Retrying login after delay...');
+          try {
+            window.FB.login((response) => {
+              if (response.status === 'connected') {
+                handleStatusChange('connected', response);
+                onSuccess && onSuccess();
+              } else {
+                onError && onError(response);
+              }
+            }, {
+              scope: 'email,public_profile,instagram_basic,pages_show_list'
+            });
+          } catch (error) {
+            console.error('Facebook login retry error:', error);
+            onError && onError(error);
+          }
+        } else {
+          setInitializationError('Facebook SDK failed to initialize. Please refresh the page.');
+          onError && onError('Facebook SDK failed to initialize');
+        }
+      }, 1000);
+      return;
+    }
+
+    // Normal login flow
     try {
+      console.log('Attempting Facebook login with initialized SDK');
       window.FB.login((response) => {
         if (response.status === 'connected') {
           handleStatusChange('connected', response);
@@ -107,12 +142,42 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
 
   // Logout method
   const logout = (onSuccess?: () => void) => {
-    if (!isInitialized || !window.FB) {
+    // Double-check SDK initialization
+    if (!window.FB) {
       console.error('Facebook SDK not initialized yet');
+      setInitializationError('Facebook SDK not initialized. Please refresh the page and try again.');
       return;
     }
 
+    // Make sure we don't proceed if the SDK is still initializing
+    if (!isInitialized) {
+      console.warn('Facebook SDK initialization in progress, waiting...');
+      
+      // Wait a short time and try again if FB is available
+      setTimeout(() => {
+        if (window.FB) {
+          console.log('Retrying logout after delay...');
+          try {
+            window.FB.logout((response) => {
+              setStatus('unknown');
+              setUser(null);
+              setAccessToken(null);
+              onSuccess && onSuccess();
+            });
+          } catch (error) {
+            console.error('Facebook logout retry error:', error);
+            setInitializationError('Failed to log out. Please try again.');
+          }
+        } else {
+          setInitializationError('Facebook SDK failed to initialize. Please refresh the page.');
+        }
+      }, 1000);
+      return;
+    }
+
+    // Normal logout flow
     try {
+      console.log('Attempting Facebook logout with initialized SDK');
       window.FB.logout((response) => {
         setStatus('unknown');
         setUser(null);
@@ -121,6 +186,7 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
       });
     } catch (error) {
       console.error('Facebook logout error:', error);
+      setInitializationError('Failed to log out. Please try again.');
     }
   };
 
@@ -140,12 +206,19 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
     logout
   };
 
+  // Handle SDK initialization errors
+  const handleSDKError = (error: string) => {
+    console.error('Facebook SDK Error:', error);
+    setInitializationError(error);
+  };
+
   return (
     <FacebookContext.Provider value={contextValue}>
       <FacebookSDK 
         appId={appId}
         onStatusChange={handleStatusChange}
         onInit={handleInit}
+        onError={handleSDKError}
       />
       {children}
     </FacebookContext.Provider>
