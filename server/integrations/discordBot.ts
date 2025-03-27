@@ -18,114 +18,92 @@ import {
   AttachmentBuilder,
   Collection,
   Message,
-  ChannelType,
-  TextBasedChannel,
   DMChannel,
-  NewsChannel,
-  TextChannel
+  TextChannel,
+  NewsChannel
 } from 'discord.js';
-import type { Express, Request, Response } from 'express';
-import { storage } from '../storage';
-import { Article, InsertArticle } from '@shared/schema';
-import fetch from 'node-fetch';
-import FormData from 'form-data';
-import fs from 'fs';
-import path from 'path';
-import { uploadImageToImgur, uploadImageUrlToImgur } from '../utils/imgurUploader';
-import { uploadImageUrlToAirtable } from '../utils/imageUploader';
+import express, { Express, Request, Response } from 'express';
+import { InsertArticle, storage } from '../storage';
+import { 
+  handleInstaImageCommand, 
+  handleWebImageCommand, 
+  handleInstaImageUploadButton, 
+  handleWebImageUploadButton 
+} from '../handlers/discordImageHandlers';
 
-// Store bot instance for the application lifecycle
+// Discord client instance that will be initialized later
 let client: Client | null = null;
-let botStatus = {
+
+// Track connection state
+const botStatus = {
   connected: false,
-  status: 'Not initialized',
+  status: 'disconnected',
   username: '',
   id: '',
   guilds: 0
 };
 
 /**
- * Handler for the /list_articles command
- * Lists all articles that are not published (drafts, pending review, etc.)
+ * Handle the list articles command
+ * Shows a list of recent articles with their status
  */
 async function handleListArticlesCommand(interaction: any) {
-  await interaction.deferReply();
+  await interaction.deferReply({ ephemeral: true });
   
   try {
-    // Get non-published articles
-    const allArticles = await storage.getArticles();
-    const nonPublishedArticles = allArticles.filter(article => article.status !== 'published');
+    const articles = await storage.getArticles();
     
-    if (nonPublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found. You can create a new article with `/create_article`.');
+    if (articles.length === 0) {
+      await interaction.editReply('No articles found in the database.');
       return;
     }
     
-    // Create an embed to display the articles
-    const embed = new EmbedBuilder()
-      .setTitle('📝 Unpublished Articles')
-      .setDescription('Here are the articles that have not been published yet.')
-      .setColor('#5865F2');
+    // Sort articles with most recent first (by creation date)
+    articles.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
     
-    // Add fields for each article (up to 10)
-    const articlesToShow = nonPublishedArticles.slice(0, 10);
-    
-    articlesToShow.forEach((article, index) => {
-      // Map the fields to Airtable field names
-      const title = article.title || 'Untitled';       // Maps to Airtable's "Name" field
-      const status = article.status || 'draft';
-      const date = article.createdAt 
-        ? new Date(article.createdAt).toLocaleDateString() 
-        : 'No date';
+    // Create a rich embed for each article (up to 10)
+    const embeds = articles.slice(0, 10).map(article => {
+      // Create an embed for this article
+      const embed = new EmbedBuilder()
+        .setTitle(article.title.substring(0, 255))
+        .setDescription(article.description ? article.description.substring(0, 200) : 'No description')
+        .addFields(
+          { name: 'Status', value: article.status, inline: true },
+          { name: 'ID', value: article.id.toString(), inline: true }
+        )
+        .setTimestamp(article.created_at ? new Date(article.created_at) : new Date())
+        .setColor(
+          article.status === 'published' ? 0x00FF00 : // Green for published
+          article.status === 'pending' ? 0xFFA500 : // Orange for pending
+          0x0099FF // Blue for draft or other statuses
+        );
       
-      // Show author information when available
-      const authorInfo = article.author ? 
-        (typeof article.author === 'string' ? `\nAuthor: ${article.author}` : '\nAuthor: Unknown') : '';
-        
-      embed.addFields({
-        name: `${index + 1}. ${title}`,
-        value: `Status: **${status}**\nLast updated: ${date}${authorInfo}\nID: ${article.id}`
-      });
+      return embed;
     });
     
-    // If there are more articles, indicate this
-    if (nonPublishedArticles.length > 10) {
-      embed.setFooter({
-        text: `Showing 10 of ${nonPublishedArticles.length} unpublished articles.`
-      });
-    } else {
-      embed.setFooter({
-        text: 'Articles submitted through Discord will be synced to Airtable through the website'
-      });
-    }
-    
-    // Add button to create new article
-    const row = new ActionRowBuilder<ButtonBuilder>()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId('create_article')
-          .setLabel('Create New Article')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('✏️')
-      );
-    
-    await interaction.editReply({
-      embeds: [embed],
-      components: [row]
+    // Send the embeds
+    await interaction.editReply({ 
+      content: `Found ${articles.length} articles (showing up to 10):`,
+      embeds 
     });
+    
   } catch (error) {
-    console.error('Error fetching unpublished articles:', error);
-    await interaction.editReply('Sorry, there was an error fetching the unpublished articles.');
+    console.error('Error handling list articles command:', error);
+    await interaction.editReply('There was an error fetching the articles. Please try again later.');
   }
 }
 
 /**
- * Helper function to get all team members from the database
- * Used for author suggestions/selection
+ * Fetch team members from database
  */
 async function getTeamMembers() {
   try {
-    return await storage.getTeamMembers();
+    const members = await storage.getTeamMembers();
+    return members;
   } catch (error) {
     console.error('Error fetching team members:', error);
     return [];
@@ -133,193 +111,153 @@ async function getTeamMembers() {
 }
 
 /**
- * Helper function to create an author selection component
- * Uses a dropdown with team members as options, limited to Discord's 25-option maximum
+ * Create a select menu for team member selection
  */
 async function createAuthorSelectMenu() {
-  // Get all team members for author options
-  let teamMembers = await getTeamMembers();
-  
-  // Sort by name for consistency
-  teamMembers = teamMembers.sort((a, b) => a.name.localeCompare(b.name));
-  
-  // Limit to 24 members to leave room for the "Custom" option (Discord limit is 25 options total)
-  // If there are more than 24 members, we'll take the first 24 alphabetically
-  if (teamMembers.length > 24) {
-    console.log(`Warning: Limiting team members dropdown to 24 options (+ custom) from ${teamMembers.length} total members`);
-    teamMembers = teamMembers.slice(0, 24);
+  try {
+    const members = await getTeamMembers();
+    
+    // If there are no members, create a blank default
+    if (members.length === 0) {
+      members.push({
+        id: 0,
+        name: 'Anonymous',
+        role: 'Default',
+        bio: '',
+        image_url: null,
+        external_id: null,
+        enabled: true,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+    }
+    
+    // Create a select menu with team members as options
+    const authorSelect = new StringSelectMenuBuilder()
+      .setCustomId('author_select')
+      .setPlaceholder('Select an author')
+      .addOptions(
+        members.map(member => ({
+          label: member.name.substring(0, 100), // Max 100 chars for labels
+          description: member.role ? member.role.substring(0, 100) : 'Team Member',
+          value: member.id.toString()
+        }))
+      );
+    
+    return authorSelect;
+  } catch (error) {
+    console.error('Error creating author select menu:', error);
+    
+    // Return a fallback select menu
+    return new StringSelectMenuBuilder()
+      .setCustomId('author_select')
+      .setPlaceholder('Select an author')
+      .addOptions([
+        {
+          label: 'Anonymous',
+          description: 'Default author when no selection is available',
+          value: '0'
+        }
+      ]);
   }
-  
-  // Create options from limited team members
-  const options = teamMembers.map(member => ({
-    label: member.name,
-    value: member.id.toString(), // We'll use the ID as the value for proper referencing
-    description: member.role?.substring(0, 50) || 'Team Member' // Limit description to 50 chars for safety
-  }));
-  
-  // Add a "Manual Entry" option
-  options.push({
-    label: "Enter Custom Author",
-    value: "custom",
-    description: "Enter a custom author name not in the list"
-  });
-  
-  // Return the select menu
-  return new StringSelectMenuBuilder()
-    .setCustomId('author_select')
-    .setPlaceholder('Select an author from team members')
-    .addOptions(options);
 }
 
 /**
- * Handler for the /create_article command
- * Opens a modal for article creation
+ * Handle the create article command
+ * Create a new article with Discord
  */
 async function handleCreateArticleCommand(interaction: any) {
+  await interaction.deferReply({ ephemeral: true });
+  
   try {
-    // Create modal for article creation
+    // Create modal with form fields
     const modal = new ModalBuilder()
       .setCustomId('create_article_modal')
       .setTitle('Create New Article');
-
-    // Add input fields that match our Airtable field names
+    
+    // Add fields to the modal
     const titleInput = new TextInputBuilder()
       .setCustomId('title')
-      .setLabel('Title')  // Maps to Airtable's "Name" field
+      .setLabel('Title')
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Enter article title')
       .setRequired(true)
-      .setMaxLength(100);
+      .setMaxLength(255);
     
     const descriptionInput = new TextInputBuilder()
       .setCustomId('description')
-      .setLabel('Description')  // Maps to Airtable's "Description" field
+      .setLabel('Description')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter a brief description')
-      .setRequired(true)
+      .setPlaceholder('Short description of the article')
+      .setRequired(false)
       .setMaxLength(500);
     
-    const bodyInput = new TextInputBuilder()
-      .setCustomId('body')
-      .setLabel('Body')  // Maps to Airtable's "Body" field
+    const contentInput = new TextInputBuilder()
+      .setCustomId('content')
+      .setLabel('Content')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter the article content')
-      .setRequired(true)
+      .setPlaceholder('Article content (markdown supported)')
+      .setRequired(false)
       .setMaxLength(4000);
     
-    // For author, we'll use a text input initially, but we'll display a selection dropdown after showing the modal
-    const authorInput = new TextInputBuilder()
-      .setCustomId('author')
-      .setLabel('Author')  // Maps to Airtable's "Author" field
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Choose from team members in the follow-up prompt')
-      .setRequired(true)
-      .setMaxLength(100);
-    
-    const featuredInput = new TextInputBuilder()
-      .setCustomId('featured')
-      .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Type "yes" to mark as featured')
-      .setRequired(false)
-      .setMaxLength(3);
-    
-    // Create action rows (each input needs its own row)
+    // Create action rows for each input
     const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
     const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
-    const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
-    const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
+    const contentRow = new ActionRowBuilder<TextInputBuilder>().addComponents(contentInput);
     
-    // Add inputs to the modal
-    modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
+    // Add the rows to the modal
+    modal.addComponents(titleRow, descriptionRow, contentRow);
     
-    // Show the modal with info about field mapping
+    // Show the modal
     await interaction.showModal(modal);
-    
-    // Add a follow-up message about Airtable mapping and author selection
-    try {
-      // Get author selection menu
-      const authorSelect = await createAuthorSelectMenu();
-      const authorRow = new ActionRowBuilder().addComponents(authorSelect);
-      
-      await interaction.followUp({
-        content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.\n\nThe fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Author → Author, Featured → Featured",
-        components: [authorRow],
-        ephemeral: true
-      });
-    } catch (error) {
-      // Ignore follow-up errors as the modal still works
-      console.log("Couldn't send follow-up about field mapping:", error);
-    }
   } catch (error) {
-    console.error('Error showing article creation modal:', error);
-    await interaction.reply({ 
-      content: 'Sorry, there was an error creating the article form.', 
-      ephemeral: true 
-    });
+    console.error('Error showing create article modal:', error);
+    await interaction.editReply('There was an error creating the article form. Please try again later.');
   }
 }
 
 /**
- * Handler for the /edit_article command
- * Retrieves the article and opens a modal for editing it
- */
-/**
- * Create a select menu for unpublished articles
+ * Create a select menu for article selection
  */
 async function createArticleSelectMenu() {
-  // Get all draft and pending articles
-  const draftArticles = await storage.getArticlesByStatus('draft');
-  const pendingArticles = await storage.getArticlesByStatus('pending');
-  
-  // Combine them and sort by creation date (newest first)
-  const unpublishedArticles = [...draftArticles, ...pendingArticles].sort((a, b) => {
-    // Convert dates to numbers for comparison, fallback to 0 if null/undefined
-    const dateA = a.createdAt ? new Date(a.createdAt.toString()).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt.toString()).getTime() : 0;
-    return dateB - dateA; // Newest first
-  });
-  
-  // Create options for the select menu (max 25 options allowed by Discord)
-  const options = unpublishedArticles.slice(0, 25).map(article => {
-    // Format title with status
-    const statusIcon = article.status === 'draft' ? '📝' : '⏳';
-    // Safely handle title, provide a fallback if missing
-    const title = article.title || 'Untitled Article';
-    let optionLabel = `${statusIcon} ${title}`;
+  try {
+    const articles = await storage.getArticles();
     
-    // Truncate if needed (Discord max length is 100 chars)
-    if (optionLabel.length > 95) {
-      optionLabel = optionLabel.substring(0, 95) + '...';
+    // If there are no articles, return null
+    if (articles.length === 0) {
+      return null;
     }
     
-    const authorText = article.author ? 
-      (typeof article.author === 'string' ? article.author.substring(0, 30) : 'Unknown') : 'Unknown';
-    
-    return {
-      label: optionLabel,
-      value: article.id.toString(),
-      description: `ID: ${article.id} | Author: ${authorText}`
-    };
-  });
-  
-  // If no unpublished articles, add a placeholder option
-  if (options.length === 0) {
-    options.push({
-      label: 'No unpublished articles found',
-      value: '0',
-      description: 'Create a new article or publish some from the website first'
+    // Sort articles with most recent first (by creation date)
+    articles.sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
     });
+    
+    // Create a select menu with articles as options (limited to 25)
+    const articleSelect = new StringSelectMenuBuilder()
+      .setCustomId('article_select')
+      .setPlaceholder('Select an article to edit')
+      .addOptions(
+        articles.slice(0, 25).map(article => ({
+          label: article.title.substring(0, 100), // Max 100 chars for labels
+          description: `Status: ${article.status}`,
+          value: article.id.toString()
+        }))
+      );
+    
+    return articleSelect;
+  } catch (error) {
+    console.error('Error creating article select menu:', error);
+    return null;
   }
-  
-  // Return the select menu
-  return new StringSelectMenuBuilder()
-    .setCustomId('article_select')
-    .setPlaceholder('Select an article to edit')
-    .addOptions(options);
 }
 
+/**
+ * Handle the edit article command
+ * Edit an existing article with Discord
+ */
 async function handleEditArticleCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
   
@@ -327,106 +265,94 @@ async function handleEditArticleCommand(interaction: any) {
     // Create a select menu for article selection
     const articleSelect = await createArticleSelectMenu();
     
-    // If no articles available to edit
-    if (articleSelect.options[0].data.value === '0') {
-      await interaction.editReply('No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.');
+    if (!articleSelect) {
+      await interaction.editReply('No articles found to edit. Create a new article first using the `/create_article` command.');
       return;
     }
     
-    // Create an action row with the article select menu
-    const row = new ActionRowBuilder().addComponents(articleSelect);
+    // Create action row for the select menu
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(articleSelect);
     
-    // Show the selection menu to the user
+    // Send the select menu
     await interaction.editReply({
-      content: 'Please select an article to edit:',
+      content: 'Select an article to edit:',
       components: [row]
     });
-    
-    // We'll handle the article editing in the string select menu interaction handler
   } catch (error) {
     console.error('Error handling edit article command:', error);
-    await interaction.editReply('Sorry, there was an error fetching articles. Please try again later.');
+    await interaction.editReply('There was an error preparing the article edit form. Please try again later.');
   }
 }
 
 /**
- * Function to actually open the article edit modal after selection
+ * Open a modal for editing an article
  */
 async function openArticleEditModal(interaction: any, articleId: number) {
   try {
-    // Get the article from the database
+    // Get the article details
     const article = await storage.getArticle(articleId);
     
     if (!article) {
-      await interaction.followUp({
+      await interaction.reply({
         content: `No article found with ID ${articleId}. It may have been deleted.`,
         ephemeral: true
       });
       return;
     }
     
-    // Verify the article is not published
-    if (article.status === 'published') {
-      await interaction.followUp({
-        content: 'This article has already been published and cannot be edited through the bot. Please use the website admin interface to edit published articles.',
-        ephemeral: true
-      });
-      return;
-    }
-    
-    // Create modal for article editing with pre-filled values
-    const title = article.title || 'Untitled Article';
+    // Create modal with form fields
     const modal = new ModalBuilder()
-      .setCustomId(`edit_article_modal_${articleId}`) // Include the article ID in the custom ID
-      .setTitle(`Edit Article: ${title.substring(0, 30)}${title.length > 30 ? '...' : ''}`);
-
-    // Add input fields that match our Airtable field names, with pre-filled values
+      .setCustomId(`edit_article_modal_${articleId}`)
+      .setTitle('Edit Article');
+    
+    // Add fields to the modal
     const titleInput = new TextInputBuilder()
       .setCustomId('title')
-      .setLabel('Title')  // Maps to Airtable's "Name" field
+      .setLabel('Title')
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Enter article title')
-      .setValue(article.title || '')
       .setRequired(true)
-      .setMaxLength(100);
+      .setMaxLength(255)
+      .setValue(article.title || '');
     
     const descriptionInput = new TextInputBuilder()
       .setCustomId('description')
-      .setLabel('Description')  // Maps to Airtable's "Description" field
+      .setLabel('Description')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter a brief description')
-      .setValue(article.description || '')
-      .setRequired(true)
-      .setMaxLength(500);
+      .setPlaceholder('Short description of the article')
+      .setRequired(false)
+      .setMaxLength(500)
+      .setValue(article.description || '');
     
     const bodyInput = new TextInputBuilder()
-      .setCustomId('body')
-      .setLabel('Body')  // Maps to Airtable's "Body" field
+      .setCustomId('content')
+      .setLabel('Content')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter the article content')
-      .setValue(article.content || '')
-      .setRequired(true)
-      .setMaxLength(4000);
+      .setPlaceholder('Article content (markdown supported)')
+      .setRequired(false)
+      .setMaxLength(4000)
+      .setValue(article.content || '');
     
     const authorInput = new TextInputBuilder()
       .setCustomId('author')
-      .setLabel('Author (read-only)')  // Maps to Airtable's "Author" field
+      .setLabel('Author')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Current author (cannot be modified here)')
-      .setValue(article.author || 'No author assigned')
-      .setRequired(false) // Not required as it's read-only
-      .setMaxLength(100);
+      .setPlaceholder('Author name')
+      .setRequired(false)
+      .setMaxLength(100)
+      .setValue(article.author || '');
     
     const featuredInput = new TextInputBuilder()
       .setCustomId('featured')
-      .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
+      .setLabel('Featured (true/false)')
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Type "yes" to mark as featured')
-      .setValue(article.featured === 'yes' ? 'yes' : 'no')
+      .setPlaceholder('Enter true or false')
       .setRequired(false)
-      .setMaxLength(3);
+      .setMaxLength(5)
+      .setValue(article.featured ? 'true' : 'false');
     
-    // Create action rows (each input needs its own row)
+    // Create action rows for each input
     const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
     const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
     const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
@@ -436,172 +362,109 @@ async function openArticleEditModal(interaction: any, articleId: number) {
     // Add inputs to the modal
     modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
     
-    // Show the modal directly 
-    // When showing a modal, no further interactions can happen until the modal is submitted
-    // We will show the author selection dropdown after the modal is submitted instead
+    // Show the modal
     await interaction.showModal(modal);
   } catch (error) {
-    console.error('Error handling edit article command:', error);
-    
-    // Check if we can use followUp instead of editReply
-    try {
-      await interaction.followUp({
-        content: 'Sorry, there was an error editing the article. Please try again later.',
-        ephemeral: true
-      });
-    } catch (followUpError) {
-      console.error('Error sending error follow-up:', followUpError);
-    }
+    console.error('Error opening article edit modal:', error);
+    throw error;
   }
 }
 
 /**
- * Handler for modal submissions (article creation)
+ * Handle modal submissions (both create and edit)
  */
 async function handleModalSubmission(interaction: ModalSubmitInteraction) {
   try {
-    // Handle article creation
+    // Check if this is a create article modal
     if (interaction.customId === 'create_article_modal') {
       await interaction.deferReply({ ephemeral: true });
       
-      // Get form input values
+      // Extract the fields from the modal
       const title = interaction.fields.getTextInputValue('title');
       const description = interaction.fields.getTextInputValue('description');
-      const body = interaction.fields.getTextInputValue('body');
-      const author = interaction.fields.getTextInputValue('author');
-      const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
-      const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
+      const content = interaction.fields.getTextInputValue('content');
       
-      // Create article data - map to fields in our system
-      // Note: These field names are later mapped to Airtable's fields by the website,
-      // We're not directly modifying Airtable here
+      // Create the article
       const articleData: InsertArticle = {
-        title,                    // Maps to Airtable's "Name" field
-        description,              // Maps to Airtable's "Description" field
-        content: body,            // Maps to Airtable's "Body" field
-        author,                   // Maps to Airtable's "Author" field
-        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
-        status: 'draft',          // Article status in our system
-        imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder image
-        imageType: 'url',
-        contentFormat: 'plaintext',
-        source: 'discord',        // Identifies the article as coming from Discord
-        externalId: `discord-${interaction.user.id}-${Date.now()}`,
+        title,
+        description: description || null,
+        content: content || null,
+        author: null,
+        featured: false,
+        status: 'draft',
+        external_id: null,
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
-      // Create the article via our API - Discord bot only modifies our website's data
       const article = await storage.createArticle(articleData);
       
       // Send confirmation
-      const embed = new EmbedBuilder()
-        .setTitle('✅ Article Created Successfully')
-        .setDescription(`Your article "${title}" has been created as a draft on the website.`)
-        .setColor('#22A559')
-        .addFields(
-          { name: 'Name', value: title },
-          { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
-          { name: 'Author', value: author },
-          { name: 'Status', value: 'Draft' },
-          { name: 'Featured', value: featured ? 'Yes' : 'No' }
-        )
-        .setFooter({ text: 'The article will be synced to Airtable through the website' });
-      
-      await interaction.editReply({ embeds: [embed] });
-      
-      // Add author selection menu after successful article creation
-      try {
-        // Get author selection menu
-        const authorSelect = await createAuthorSelectMenu();
-        const authorRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(authorSelect);
-        
-        await interaction.followUp({
-          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.",
-          components: [authorRow],
-          ephemeral: true
-        });
-      } catch (followUpError) {
-        console.error("Couldn't send author selection menu:", followUpError);
-      }
+      await interaction.editReply({
+        content: `Article created successfully!\n\nTitle: ${article.title}\nStatus: ${article.status}\nID: ${article.id}`
+      });
     }
-    // Handle article editing (check if customId starts with edit_article_modal_)
+    // Check if this is an edit article modal
     else if (interaction.customId.startsWith('edit_article_modal_')) {
       await interaction.deferReply({ ephemeral: true });
       
-      // Extract the article ID from the customId (edit_article_modal_123 => 123)
-      const articleId = parseInt(interaction.customId.replace('edit_article_modal_', ''), 10);
+      // Extract the article ID from the custom ID
+      const articleId = parseInt(interaction.customId.replace('edit_article_modal_', ''));
       
       if (isNaN(articleId)) {
-        await interaction.editReply('Error: Invalid article ID');
+        await interaction.editReply('Invalid article ID. Please try again.');
         return;
       }
       
-      // Get the existing article to verify it exists
+      // Get the existing article to make sure it exists
       const existingArticle = await storage.getArticle(articleId);
       
       if (!existingArticle) {
-        await interaction.editReply(`Error: Article with ID ${articleId} not found.`);
+        await interaction.editReply('Article not found. It may have been deleted.');
         return;
       }
       
-      // Get form input values
+      // Extract the fields from the modal
       const title = interaction.fields.getTextInputValue('title');
       const description = interaction.fields.getTextInputValue('description');
-      const body = interaction.fields.getTextInputValue('body');
+      const content = interaction.fields.getTextInputValue('content');
       const author = interaction.fields.getTextInputValue('author');
-      const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
-      const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
+      const featuredText = interaction.fields.getTextInputValue('featured');
+      const featured = featuredText.toLowerCase() === 'true';
       
-      // Update article data - don't update the author field (it's read-only)
-      const articleData = {
-        title,                     // Maps to Airtable's "Name" field
-        description,               // Maps to Airtable's "Description" field
-        content: body,             // Maps to Airtable's "Body" field
-        // author field is intentionally omitted - keep existing author
-        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
-        // Don't change the status of the article
-        // Don't change image or other fields (keep them as is)
-      };
-      
-      // Update the article via our API
-      const updatedArticle = await storage.updateArticle(articleId, articleData);
+      // Update the article
+      const updatedArticle = await storage.updateArticle(articleId, {
+        title,
+        description: description || null,
+        content: content || null,
+        author: author || null,
+        featured,
+        updated_at: new Date()
+      });
       
       if (!updatedArticle) {
-        await interaction.editReply(`Error: Failed to update article with ID ${articleId}.`);
+        await interaction.editReply('Failed to update the article. Please try again.');
         return;
       }
       
       // Send confirmation
-      const embed = new EmbedBuilder()
-        .setTitle('✅ Article Updated Successfully')
-        .setDescription(`Your article "${title}" has been updated on the website.`)
-        .setColor('#22A559')
-        .addFields(
-          { name: 'Name', value: title },
-          { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
-          { name: 'Author', value: existingArticle.author || 'No author assigned' }, // Display the existing author
-          { name: 'Status', value: updatedArticle.status },
-          { name: 'Featured', value: featured ? 'Yes' : 'No' }
-        )
-        .setFooter({ text: 'The updated article will be synced to Airtable through the website' });
-      
-      // Add information about the author being read-only
-      await interaction.editReply({ 
-        embeds: [embed],
-        // Add a follow-up message explaining that the author field is read-only
-        content: "**Note:** The author field is read-only when editing articles. To change an article's author, please use the website interface."
+      await interaction.editReply({
+        content: `Article updated successfully!\n\nTitle: ${updatedArticle.title}\nStatus: ${updatedArticle.status}\nID: ${updatedArticle.id}`
       });
     }
   } catch (error) {
     console.error('Error handling modal submission:', error);
+    
     try {
-      // Check if we need to use reply or editReply based on the interaction state
-      if (!interaction.replied && !interaction.deferred) {
+      // Check if we've already deferred, in which case we need to editReply
+      if (interaction.deferred) {
+        await interaction.editReply('There was an error processing your submission. Please try again later.');
+      } else {
+        // If we haven't deferred, we can reply directly
         await interaction.reply({
-          content: 'Sorry, there was an error processing your article. Please try again later.',
+          content: 'There was an error processing your submission. Please try again later.',
           ephemeral: true
         });
-      } else {
-        await interaction.editReply('Sorry, there was an error processing your article. Please try again later.');
       }
     } catch (replyError) {
       console.error('Error sending error message:', replyError);
@@ -610,7 +473,7 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
 }
 
 /**
- * Handler for string select menu interactions
+ * Handle dropdown selections for various menus
  */
 async function handleStringSelectMenuInteraction(interaction: any) {
   try {
@@ -678,29 +541,28 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
-      // Create buttons for different options
+      // Create a button for uploading image
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_insta_image_${articleId}`)
-        .setLabel('Upload via Bot')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('📸');
+        .setLabel('Upload Instagram Image')
+        .setStyle(ButtonStyle.Primary);
       
-      const dashboardButton = new ButtonBuilder()
-        .setLabel('Open in Dashboard')
+      // Create a button to view in dashboard
+      const viewButton = new ButtonBuilder()
+        .setLabel('View in Dashboard')
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
-        .setEmoji('🔗');
+        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
       
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(dashboardButton, uploadButton);
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(uploadButton, viewButton);
       
-      // Confirm selection and provide options
-      await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading an Instagram image:\n\n1. Use the dashboard link to upload through the website (recommended)\n2. Try the bot upload button, but note that due to Discord permission constraints, this may redirect you to use the web dashboard instead.`,
-        components: [buttonRow]
+      await interaction.followUp({
+        content: `Selected article: **${article.title}**\nStatus: ${article.status}\n\nClick the button below to upload an Instagram image for this article.`,
+        components: [row],
+        ephemeral: true
       });
     }
-    // Handle article selection for Web image upload
+    // Handle article selection for web image upload
     else if (interaction.customId === 'select_article_for_web_image') {
       // Get the selected article ID
       const articleId = parseInt(interaction.values[0], 10);
@@ -727,205 +589,57 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
-      // Create buttons for different options
+      // Create a button for uploading image
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_web_image_${articleId}`)
-        .setLabel('Upload via Bot')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🖼️');
+        .setLabel('Upload Web Image')
+        .setStyle(ButtonStyle.Primary);
       
-      const dashboardButton = new ButtonBuilder()
-        .setLabel('Open in Dashboard')
+      // Create a button to view in dashboard
+      const viewButton = new ButtonBuilder()
+        .setLabel('View in Dashboard')
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
-        .setEmoji('🔗');
+        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
       
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(dashboardButton, uploadButton);
+      const row = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(uploadButton, viewButton);
       
-      // Confirm selection and provide options
-      await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the dashboard link to upload through the website (recommended)\n2. Try the bot upload button, but note that due to Discord permission constraints, this may redirect you to use the web dashboard instead.`,
-        components: [buttonRow]
+      await interaction.followUp({
+        content: `Selected article: **${article.title}**\nStatus: ${article.status}\n\nClick the button below to upload a main web image for this article.`,
+        components: [row],
+        ephemeral: true
       });
     }
-    // Handle author selection dropdown
-    else if (interaction.customId === 'author_select') {
-      await interaction.deferUpdate();
-      
-      // Get the selected team member ID
-      const selectedValue = interaction.values[0];
-      if (!selectedValue) {
-        await interaction.followUp({
-          content: 'No author was selected.',
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // Check if the user selected "custom" option
-      if (selectedValue === 'custom') {
-        await interaction.followUp({
-          content: '✅ You chose to enter a custom author name. Please make sure you entered it in the article form.',
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // Get the team member info from our database
-      const teamMember = await storage.getTeamMember(parseInt(selectedValue, 10));
-      
-      if (!teamMember) {
-        await interaction.followUp({
-          content: 'Could not find the selected team member.',
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // Try to find the article ID from recent interactions
-      // This is a simplistic approach - we're assuming this menu is shown after a modal submission
-      // In a more robust implementation, you'd include article ID in the menu's custom ID
-      
-      // First, try to find a recent created article
-      const recentArticles = await storage.getArticlesByStatus('draft');
-      const TWO_MINUTES_MS = 2 * 60 * 1000;
-
-      let targetArticle = recentArticles.find(article => {
-        // Check if it's from discord and created by this user
-        if (!article.source || article.source !== 'discord' || !article.externalId?.includes(interaction.user.id)) {
-          return false;
-        }
-        
-        // If createdAt exists, check if it was created in the last 2 minutes
-        if (article.createdAt) {
-          try {
-            // Ensure we're working with a string
-            const createdAtString = typeof article.createdAt === 'object' 
-              ? article.createdAt.toISOString() 
-              : String(article.createdAt);
-              
-            const createdTime = new Date(createdAtString).getTime();
-            return (Date.now() - createdTime < TWO_MINUTES_MS);
-          } catch (err) {
-            return false;
-          }
-        }
-        return false;
-      });
-      
-      if (targetArticle) {
-        // Update the article with the team member's name
-        // We'll store the author name since that's what our schema has
-        const updatedArticle = await storage.updateArticle(targetArticle.id, {
-          author: teamMember.name,
-          // Store the externalId of the team member in a way that Airtable can reference it
-          // This could be improved by adding a proper author reference field to the schema
-          photo: teamMember.externalId || `ref_${teamMember.id}`
-        });
-        
-        if (updatedArticle) {
-          await interaction.followUp({
-            content: `✅ Selected author: **${teamMember.name}**\n\nYour draft article has been updated with this author. This will properly reference the team member in Airtable when the article is synced.`,
-            ephemeral: true
-          });
-        } else {
-          await interaction.followUp({
-            content: `✅ Selected author: **${teamMember.name}**\n\nCouldn't automatically update your article. Please make sure to manually set this author in your article.`,
-            ephemeral: true
-          });
-        }
-      } else {
-        // If we can't find a recent article, just confirm the selection
-        await interaction.followUp({
-          content: `✅ Selected author: **${teamMember.name}**\n\nThis author will be used for your article. When creating or editing articles, please enter this name to ensure proper Airtable reference.`,
-          ephemeral: true
-        });
-      }
-    }
+    // Add other select menu handlers here as needed
   } catch (error) {
     console.error('Error handling string select menu interaction:', error);
+    
     try {
-      if (!interaction.replied) {
-        await interaction.followUp({ 
-          content: 'An error occurred while processing your selection.', 
-          ephemeral: true 
+      // Try to respond with an error message
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: 'There was an error processing your selection. Please try again later.',
+          ephemeral: true
+        });
+      } else {
+        await interaction.followUp({
+          content: 'There was an error processing your selection. Please try again later.',
+          ephemeral: true
         });
       }
-    } catch (followUpError) {
-      console.error('Error sending error follow-up:', followUpError);
+    } catch (replyError) {
+      console.error('Error sending error message:', replyError);
     }
   }
 }
 
 /**
- * Handler for button interactions
+ * Handle button interaction events
  */
 async function handleButtonInteraction(interaction: MessageComponentInteraction) {
   try {
-    // Handle Create Article button
-    if (interaction.customId === 'create_article') {
-      // Show the article creation modal
-      const modal = new ModalBuilder()
-        .setCustomId('create_article_modal')
-        .setTitle('Create New Article');
-
-      // Add input fields that match Airtable field names
-      const titleInput = new TextInputBuilder()
-        .setCustomId('title')
-        .setLabel('Title')  // Maps to Airtable's "Name" field
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Enter article title')
-        .setRequired(true)
-        .setMaxLength(100);
-      
-      const descriptionInput = new TextInputBuilder()
-        .setCustomId('description')
-        .setLabel('Description')  // Maps to Airtable's "Description" field
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Enter a brief description')
-        .setRequired(true)
-        .setMaxLength(500);
-      
-      const bodyInput = new TextInputBuilder()
-        .setCustomId('body')
-        .setLabel('Body')  // Maps to Airtable's "Body" field
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Enter the article content')
-        .setRequired(true)
-        .setMaxLength(4000);
-      
-      const authorInput = new TextInputBuilder()
-        .setCustomId('author')
-        .setLabel('Author')  // Maps to Airtable's "Author" field
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Enter author name')
-        .setRequired(true)
-        .setMaxLength(100);
-      
-      const featuredInput = new TextInputBuilder()
-        .setCustomId('featured')
-        .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Type "yes" to mark as featured')
-        .setRequired(false)
-        .setMaxLength(3);
-      
-      // Create action rows
-      const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
-      const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-      const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
-      const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
-      const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
-      
-      // Add inputs to the modal
-      modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
-      
-      // Show the modal
-      await interaction.showModal(modal);
-    }
     // Handle Instagram image upload button
-    else if (interaction.customId.startsWith('upload_insta_image_')) {
+    if (interaction.customId.startsWith('upload_insta_image_')) {
       // Extract article ID from the custom ID
       const articleId = parseInt(interaction.customId.replace('upload_insta_image_', ''));
       
@@ -956,201 +670,8 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         return;
       }
       
-      // Defer the reply since image upload may take time
-      await interaction.deferReply({ ephemeral: true });
-      
-      try {
-        // Create a button that will take the user to the article in the dashboard (as fallback)
-        const viewInDashboardButton = new ButtonBuilder()
-          .setLabel('View in Dashboard')
-          .setStyle(ButtonStyle.Link)
-          .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
-        
-        // Now we can actually handle image uploads with the updated intents
-        // We'll use a DM to collect the image if in a guild channel
-        const userId = interaction.user.id;
-        let uploadChannel: DMChannel | TextChannel | NewsChannel | null = null;
-        
-          // If we're already in a DM, use the current channel
-          uploadChannel = interaction.channel as DMChannel;
-        } else {
-          // If we're in a guild channel, try to create a DM with the user
-          try {
-            uploadChannel = await interaction.user.createDM();
-          } catch (dmError) {
-            console.error('Could not create DM channel:', dmError);
-            // Fallback to the same channel if DM fails
-            uploadChannel = interaction.channel as DMChannel;
-          }
-        }
-        
-        // Ask the user to send an image
-        await interaction.editReply({
-          content: `Please send the Instagram image for article **${article.title}** in the next 5 minutes.\n\nImportant instructions:\n- Send the image as an attachment (not a link)\n- Send only one image\n- The image will be uploaded to Imgur and then linked to your article\n\nI'll send you a private message where you can upload the image.`,
-          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
-        });
-        
-        if (uploadChannel && interaction.channel && uploadChannel.id !== interaction.channel.id) {
-          // If using DM, send a message there to prompt for the image
-          await uploadChannel.send({
-            content: `Please send the Instagram image for article **${article.title}** now. Simply attach the image to your next message.`
-          });
-        }
-        
-        // Set up a filter to only accept messages with images from the original user
-        const filter = (m: Message) => {
-          return m.author.id === userId && m.attachments.size > 0;
-        };
-        
-        // Collect the image message
-        const imageMessage = await collectImageMessage(uploadChannel, filter, 5 * 60 * 1000); // 5 minute timeout
-        
-        if (!imageMessage) {
-          if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
-            // If using DM, send timeout message there
-            await uploadChannel.send('No image received within the time limit. Please try again.');
-          }
-          
-          // Also notify in the original channel
-          await interaction.followUp({
-            content: 'No image was received within the time limit. Please try again or use the dashboard.',
-            ephemeral: true
-          });
-          return;
-        }
-        
-        // Get the first attachment
-        const attachment = imageMessage.attachments.first();
-        
-        if (!attachment) {
-          await uploadChannel.send('No valid image attachment found. Please try again with a proper image file.');
-          return;
-        }
-        
-        // Download the attachment
-        const response = await fetch(attachment.url);
-        if (!response.ok) {
-          throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-        }
-        
-        // Create a temporary directory for the download if it doesn't exist
-        const tempDir = path.join(process.cwd(), 'temp');
-        if (!fs.existsSync(tempDir)) {
-          fs.mkdirSync(tempDir, { recursive: true });
-        }
-        
-        // Create a temporary file to store the image
-        const tempFilePath = path.join(tempDir, attachment.name);
-        const fileStream = fs.createWriteStream(tempFilePath);
-        
-        // Wait for the image to be fully downloaded
-        await new Promise<void>((resolve, reject) => {
-          response.body!.pipe(fileStream);
-          response.body!.on('error', (err) => {
-            reject(err);
-          });
-          fileStream.on('finish', () => {
-            resolve();
-          });
-        });
-        
-        // Prepare file info for Imgur upload
-        const fileInfo = {
-          path: tempFilePath,
-          filename: attachment.name,
-          mimetype: attachment.contentType || 'application/octet-stream',
-          size: attachment.size
-        };
-        
-        // Send a status message
-        await uploadChannel.send('Processing your image... This might take a moment.');
-        
-        // Check if Imgur integration is enabled
-        const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
-        if (!imgurClientIdSetting?.enabled || !imgurClientIdSetting?.value) {
-          throw new Error('Imgur integration is not enabled. Please configure it in the dashboard.');
-        }
-        
-        // Upload to Imgur
-        const imgurResult = await uploadImageToImgur(fileInfo);
-        
-        // Always clean up the temp file
-        try {
-          fs.unlinkSync(tempFilePath);
-        } catch (cleanupError) {
-          console.error('Error cleaning up temp file:', cleanupError);
-        }
-        
-        if (!imgurResult) {
-          throw new Error('Failed to upload image to Imgur');
-        }
-        
-        // If article is from Airtable, update it there too
-        let airtableResult = null;
-        if (article.source === 'airtable' && article.externalId) {
-          // Upload the Imgur URL to Airtable
-          airtableResult = await uploadImageUrlToAirtable(
-            imgurResult.link,
-            article.externalId,
-            'instaPhoto',
-            fileInfo.filename
-          );
-        }
-        
-        // Update the article in our database
-        const updateData: Partial<InsertArticle> = {
-          instagramImageUrl: imgurResult.link
-        };
-        
-        await storage.updateArticle(articleId, updateData);
-        
-        // Log the activity
-        await storage.createActivityLog({
-          userId: null, // Since we don't have access to the user ID in the Discord context
-          action: 'upload',
-          resourceType: 'image',
-          resourceId: articleId.toString(),
-          details: {
-            fieldName: 'instaPhoto',
-            imgurId: imgurResult.id,
-            imgurLink: imgurResult.link,
-            filename: fileInfo.filename,
-            discordUserId: interaction.user.id,
-            discordUsername: interaction.user.username
-          }
-        });
-        
-        // Success message with preview
-        const successEmbed = new EmbedBuilder()
-          .setTitle('Instagram Image Uploaded')
-          .setDescription(`Successfully uploaded Instagram image for article **${article.title}**`)
-          .setImage(imgurResult.link)
-          .setColor('#00FF00')
-          .addFields(
-            { name: 'Article ID', value: article.id.toString(), inline: true },
-            { name: 'Status', value: article.status, inline: true }
-          )
-          .setFooter({ text: 'Discord-Airtable Integration System' })
-          .setTimestamp();
-        
-        // Send success messages
-        await uploadChannel.send({ embeds: [successEmbed] });
-        
-        if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
-          await interaction.followUp({
-            content: `✅ Instagram image uploaded successfully! Check your DMs for details and preview.`,
-            ephemeral: true,
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
-          });
-        }
-        
-      } catch (error) {
-        console.error('Error processing Instagram image upload:', error);
-        await interaction.followUp({
-          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`,
-          ephemeral: true
-        });
-      }
+      // Use our dedicated handler from the imported module
+      await handleInstaImageUploadButton(interaction, articleId, article);
     }
     // Handle Web image upload button
     else if (interaction.customId.startsWith('upload_web_image_')) {
@@ -1184,426 +705,196 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         return;
       }
       
-      // Defer the reply since image upload may take time
-      await interaction.deferReply({ ephemeral: true });
-      
-      try {
-        // Create a button that will take the user to the article in the dashboard (as fallback)
-        const viewInDashboardButton = new ButtonBuilder()
-          .setLabel('View in Dashboard')
-          .setStyle(ButtonStyle.Link)
-          .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
-        
-        // Now we can actually handle image uploads with the updated intents
-        // We'll use a DM to collect the image if in a guild channel
-        const userId = interaction.user.id;
-        let uploadChannel: DMChannel | TextChannel | NewsChannel | null = null;
-        
-          // If we're already in a DM, use the current channel
-          uploadChannel = interaction.channel as DMChannel;
-        } else {
-          // If we're in a guild channel, try to create a DM with the user
-          try {
-            uploadChannel = await interaction.user.createDM();
-          } catch (dmError) {
-            console.error('Could not create DM channel:', dmError);
-            // Fallback to the same channel if DM fails
-            uploadChannel = interaction.channel as DMChannel;
-          }
-        }
-        
-        // Ask the user to send an image
-        await interaction.editReply({
-          content: `Please send the main web image for article **${article.title}** in the next 5 minutes.\n\nImportant instructions:\n- Send the image as an attachment (not a link)\n- Send only one image\n- The image will be uploaded to Imgur and then linked to your article\n\nI'll send you a private message where you can upload the image.`,
-          components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
+      // Use our dedicated handler from the imported module
+      await handleWebImageUploadButton(interaction, articleId, article);
+    }
+    // Add other button handlers here as needed
+  } catch (error) {
+    console.error('Error handling button interaction:', error);
+    
+    try {
+      // Try to respond with an error message
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: 'There was an error processing your request. Please try again later.',
+          ephemeral: true
         });
-        
-        if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
-          // If using DM, send a message there to prompt for the image
-          await uploadChannel.send({
-            content: `Please send the main web image for article **${article.title}** now. Simply attach the image to your next message.`
-          });
-        }
-        
-        // Set up a filter to only accept messages with images from the original user
-        const filter = (m: Message) => {
-          return m.author.id === userId && m.attachments.size > 0;
-        };
-        
-        // Collect the image message
-        const imageMessage = await collectImageMessage(uploadChannel, filter, 5 * 60 * 1000); // 5 minute timeout
-        
-        if (!imageMessage) {
-          if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
-            // If using DM, send timeout message there
-            await uploadChannel.send('No image received within the time limit. Please try again.');
-          }
-          
-          // Also notify in the original channel
-          await interaction.followUp({
-            content: 'No image was received within the time limit. Please try again or use the dashboard.',
-            ephemeral: true
-          });
-          return;
-        }
-        
-        // Get the first attachment
-        const attachment = imageMessage.attachments.first();
-        
-        if (!attachment) {
-          await uploadChannel.send('No valid image attachment found. Please try again with a proper image file.');
-          return;
-        }
-        
-        // Download the attachment
-        const response = await fetch(attachment.url);
-        if (!response.ok) {
-          throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
-        }
-        
-        // Create a temporary directory for the download if it doesn't exist
-        const tempDir = path.join(process.cwd(), 'temp');
-        if (!fs.existsSync(tempDir)) {
-          fs.mkdirSync(tempDir, { recursive: true });
-        }
-        
-        // Create a temporary file to store the image
-        const tempFilePath = path.join(tempDir, attachment.name);
-        const fileStream = fs.createWriteStream(tempFilePath);
-        
-        // Wait for the image to be fully downloaded
-        await new Promise<void>((resolve, reject) => {
-          response.body!.pipe(fileStream);
-          response.body!.on('error', (err) => {
-            reject(err);
-          });
-          fileStream.on('finish', () => {
-            resolve();
-          });
-        });
-        
-        // Prepare file info for Imgur upload
-        const fileInfo = {
-          path: tempFilePath,
-          filename: attachment.name,
-          mimetype: attachment.contentType || 'application/octet-stream',
-          size: attachment.size
-        };
-        
-        // Send a status message
-        await uploadChannel.send('Processing your image... This might take a moment.');
-        
-        // Check if Imgur integration is enabled
-        const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
-        if (!imgurClientIdSetting?.enabled || !imgurClientIdSetting?.value) {
-          throw new Error('Imgur integration is not enabled. Please configure it in the dashboard.');
-        }
-        
-        // Upload to Imgur
-        const imgurResult = await uploadImageToImgur(fileInfo);
-        
-        // Always clean up the temp file
-        try {
-          fs.unlinkSync(tempFilePath);
-        } catch (cleanupError) {
-          console.error('Error cleaning up temp file:', cleanupError);
-        }
-        
-        if (!imgurResult) {
-          throw new Error('Failed to upload image to Imgur');
-        }
-        
-        // If article is from Airtable, update it there too
-        let airtableResult = null;
-        if (article.source === 'airtable' && article.externalId) {
-          // Upload the Imgur URL to Airtable
-          airtableResult = await uploadImageUrlToAirtable(
-            imgurResult.link,
-            article.externalId,
-            'MainImage',
-            fileInfo.filename
-          );
-        }
-        
-        // Update the article in our database
-        const updateData: Partial<InsertArticle> = {
-          imageUrl: imgurResult.link,
-          imageType: 'url'
-        };
-        
-        await storage.updateArticle(articleId, updateData);
-        
-        // Log the activity
-        await storage.createActivityLog({
-          userId: null, // Since we don't have access to the user ID in the Discord context
-          action: 'upload',
-          resourceType: 'image',
-          resourceId: articleId.toString(),
-          details: {
-            fieldName: 'MainImage',
-            imgurId: imgurResult.id,
-            imgurLink: imgurResult.link,
-            filename: fileInfo.filename,
-            discordUserId: interaction.user.id,
-            discordUsername: interaction.user.username
-          }
-        });
-        
-        // Success message with preview
-        const successEmbed = new EmbedBuilder()
-          .setTitle('Main Web Image Uploaded')
-          .setDescription(`Successfully uploaded main web image for article **${article.title}**`)
-          .setImage(imgurResult.link)
-          .setColor('#00FF00')
-          .addFields(
-            { name: 'Article ID', value: article.id.toString(), inline: true },
-            { name: 'Status', value: article.status, inline: true }
-          )
-          .setFooter({ text: 'Discord-Airtable Integration System' })
-          .setTimestamp();
-        
-        // Send success messages
-        await uploadChannel.send({ embeds: [successEmbed] });
-        
-        if (uploadChannel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { interaction.channel if (uploadChannel.id !== interaction.channel.id) {if (uploadChannel.id !== interaction.channel.id) { uploadChannel.id !== interaction.channel.id) {
-          await interaction.followUp({
-            content: `✅ Main web image uploaded successfully! Check your DMs for details and preview.`,
-            ephemeral: true,
-            components: [new ActionRowBuilder<ButtonBuilder>().addComponents(viewInDashboardButton)]
-          });
-        }
-        
-      } catch (error) {
-        console.error('Error processing web image upload:', error);
+      } else {
         await interaction.followUp({
-          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`,
+          content: 'There was an error processing your request. Please try again later.',
           ephemeral: true
         });
       }
+    } catch (replyError) {
+      console.error('Error sending error message:', replyError);
     }
-  } catch (error) {
-    console.error('Error handling button interaction:', error);
-    await interaction.reply({
-      content: 'Sorry, there was an error processing your request.',
-      ephemeral: true
-    });
   }
 }
-
-// Commands configuration
-const commands = [
-  new SlashCommandBuilder()
-    .setName('ping')
-    .setDescription('Replies with the bot latency'),
-  
-  new SlashCommandBuilder()
-    .setName('list_articles')
-    .setDescription('List articles that have not been published yet'),
-  
-  new SlashCommandBuilder()
-    .setName('create_article')
-    .setDescription('Create a new article draft'),
-    
-  new SlashCommandBuilder()
-    .setName('edit_article')
-    .setDescription('Edit an existing draft article'),
-    
-  new SlashCommandBuilder()
-    .setName('insta')
-    .setDescription('Upload an Instagram image to an unpublished article'),
-    
-  new SlashCommandBuilder()
-    .setName('web')
-    .setDescription('Upload a web (main) image to an unpublished article')
-];
 
 /**
  * Initialize a new Discord bot with the provided token and client ID
  */
 export const initializeDiscordBot = async (token: string, clientId: string) => {
   try {
-    // Clean up any existing client
-    if (client) {
-      await client.destroy();
-      client = null;
-    }
-
-    // Create a new client with required intents
-    // Note: MessageContent and MessageAttachments are privileged intents and must be enabled in the Discord Developer Portal
+    // Set up the client with necessary intents
+    // Note: MessageContent intent is needed to read message content (for image attachments)
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,  // Required for accessing message content and attachments
-        GatewayIntentBits.DirectMessages   // Required for DM-based image uploads
+        GatewayIntentBits.MessageContent, // Important for image attachments!
+        GatewayIntentBits.DirectMessages
       ]
     });
-
-    // Register event handlers
-    client.once(Events.ClientReady, c => {
-      botStatus = {
-        connected: true,
-        status: 'Connected and ready',
-        username: c.user.username,
-        id: c.user.id,
-        guilds: c.guilds.cache.size
-      };
+    
+    // Register event handlers once the client is ready
+    client.once(Events.ClientReady, (c) => {
       console.log(`Ready! Logged in as ${c.user.tag}`);
+      
+      botStatus.connected = true;
+      botStatus.status = 'connected';
+      botStatus.username = c.user.username;
+      botStatus.id = c.user.id;
+      botStatus.guilds = c.guilds.cache.size;
+      
+      // Register slash commands with Discord 
+      registerCommands(clientId, token);
     });
-
-    // Register commands
-    client.on(Events.InteractionCreate, async interaction => {
+    
+    // Handle interactions (commands, buttons, etc.)
+    client.on(Events.InteractionCreate, async (interaction) => {
       try {
-        // Handle different types of interactions
-        if (interaction.isButton()) {
-          // Handle button interactions
-          await handleButtonInteraction(interaction);
-        } else if (interaction.isModalSubmit()) {
-          // Handle modal submissions (for article creation)
-          await handleModalSubmission(interaction);
-        } else if (interaction.isStringSelectMenu()) {
-          // Handle string select menu interactions
-          await handleStringSelectMenuInteraction(interaction);
-        } else if (interaction.isChatInputCommand()) {
-          // Handle slash commands
+        // Handle slash commands
+        if (interaction.isChatInputCommand()) {
+          // Handle individual commands based on name
+          const { commandName } = interaction;
           
-          // Ping command - simple latency check
-          if (interaction.commandName === 'ping') {
-            const sent = await interaction.reply({ 
-              content: 'Pinging...', 
-              fetchReply: true 
-            });
-            const latency = sent.createdTimestamp - interaction.createdTimestamp;
-            await interaction.editReply(`Pong! Bot latency: ${latency}ms | API Latency: ${Math.round(client!.ws.ping)}ms`);
-          } 
-          
-          // List articles command
-          else if (interaction.commandName === 'list_articles') {
+          if (commandName === 'list_articles') {
             await handleListArticlesCommand(interaction);
           }
-          
-          // Create article command
-          else if (interaction.commandName === 'create_article') {
+          else if (commandName === 'create_article') {
             await handleCreateArticleCommand(interaction);
           }
-          
-          // Edit article command
-          else if (interaction.commandName === 'edit_article') {
+          else if (commandName === 'edit_article') {
             await handleEditArticleCommand(interaction);
           }
-          
-          // Instagram image upload command
-          else if (interaction.commandName === 'insta') {
+          else if (commandName === 'insta') {
             await handleInstaImageCommand(interaction);
           }
-          
-          // Web (Main) image upload command
-          else if (interaction.commandName === 'web') {
+          else if (commandName === 'web') {
             await handleWebImageCommand(interaction);
           }
+          // Add more commands as needed
+        }
+        // Handle button interactions
+        else if (interaction.isButton()) {
+          await handleButtonInteraction(interaction);
+        }
+        // Handle string select menu interactions (dropdowns)
+        else if (interaction.isStringSelectMenu()) {
+          await handleStringSelectMenuInteraction(interaction);
+        }
+        // Handle modal submissions
+        else if (interaction.isModalSubmit()) {
+          await handleModalSubmission(interaction as ModalSubmitInteraction);
         }
       } catch (error) {
-        console.error('Error handling Discord interaction:', error);
-        try {
-          if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-            await interaction.reply({ 
-              content: 'An error occurred while processing this command.', 
-              ephemeral: true 
-            });
-          } else if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.editReply('An error occurred while processing this command.');
-          }
-        } catch (replyError) {
-          console.error('Error sending error reply:', replyError);
-        }
+        console.error('Error handling interaction:', error);
       }
     });
-
-    // Register commands with Discord API
-    const rest = new REST().setToken(token);
-    await rest.put(
-      Routes.applicationCommands(clientId),
-      { body: commands }
-    );
-
-    // Store token and client ID in integration settings
-    const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-    if (!tokenSetting) {
-      await storage.createIntegrationSetting({
-        service: 'discord',
-        key: 'bot_token',
-        value: token,
-        enabled: true
-      });
-    } else {
-      await storage.updateIntegrationSetting(tokenSetting.id, {
-        value: token,
-        enabled: true
-      });
-    }
-
-    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
-    if (!clientIdSetting) {
-      await storage.createIntegrationSetting({
-        service: 'discord',
-        key: 'bot_client_id',
-        value: clientId,
-        enabled: true
-      });
-    } else {
-      await storage.updateIntegrationSetting(clientIdSetting.id, {
-        value: clientId,
-        enabled: true
-      });
-    }
-
-    botStatus.status = 'Initialized (not connected)';
-    return { success: true, message: 'Bot initialized successfully' };
+    
+    // Log in to Discord with the provided token
+    await client.login(token);
+    
+    return client;
   } catch (error) {
-    botStatus = {
-      connected: false,
-      status: `Initialization error: ${error instanceof Error ? error.message : String(error)}`,
-      username: '',
-      id: '',
-      guilds: 0
-    };
-    console.error('Error initializing Discord bot:', error);
-    return { success: false, message: 'Failed to initialize bot', error };
+    console.error('Failed to initialize Discord bot:', error);
+    botStatus.status = 'error: ' + (error instanceof Error ? error.message : String(error));
+    throw error;
   }
 };
+
+/**
+ * Register slash commands with Discord
+ */
+async function registerCommands(clientId: string, token: string) {
+  try {
+    console.log('Registering slash commands...');
+    
+    // Create the list of commands
+    const commands = [
+      new SlashCommandBuilder()
+        .setName('list_articles')
+        .setDescription('List all articles in the database'),
+      
+      new SlashCommandBuilder()
+        .setName('create_article')
+        .setDescription('Create a new article'),
+      
+      new SlashCommandBuilder()
+        .setName('edit_article')
+        .setDescription('Edit an existing article'),
+      
+      new SlashCommandBuilder()
+        .setName('insta')
+        .setDescription('Upload an Instagram image for an article'),
+      
+      new SlashCommandBuilder()
+        .setName('web')
+        .setDescription('Upload a main web image for an article')
+    ];
+    
+    // Create the REST API client
+    const rest = new REST().setToken(token);
+    
+    // Register the commands
+    try {
+      console.log('Started refreshing application (/) commands.');
+      
+      // Register commands globally (for all guilds/servers)
+      await rest.put(
+        Routes.applicationCommands(clientId),
+        { body: commands }
+      );
+      
+      console.log('Successfully reloaded application (/) commands.');
+    } catch (error) {
+      console.error('Error registering commands:', error);
+    }
+  } catch (error) {
+    console.error('Error in registerCommands:', error);
+  }
+}
 
 /**
  * Start the Discord bot
  */
 export const startDiscordBot = async () => {
   try {
-    if (!client) {
-      // Try to load settings from storage and initialize
-      const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-      const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
-      
-      if (!tokenSetting || !clientIdSetting) {
-        return { success: false, message: 'Bot not initialized. Please set bot token and client ID first.' };
-      }
-      
-      await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
-      if (!client) {
-        return { success: false, message: 'Failed to initialize bot with stored credentials.' };
-      }
+    if (client) {
+      console.log('Bot is already running');
+      return;
     }
     
-    botStatus.status = 'Connecting...';
-    await client.login(await getDiscordBotToken());
+    const token = await getDiscordBotToken();
+    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'client_id');
     
-    return { success: true, message: 'Bot started successfully' };
+    if (!token) {
+      throw new Error('Discord bot token not found in settings');
+    }
+    
+    if (!clientIdSetting?.value) {
+      throw new Error('Discord client ID not found in settings');
+    }
+    
+    const clientId = clientIdSetting.value;
+    
+    // Initialize and start the bot
+    return await initializeDiscordBot(token, clientId);
   } catch (error) {
-    botStatus = {
-      ...botStatus,
-      connected: false,
-      status: `Start error: ${error instanceof Error ? error.message : String(error)}`
-    };
     console.error('Error starting Discord bot:', error);
-    return { success: false, message: 'Failed to start bot', error };
+    botStatus.status = 'error: ' + (error instanceof Error ? error.message : String(error));
+    throw error;
   }
 };
 
@@ -1613,22 +904,25 @@ export const startDiscordBot = async () => {
 export const stopDiscordBot = async () => {
   try {
     if (!client) {
-      return { success: false, message: 'Bot not initialized' };
+      console.log('Bot is not running');
+      return;
     }
     
+    // Destroy the client
     await client.destroy();
-    botStatus = {
-      connected: false,
-      status: 'Disconnected',
-      username: botStatus.username,
-      id: botStatus.id,
-      guilds: 0
-    };
+    client = null;
     
-    return { success: true, message: 'Bot stopped successfully' };
+    // Update status
+    botStatus.connected = false;
+    botStatus.status = 'disconnected';
+    botStatus.username = '';
+    botStatus.id = '';
+    botStatus.guilds = 0;
+    
+    console.log('Discord bot stopped');
   } catch (error) {
     console.error('Error stopping Discord bot:', error);
-    return { success: false, message: 'Failed to stop bot', error };
+    throw error;
   }
 };
 
@@ -1636,16 +930,6 @@ export const stopDiscordBot = async () => {
  * Get the Discord bot status
  */
 export const getDiscordBotStatus = () => {
-  if (client) {
-    // Update the connected status based on client's readiness
-    botStatus.connected = client.isReady();
-    
-    // Update guild count if connected
-    if (client.isReady()) {
-      botStatus.guilds = client.guilds.cache.size;
-    }
-  }
-  
   return botStatus;
 };
 
@@ -1655,8 +939,8 @@ export const getDiscordBotStatus = () => {
 async function getDiscordBotToken(): Promise<string> {
   const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
   
-  if (!tokenSetting || !tokenSetting.value) {
-    throw new Error('Discord bot token not found in settings');
+  if (!tokenSetting?.value || !tokenSetting.enabled) {
+    return '';
   }
   
   return tokenSetting.value;
@@ -1666,93 +950,113 @@ async function getDiscordBotToken(): Promise<string> {
  * Set up Discord bot routes for the Express app
  */
 export function setupDiscordBotRoutes(app: Express) {
-  // Initialize the bot with token and client ID
   app.post("/api/discord/bot/initialize", async (req: Request, res: Response) => {
     try {
       const { token, clientId } = req.body;
       
       if (!token || !clientId) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Bot token and client ID are required' 
+        return res.status(400).json({
+          success: false,
+          message: 'Bot token and client ID are required'
         });
       }
       
-      const result = await initializeDiscordBot(token, clientId);
+      // First, save these settings to the database
+      const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
+      const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'client_id');
       
-      if (result.success) {
-        res.json({ success: true, message: result.message });
+      if (tokenSetting) {
+        await storage.updateIntegrationSetting(tokenSetting.id, {
+          value: token,
+          enabled: true
+        });
       } else {
-        res.status(500).json({ 
-          success: false, 
-          message: result.message 
+        await storage.createIntegrationSetting({
+          service: 'discord',
+          key: 'bot_token',
+          value: token,
+          description: 'Discord Bot Token',
+          enabled: true,
+          created_at: new Date(),
+          updated_at: new Date()
         });
       }
+      
+      if (clientIdSetting) {
+        await storage.updateIntegrationSetting(clientIdSetting.id, {
+          value: clientId,
+          enabled: true
+        });
+      } else {
+        await storage.createIntegrationSetting({
+          service: 'discord',
+          key: 'client_id',
+          value: clientId,
+          description: 'Discord Client ID',
+          enabled: true,
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+      }
+      
+      // Then initialize the bot
+      await initializeDiscordBot(token, clientId);
+      
+      res.status(200).json({
+        success: true,
+        message: 'Discord bot initialized successfully',
+        status: getDiscordBotStatus()
+      });
     } catch (error) {
       console.error('Error initializing Discord bot:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while initializing the Discord bot' 
+      res.status(500).json({
+        success: false,
+        message: 'Error initializing Discord bot: ' + (error instanceof Error ? error.message : String(error))
       });
     }
   });
-
-  // Start the bot
+  
   app.post("/api/discord/bot/start", async (req: Request, res: Response) => {
     try {
-      const result = await startDiscordBot();
+      await startDiscordBot();
       
-      if (result.success) {
-        res.json({ success: true, message: result.message });
-      } else {
-        res.status(500).json({ 
-          success: false, 
-          message: result.message 
-        });
-      }
+      res.status(200).json({
+        success: true,
+        message: 'Discord bot started successfully',
+        status: getDiscordBotStatus()
+      });
     } catch (error) {
       console.error('Error starting Discord bot:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while starting the Discord bot' 
+      res.status(500).json({
+        success: false,
+        message: 'Error starting Discord bot: ' + (error instanceof Error ? error.message : String(error))
       });
     }
   });
-
-  // Stop the bot
+  
   app.post("/api/discord/bot/stop", async (req: Request, res: Response) => {
     try {
-      const result = await stopDiscordBot();
+      await stopDiscordBot();
       
-      if (result.success) {
-        res.json({ success: true, message: result.message });
-      } else {
-        res.status(400).json({ 
-          success: false, 
-          message: result.message 
-        });
-      }
+      res.status(200).json({
+        success: true,
+        message: 'Discord bot stopped successfully',
+        status: getDiscordBotStatus()
+      });
     } catch (error) {
       console.error('Error stopping Discord bot:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while stopping the Discord bot' 
+      res.status(500).json({
+        success: false,
+        message: 'Error stopping Discord bot: ' + (error instanceof Error ? error.message : String(error))
       });
     }
   });
-
-  // Get bot status
+  
   app.get("/api/discord/bot/status", (req: Request, res: Response) => {
-    try {
-      const status = getDiscordBotStatus();
-      res.json(status);
-    } catch (error) {
-      console.error('Error getting Discord bot status:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while getting Discord bot status' 
-      });
-    }
+    res.status(200).json({
+      success: true,
+      status: getDiscordBotStatus()
+    });
   });
 }
 
@@ -1762,172 +1066,54 @@ export function setupDiscordBotRoutes(app: Express) {
 export function setupArticleReceiveEndpoint(app: Express) {
   app.post("/api/discord/articles", async (req: Request, res: Response) => {
     try {
-      const { title, description, content, author, featured = false } = req.body;
+      const { title, content, description, author, featured } = req.body;
       
-      // Validate required fields
-      if (!title || !content) {
+      if (!title) {
         return res.status(400).json({
           success: false,
-          message: 'Title and content are required'
+          message: 'Article title is required'
         });
       }
       
-      // Create article data - map to fields in our system
-      // Note: These field names map to Airtable fields through the website
+      // Create a new article
       const articleData: InsertArticle = {
-        title,                    // Maps to Airtable's "Name" field
-        description: description || '',   // Maps to Airtable's "Description" field
-        content,                  // Maps to Airtable's "Body" field
-        author: author || 'Discord User', // Maps to Airtable's "Author" field
-        featured: featured ? 'yes' : 'no', // Maps to Airtable's "Featured" field (as string)
-        status: 'draft',          // Article status in our system
-        imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder
-        imageType: 'url',         // Specifies that we're using a URL, not a file
-        contentFormat: 'plaintext', // Format of the content
-        source: 'discord',        // Identifies the article as coming from Discord
-        externalId: `discord-api-${Date.now()}`, // Unique ID for tracking
+        title,
+        content: content || null,
+        description: description || null,
+        author: author || null,
+        featured: featured === true,
+        status: 'draft',
+        external_id: null,
+        created_at: new Date(),
+        updated_at: new Date()
       };
       
-      // Create the article through our website's storage system
-      // This doesn't directly modify Airtable - that sync happens through the website
       const article = await storage.createArticle(articleData);
+      
+      // Log the activity
+      await storage.createActivityLog({
+        action: 'create',
+        entity_type: 'article',
+        entity_id: article.id,
+        description: `Article "${article.title}" created via Discord API`,
+        user_id: null,
+        metadata: JSON.stringify(article),
+        created_at: new Date()
+      });
       
       res.status(201).json({
         success: true,
-        message: 'Article created successfully in the website database',
+        message: 'Article created successfully',
         article
       });
     } catch (error) {
-      console.error('Error creating article from Discord API:', error);
+      console.error('Error creating article from Discord:', error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while creating the article'
+        message: 'Error creating article: ' + (error instanceof Error ? error.message : String(error))
       });
     }
   });
-}
-
-/**
- * Helper function to create a type-safe message collector
- * Used by both /insta and /web commands to collect image messages
- */
-async function collectImageMessage(channel: any, filter: (m: any) => boolean, timeoutMs: number = 300000): Promise<any | null> {
-  // Create a collector that will listen for messages meeting the filter criteria
-  const collector = channel.createMessageCollector({
-    filter,
-    max: 1,
-    time: timeoutMs
-  });
-  
-  // Return a promise that resolves when a message is collected or timeout occurs
-  return new Promise<any | null>(resolve => {
-    collector.on('collect', (message: any) => {
-      resolve(message);
-      collector.stop();
-    });
-    
-    collector.on('end', (collected: any) => {
-      if (collected.size === 0) {
-        resolve(null);
-      }
-    });
-  });
-}
-
-/**
- * Handler for the /insta command
- * Allows users to select an unpublished article and upload an Instagram image to it
- */
-async function handleInstaImageCommand(interaction: any) {
-  await interaction.deferReply({ ephemeral: true });
-  
-  try {
-    // Create a select menu for article selection
-    const articles = await storage.getArticles();
-    const unpublishedArticles = articles.filter(article => 
-      article.status !== 'published'
-    );
-    
-    if (unpublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.');
-      return;
-    }
-    
-    // Create a select menu for article selection
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('select_article_for_insta_image')
-      .setPlaceholder('Select an article to add Instagram image')
-      .addOptions(
-        unpublishedArticles.slice(0, 25).map(article => ({
-          label: article.title.substring(0, 100), // Max 100 chars for option label
-          description: `Status: ${article.status} | ID: ${article.id}`,
-          value: article.id.toString()
-        }))
-      );
-    
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(selectMenu);
-    
-    // Show the selection menu to the user
-    await interaction.editReply({
-      content: 'Please select an article to upload an Instagram image to.\n\nNote: Due to Discord permission constraints, you\'ll need to use the web dashboard to actually upload the image after selecting an article.',
-      components: [row]
-    });
-    
-    // We'll handle the selection in the handleStringSelectMenuInteraction function
-    // which will check for the 'select_article_for_insta_image' custom ID
-  } catch (error) {
-    console.error('Error handling Instagram image command:', error);
-    await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
-  }
-}
-
-/**
- * Handler for the /web command
- * Allows users to select an unpublished article and upload a main web image to it
- */
-async function handleWebImageCommand(interaction: any) {
-  await interaction.deferReply({ ephemeral: true });
-  
-  try {
-    // Create a select menu for article selection
-    const articles = await storage.getArticles();
-    const unpublishedArticles = articles.filter(article => 
-      article.status !== 'published'
-    );
-    
-    if (unpublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.');
-      return;
-    }
-    
-    // Create a select menu for article selection
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('select_article_for_web_image')
-      .setPlaceholder('Select an article to add web image')
-      .addOptions(
-        unpublishedArticles.slice(0, 25).map(article => ({
-          label: article.title.substring(0, 100), // Max 100 chars for option label
-          description: `Status: ${article.status} | ID: ${article.id}`,
-          value: article.id.toString()
-        }))
-      );
-    
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(selectMenu);
-    
-    // Show the selection menu to the user
-    await interaction.editReply({
-      content: 'Please select an article to upload a web (main) image to.\n\nNote: Due to Discord permission constraints, you\'ll need to use the web dashboard to actually upload the image after selecting an article.',
-      components: [row]
-    });
-    
-    // We'll handle the selection in the handleStringSelectMenuInteraction function
-    // which will check for the 'select_article_for_web_image' custom ID
-  } catch (error) {
-    console.error('Error handling web image command:', error);
-    await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
-  }
 }
 
 /**
@@ -1935,13 +1121,10 @@ async function handleWebImageCommand(interaction: any) {
  */
 export const autoStartDiscordBot = async () => {
   try {
-    // Check if we have the required settings
     const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
     
-    if (tokenSetting?.enabled && clientIdSetting?.enabled) {
+    if (tokenSetting?.value && tokenSetting.enabled) {
       console.log('Auto-starting Discord bot...');
-      await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
       await startDiscordBot();
     }
   } catch (error) {
