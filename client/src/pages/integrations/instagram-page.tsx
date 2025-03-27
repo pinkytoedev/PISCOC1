@@ -74,8 +74,17 @@ export default function InstagramPage() {
 
   // Handle Facebook login
   const handleLogin = () => {
+    console.log('Login requested, SDK initialized:', isInitialized);
+    if (!isInitialized) {
+      setError('Facebook SDK is still initializing. Please wait a moment and try again.');
+      return;
+    }
+    
     login(
-      () => console.log('Login successful'),
+      () => {
+        console.log('Login successful');
+        setError(null);
+      },
       (error) => {
         console.error('Login failed:', error);
         setError('Facebook login failed. Please try again.');
@@ -85,7 +94,16 @@ export default function InstagramPage() {
 
   // Handle Facebook logout
   const handleLogout = () => {
-    logout(() => console.log('Logout successful'));
+    console.log('Logout requested, SDK initialized:', isInitialized);
+    if (!isInitialized) {
+      setError('Facebook SDK is still initializing. Please wait a moment and try again.');
+      return;
+    }
+    
+    logout(() => {
+      console.log('Logout successful');
+      setError(null);
+    });
   };
 
   // Create a new webhook subscription
@@ -150,7 +168,7 @@ export default function InstagramPage() {
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             Facebook Authentication
-            <Badge variant={status === 'connected' ? 'success' : 'destructive'}>
+            <Badge variant={status === 'connected' ? 'default' : 'destructive'}>
               {status === 'connected' ? 'Connected' : 'Not Connected'}
             </Badge>
           </CardTitle>
@@ -159,6 +177,14 @@ export default function InstagramPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* SDK initialization status */}
+          {!isInitialized && (
+            <div className="flex items-center justify-center space-x-2 mb-4 p-2 border rounded bg-muted">
+              <RefreshCcw className="animate-spin h-4 w-4" />
+              <p>Facebook SDK is initializing...</p>
+            </div>
+          )}
+
           {status === 'connected' && user && (
             <div className="rounded-lg bg-muted p-4 mb-4">
               <div className="flex items-center">
