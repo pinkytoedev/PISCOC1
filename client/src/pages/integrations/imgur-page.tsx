@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Save, Lock, LogIn, LogOut, Image, ExternalLink } from "lucide-react";
+import { Loader2, Save, Lock, LogIn, LogOut, Image, ExternalLink, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -260,12 +260,54 @@ export default function ImgurPage() {
         </p>
       </div>
       
+      {/* Status Banner */}
+      <div className={`mb-8 p-4 rounded-lg ${clientIdSetting?.value ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+        <div className="flex items-center gap-3">
+          {clientIdSetting?.value ? (
+            <>
+              <div className="bg-green-100 p-2 rounded-full">
+                <Image className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-medium text-green-800">Imgur Integration Status: {clientIdSetting.enabled ? 'Enabled' : 'Configured but Disabled'}</h2>
+                <p className="text-green-700 text-sm mt-1">
+                  {clientIdSetting.enabled 
+                    ? 'Images will be uploaded through Imgur before being sent to Airtable.' 
+                    : 'Integration is configured but currently disabled. Enable it below to use Imgur for image uploads.'}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-amber-100 p-2 rounded-full">
+                <AlertCircle className="h-6 w-6 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-medium text-amber-800">Imgur Integration Status: Not Configured</h2>
+                <p className="text-amber-700 text-sm mt-1">
+                  Enter your Imgur API credentials below to enable seamless image hosting for Airtable.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+      
       <Card className="mb-8">
         <CardHeader>
-          <CardTitle>Imgur API Configuration</CardTitle>
-          <CardDescription>
-            Enter your Imgur API client ID to enable integration with the Imgur service for image hosting
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Imgur API Configuration</CardTitle>
+              <CardDescription>
+                Enter your Imgur API client ID to enable integration with the Imgur service for image hosting
+              </CardDescription>
+            </div>
+            {clientIdSetting?.value && (
+              <Badge className={clientIdSetting.enabled ? 'bg-green-600' : 'bg-gray-400'}>
+                {clientIdSetting.enabled ? 'Active' : 'Disabled'}
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -325,7 +367,7 @@ export default function ImgurPage() {
                   control={form.control}
                   name="enabled"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 bg-gray-50">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">
                           Enable Imgur Integration
@@ -348,7 +390,7 @@ export default function ImgurPage() {
                   control={form.control}
                   name="use_oauth"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 bg-gray-50">
                       <div className="space-y-0.5">
                         <FormLabel className="text-base">
                           Use OAuth Authentication
@@ -367,32 +409,32 @@ export default function ImgurPage() {
                   )}
                 />
                 
-                <Button 
-                  type="submit" 
-                  disabled={isSubmitting}
-                  className="flex items-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Saving...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      <span>Save Settings</span>
-                    </>
-                  )}
-                </Button>
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-muted-foreground max-w-[400px]">
+                    <p>Using Imgur as an intermediary ensures your images have permanent URLs that won't expire and bypass Airtable's attachment size limits.</p>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="flex items-center gap-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        <span>Save Settings</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
               </form>
             </Form>
           )}
         </CardContent>
-        <CardFooter className="bg-secondary/20 text-sm text-muted-foreground">
-          <p>
-            Note: Using Imgur as an intermediary ensures your images have permanent URLs that won't expire.
-          </p>
-        </CardFooter>
       </Card>
       
       {form.getValues('use_oauth') && (
