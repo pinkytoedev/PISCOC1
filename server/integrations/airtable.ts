@@ -17,7 +17,7 @@ interface AirtableResponse<T> {
   offset?: string;
 }
 
-// Interface for URL objects from Airtable
+// Interface for attachment objects from Airtable (response format)
 interface Attachment {
   id: string;
   url: string;
@@ -33,11 +33,19 @@ interface Attachment {
   };
 }
 
+// Interface for attachment objects to be sent to Airtable (upload format)
+// Airtable API only requires url and filename for attachments
+interface UploadAttachment {
+  url: string;
+  filename: string;
+}
+
 interface UrlObject {
   url: string;
 }
 
-interface AirtableArticle {
+// For response data (reading from Airtable)
+interface AirtableArticleResponse {
   Name: string;                    // Long text
   _createdTime?: string;           // Date
   _publishedTime?: string;         // Date
@@ -56,6 +64,30 @@ interface AirtableArticle {
   "Name (from Photo)"?: string[];  // Lookup
   Photo?: string[];                // Link to another record (array of IDs)
 }
+
+// For request data (writing to Airtable)
+interface AirtableArticleRequest {
+  Name: string;                    // Long text
+  _createdTime?: string;           // Date
+  _publishedTime?: string;         // Date
+  _updatedTime?: string;           // Date
+  Author?: string[];               // Link to another record (array of IDs)
+  Body: string;                    // Long text (content)
+  Date?: string;                   // Date
+  Description?: string;            // Long text
+  Featured?: boolean;              // Checkbox
+  Finished?: boolean;              // Checkbox
+  Hashtags?: string;               // Long text
+  instaPhoto?: UploadAttachment[]; // Attachment
+  MainImage?: UploadAttachment[];  // Attachment
+  message_sent?: boolean;          // Checkbox
+  "Name (from Author)"?: string[]; // Lookup
+  "Name (from Photo)"?: string[];  // Lookup
+  Photo?: string[];                // Link to another record (array of IDs)
+}
+
+// Type alias for compatibility with existing code
+type AirtableArticle = AirtableArticleResponse;
 
 interface AirtableTeamMember {
   Name: string;                   // Long text
@@ -210,30 +242,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         // Extract filename or create a default one with proper extension
         const filename = article.imageUrl.split('/').pop() || `main_image.${fileExt}`;
         
-        // Create the Airtable Attachment structure for MainImage
-        const mainImageAttachment: Attachment = {
-          id: `img_main_${Date.now()}`, // Generate a temporary id
+        // Create the simplified Airtable Attachment structure for MainImage
+        // Airtable API only needs url and filename; it will fetch and process the image
+        const mainImageAttachment: UploadAttachment = {
           url: article.imageUrl,
-          filename: filename,
-          size: 0, // We don't know the size, but Airtable requires this field
-          type: mimeType,
-          thumbnails: {
-            small: { 
-              url: article.imageUrl,
-              width: 36,
-              height: 36
-            },
-            large: {
-              url: article.imageUrl,
-              width: 512,
-              height: 512
-            },
-            full: {
-              url: article.imageUrl,
-              width: 3000,
-              height: 3000
-            }
-          }
+          filename: filename
         };
         
         airtableData.MainImage = [mainImageAttachment];
@@ -268,30 +281,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       // Extract filename or create a default one with proper extension
       const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
       
-      // Create the Airtable Attachment structure for instaPhoto
-      const instaPhotoAttachment: Attachment = {
-        id: `img_insta_${Date.now()}`, // Generate a temporary id
+      // Create the simplified Airtable Attachment structure for instaPhoto
+      // Airtable API only needs url and filename; it will fetch and process the image
+      const instaPhotoAttachment: UploadAttachment = {
         url: article.instagramImageUrl,
-        filename: filename,
-        size: 0, 
-        type: mimeType,
-        thumbnails: {
-          small: { 
-            url: article.instagramImageUrl,
-            width: 36,
-            height: 36
-          },
-          large: {
-            url: article.instagramImageUrl,
-            width: 512,
-            height: 512
-          },
-          full: {
-            url: article.instagramImageUrl,
-            width: 3000,
-            height: 3000
-          }
-        }
+        filename: filename
       };
       
       airtableData.instaPhoto = [instaPhotoAttachment];
@@ -325,29 +319,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       // Extract filename or create a default one with proper extension
       const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
       
-      const instaPhotoAttachment: Attachment = {
-        id: `img_insta_${Date.now()}`, // Generate a temporary id
+      // Create the simplified Airtable Attachment structure for instaPhoto
+      // Airtable API only needs url and filename; it will fetch and process the image
+      const instaPhotoAttachment: UploadAttachment = {
         url: article.imageUrl,
-        filename: filename,
-        size: 0, 
-        type: mimeType,
-        thumbnails: {
-          small: { 
-            url: article.imageUrl,
-            width: 36,
-            height: 36
-          },
-          large: {
-            url: article.imageUrl,
-            width: 512,
-            height: 512
-          },
-          full: {
-            url: article.imageUrl,
-            width: 3000,
-            height: 3000
-          }
-        }
+        filename: filename
       };
       
       airtableData.instaPhoto = [instaPhotoAttachment];
