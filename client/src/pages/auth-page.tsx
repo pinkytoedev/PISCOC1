@@ -53,10 +53,10 @@ export default function AuthPage() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="text-2xl font-bold text-center">
-                Discord-Airtable Integration
+               P.I.S.C.O.C Management Software
               </CardTitle>
               <CardDescription className="text-center">
-                Sign in to manage your content across platforms
+                Sign in to the Pinkytoe's Internal Social Communication and Online Commander. Proprietary to the Alphabet Mafia and our constitutes.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -116,10 +116,10 @@ export default function AuthPage() {
         <div className="hidden md:block">
           <div className="bg-primary rounded-xl p-8 text-white">
             <h1 className="text-3xl font-bold mb-6">
-              Unified Content Management
+              Discord, Insta, and Airtable
             </h1>
             <p className="text-lg mb-8">
-              Seamlessly integrate Discord, Airtable, and Instagram for efficient content distribution and management.
+              This took so long to make like holy f**k
             </p>
             
             <div className="space-y-6">
@@ -152,7 +152,7 @@ export default function AuthPage() {
                   <SiInstagram className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold">Instagram Publishing</h3>
+                  <h3 className="text-lg font-semibold">Instagram Publishing W.I.P</h3>
                   <p className="text-sm text-white/80">
                     Distribute content to Instagram directly from your admin dashboard.
                   </p>
