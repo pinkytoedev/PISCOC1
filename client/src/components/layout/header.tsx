@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Bell, ChevronDown, Link as LinkIcon } from "lucide-react";
+import { Bell, ChevronDown, Link as LinkIcon, Menu } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,9 +14,10 @@ import {
 
 interface HeaderProps {
   title?: string;
+  onMobileMenuToggle?: () => void;
 }
 
-export function Header({ title = "Discord-Airtable Integration" }: HeaderProps) {
+export function Header({ title = "Discord-Airtable Integration", onMobileMenuToggle }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const [notifications] = useState<any[]>([]);
   
@@ -31,13 +33,23 @@ export function Header({ title = "Discord-Airtable Integration" }: HeaderProps) 
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="flex justify-between items-center px-4 py-3">
         <div className="flex items-center space-x-3">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={onMobileMenuToggle} 
+            className="md:hidden mr-1"
+            aria-label="Toggle mobile menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
           <div className="font-medium text-xl flex items-center">
             <span className="mr-2 text-primary">
               <LinkIcon className="h-5 w-5" />
             </span>
-            <span>{title}</span>
+            <span className="hidden sm:inline">{title}</span>
+            <span className="sm:hidden">Dashboard</span>
           </div>
-          <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded">v1.0.0</span>
+          <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded hidden sm:inline-block">v1.0.0</span>
         </div>
         
         <div className="flex items-center space-x-4">
@@ -89,7 +101,7 @@ export function Header({ title = "Discord-Airtable Integration" }: HeaderProps) 
                 <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
                   <span className="text-sm font-medium text-gray-600">{userInitials}</span>
                 </div>
-                <span className="text-sm font-medium">{user?.username}</span>
+                <span className="text-sm font-medium hidden sm:inline">{user?.username}</span>
                 <ChevronDown className="h-4 w-4 text-gray-500" />
               </button>
             </DropdownMenuTrigger>
