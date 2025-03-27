@@ -939,6 +939,8 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         return;
       }
       
+      console.log('Processing Instagram image upload for article ID:', articleId);
+      
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
       
@@ -1004,6 +1006,8 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         });
         return;
       }
+      
+      console.log('Processing Instagram image upload NOW for article ID:', articleId);
       
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
@@ -1771,13 +1775,14 @@ async function processDiscordAttachment(
     // Get the article
     const article = await storage.getArticle(articleId);
     if (!article) {
+      console.error(`Article with ID ${articleId} not found in processDiscordAttachment.`);
       return {
         success: false,
         message: `Article with ID ${articleId} not found.`
       };
     }
     
-    console.log(`Processing Discord attachment for article ${articleId}, field ${fieldName}`);
+    console.log(`Processing Discord attachment for article ID ${articleId}, title "${article.title}", field ${fieldName}`);
     
     // Upload directly to Imgur using the URL from Discord
     const imgurResult = await uploadImageUrlToImgur(
@@ -1816,12 +1821,15 @@ async function processDiscordAttachment(
     
     if (fieldName === 'MainImage') {
       updateData.imageUrl = imgurResult.link;
+      console.log(`Updating article ${articleId} with MainImage URL: ${imgurResult.link}`);
     } else if (fieldName === 'instaPhoto') {
       updateData.instagramImageUrl = imgurResult.link;
+      console.log(`Updating article ${articleId} with Instagram image URL: ${imgurResult.link}`);
     }
     
     // Update the article
-    await storage.updateArticle(articleId, updateData);
+    const updatedArticle = await storage.updateArticle(articleId, updateData);
+    console.log('Article update result:', updatedArticle ? 'Success' : 'Failed');
     
     return {
       success: true,
