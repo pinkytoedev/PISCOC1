@@ -16,6 +16,7 @@ import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
 import ImgurPage from "@/pages/integrations/imgur-page";
+import DocsPage from "@/pages/docs-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -31,6 +32,7 @@ function Router() {
       <ProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <ProtectedRoute path="/integrations/instagram" component={InstagramPage} />
       <ProtectedRoute path="/integrations/imgur" component={ImgurPage} />
+      <ProtectedRoute path="/docs" component={DocsPage} />
       <Route component={NotFound} />
     </Switch>
   );
