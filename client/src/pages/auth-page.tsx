@@ -154,7 +154,7 @@ export default function AuthPage() {
                 <div>
                   <h3 className="text-lg font-semibold">Instagram Publishing W.I.P</h3>
                   <p className="text-sm text-white/80">
-                    Distribute content to Instagram directly from your admin dashboard.
+                    Sorry I can't hang I am busy learning Law so I can write a privacy policy my Meta overlords will appreciate
                   </p>
                 </div>
               </div>
