@@ -27,7 +27,10 @@ import {
   BarChart,
   User,
   Newspaper,
-  Coffee
+  Coffee,
+  MessageSquare,
+  ImageIcon,
+  BarChart3
 } from "lucide-react";
 
 // Interface for Instagram account info
@@ -279,9 +282,10 @@ export default function InstagramPage() {
             ) : (
               <div className="space-y-6">
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-4">
+                  <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="settings">Settings</TabsTrigger>
                     <TabsTrigger value="auth">Authentication</TabsTrigger>
+                    <TabsTrigger value="webhooks" disabled={!isConnected}>Webhooks</TabsTrigger>
                     <TabsTrigger value="publish">Publish Content</TabsTrigger>
                     <TabsTrigger value="insights" disabled={!isConnected}>Insights</TabsTrigger>
                   </TabsList>
@@ -641,6 +645,151 @@ export default function InstagramPage() {
                                 Ability to publish content to your Instagram professional account
                               </p>
                             </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                  
+                  <TabsContent value="webhooks" className="space-y-6 mt-6">
+                    {/* Instagram Webhooks */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Instagram Webhooks</CardTitle>
+                        <CardDescription>
+                          Configure webhooks to receive real-time updates from Instagram.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        <div className="bg-blue-50 p-4 rounded-md">
+                          <h3 className="text-sm font-medium text-blue-800">About Instagram Webhooks</h3>
+                          <p className="mt-1 text-sm text-blue-700">
+                            Webhooks allow your application to receive real-time updates when events occur on your Instagram account, such as new comments, mentions, or media uploads.
+                          </p>
+                        </div>
+                        
+                        <div className="space-y-4">
+                          <div className="grid gap-2">
+                            <Label htmlFor="webhook_url">Webhook URL</Label>
+                            <Input
+                              id="webhook_url"
+                              type="text"
+                              placeholder={`${window.location.protocol}//${window.location.host}/api/instagram/webhook`}
+                              value={getSettingValue('webhook_url')}
+                              onChange={(e) => handleSettingChange('webhook_url', e.target.value)}
+                            />
+                            <p className="text-xs text-gray-500">
+                              This URL will receive webhook notifications from Instagram. It must be publicly accessible.
+                            </p>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="border rounded-md p-4">
+                              <h3 className="text-sm font-semibold mb-2 flex items-center">
+                                <User className="h-4 w-4 mr-1" />
+                                Mentions
+                              </h3>
+                              <p className="text-xs text-gray-600">
+                                Receive notifications when your account is mentioned in comments or captions.
+                              </p>
+                            </div>
+                            
+                            <div className="border rounded-md p-4">
+                              <h3 className="text-sm font-semibold mb-2 flex items-center">
+                                <MessageSquare className="h-4 w-4 mr-1" />
+                                Comments
+                              </h3>
+                              <p className="text-xs text-gray-600">
+                                Receive notifications about new comments on your posts.
+                              </p>
+                            </div>
+                            
+                            <div className="border rounded-md p-4">
+                              <h3 className="text-sm font-semibold mb-2 flex items-center">
+                                <ImageIcon className="h-4 w-4 mr-1" />
+                                Media
+                              </h3>
+                              <p className="text-xs text-gray-600">
+                                Get updates when media is published, updated, or deleted.
+                              </p>
+                            </div>
+                            
+                            <div className="border rounded-md p-4">
+                              <h3 className="text-sm font-semibold mb-2 flex items-center">
+                                <BarChart3 className="h-4 w-4 mr-1" />
+                                Stories
+                              </h3>
+                              <p className="text-xs text-gray-600">
+                                Get notifications about story updates (requires additional permissions).
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <Button 
+                          className="w-full"
+                          onClick={() => {
+                            const webhookUrl = getSettingValue('webhook_url') || 
+                              `${window.location.protocol}//${window.location.host}/api/instagram/webhook`;
+                            
+                            fetch('/api/instagram/webhooks/subscribe', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                              },
+                              body: JSON.stringify({ webhookUrl })
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                              if (data.success) {
+                                toast({
+                                  title: "Webhooks Configured",
+                                  description: "Successfully subscribed to Instagram webhooks.",
+                                });
+                              } else {
+                                toast({
+                                  title: "Webhook Configuration Failed",
+                                  description: data.message || "Failed to subscribe to Instagram webhooks.",
+                                  variant: "destructive",
+                                });
+                              }
+                            })
+                            .catch(error => {
+                              toast({
+                                title: "Webhook Configuration Failed",
+                                description: error.message || "An error occurred while configuring webhooks.",
+                                variant: "destructive",
+                              });
+                            });
+                          }}
+                        >
+                          Subscribe to Webhooks
+                        </Button>
+                      </CardContent>
+                      <CardFooter className="bg-gray-50 border-t">
+                        <div className="w-full text-sm text-gray-500">
+                          <p>
+                            Note: Your server must be publicly accessible to receive webhook events from Instagram.
+                            For local development, you may need to use a tool like ngrok to expose your local server.
+                          </p>
+                        </div>
+                      </CardFooter>
+                    </Card>
+                    
+                    {/* Webhook Events */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Recent Webhook Events</CardTitle>
+                        <CardDescription>
+                          View recent events received from Instagram webhooks.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2">
+                          <div className="bg-gray-100 p-4 rounded-md text-center">
+                            <p className="text-sm text-gray-600">
+                              Webhook events will appear here when received.
+                            </p>
                           </div>
                         </div>
                       </CardContent>
