@@ -17,7 +17,8 @@ import {
 import { 
   SiDiscord, 
   SiAirtable, 
-  SiInstagram 
+  SiInstagram,
+  SiImgur
 } from "react-icons/si";
 
 export function Sidebar() {
@@ -67,6 +68,11 @@ export function Sidebar() {
           name: "Instagram",
           path: "/integrations/instagram",
           icon: <SiInstagram className="w-5 h-5" />
+        },
+        {
+          name: "Imgur",
+          path: "/integrations/imgur",
+          icon: <SiImgur className="w-5 h-5" />
         }
       ]
     },
