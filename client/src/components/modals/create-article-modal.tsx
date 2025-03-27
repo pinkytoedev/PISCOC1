@@ -290,7 +290,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       })
       .then(data => {
         toast({
-          title: "Image uploaded via Imgur successfully",
+          title: "Main image uploaded via Imgur successfully",
           description: "The image was uploaded to Imgur and linked to Airtable",
         });
         
@@ -303,7 +303,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           imageUrl: imageUrl
         }));
         
-        console.log("Imgur upload response:", data);
+        console.log("Imgur upload response for Main image:", data);
         setMainImageUploading(false);
       })
       .catch(error => {
