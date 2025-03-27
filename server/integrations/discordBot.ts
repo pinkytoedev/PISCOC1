@@ -15,7 +15,10 @@ import {
   ModalSubmitInteraction,
   MessageComponentInteraction,
   StringSelectMenuBuilder,
-  AttachmentBuilder
+  AttachmentBuilder,
+  Collection,
+  Message,
+  ChannelType
 } from 'discord.js';
 import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
@@ -643,6 +646,92 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         }
       }
     }
+    // Handle article selection for Instagram image upload
+    else if (interaction.customId === 'select_article_for_insta_image') {
+      // Get the selected article ID
+      const articleId = parseInt(interaction.values[0], 10);
+      
+      if (isNaN(articleId) || articleId === 0) {
+        await interaction.deferUpdate();
+        await interaction.followUp({
+          content: 'No valid article was selected.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      await interaction.deferUpdate();
+      
+      // Get the article details to confirm
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.followUp({
+          content: `No article found with ID ${articleId}. It may have been deleted.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Create the upload button
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_insta_image_${articleId}`)
+        .setLabel('Upload Instagram Image')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📸');
+      
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(uploadButton);
+      
+      // Confirm selection and prompt for image upload
+      await interaction.editReply({
+        content: `Selected article: **${article.title}**\n\nPlease upload an Instagram image using the button below:`,
+        components: [buttonRow]
+      });
+    }
+    // Handle article selection for Web image upload
+    else if (interaction.customId === 'select_article_for_web_image') {
+      // Get the selected article ID
+      const articleId = parseInt(interaction.values[0], 10);
+      
+      if (isNaN(articleId) || articleId === 0) {
+        await interaction.deferUpdate();
+        await interaction.followUp({
+          content: 'No valid article was selected.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      await interaction.deferUpdate();
+      
+      // Get the article details to confirm
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.followUp({
+          content: `No article found with ID ${articleId}. It may have been deleted.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Create the upload button
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_web_image_${articleId}`)
+        .setLabel('Upload Web Image')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🖼️');
+      
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(uploadButton);
+      
+      // Confirm selection and prompt for image upload
+      await interaction.editReply({
+        content: `Selected article: **${article.title}**\n\nPlease upload a web (main) image using the button below:`,
+        components: [buttonRow]
+      });
+    }
     // Handle author selection dropdown
     else if (interaction.customId === 'author_select') {
       await interaction.deferUpdate();
@@ -858,7 +947,6 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         content: `Please upload an Instagram image for the article: **${article.title}**\n\nAttach your image to your next message in this channel. The image will be automatically uploaded.`
       });
       
-      // Create a message collector to get the next message with an attachment from this user
       // This will be limited to the channel where the interaction occurred
       const filter = (msg: any) => {
         return msg.author.id === interaction.user.id && msg.attachments.size > 0;
@@ -870,130 +958,134 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         return;
       }
       
-      const collector = channel.createMessageCollector({ 
-        filter, 
-        max: 1, // Only collect one message
-        time: 300000 // 5 minute timeout
-      });
-      
-      collector.on('collect', async (message: any) => {
-        try {
-          // Get the first attachment
-          const attachment = message.attachments.first();
-          
-          if (!attachment) {
-            await interaction.followUp({
-              content: 'No valid image attachment found. Please try again with the command.',
-              ephemeral: true
-            });
-            return;
-          }
-          
-          // Check if the attachment is an image
-          if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-            await interaction.followUp({
-              content: 'The attachment must be an image. Please try again with an image file.',
-              ephemeral: true
-            });
-            return;
-          }
-          
-          // Update the status message
-          await interaction.editReply({
-            content: `Processing your Instagram image for article: **${article.title}**\n\nThis may take a few moments...`
-          });
-          
-          // Download the image
-          const response = await fetch(attachment.url);
-          if (!response.ok) {
-            throw new Error(`Failed to download image: ${response.statusText}`);
-          }
-          
-          const buffer = await response.buffer();
-          
-          // Create a temporary file to save the image
-          const tempDir = path.join(process.cwd(), 'temp');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-          
-          const tempFilePath = path.join(tempDir, attachment.name);
-          fs.writeFileSync(tempFilePath, buffer);
-          
-          // Now we have the image file, upload it to Imgur
-          const fileInfo = {
-            path: tempFilePath,
-            filename: attachment.name,
-            mimetype: attachment.contentType || 'image/jpeg', // Fallback to jpeg if no content type
-            size: attachment.size
-          };
-          
-          const imgurResult = await uploadImageToImgur(fileInfo);
-          
-          // Clean up the temp file
-          try {
-            fs.unlinkSync(tempFilePath);
-          } catch (e) {
-            console.error('Error removing temp file:', e);
-          }
-          
-          if (!imgurResult) {
-            throw new Error('Failed to upload image to Imgur');
-          }
-          
-          // Now upload the Imgur URL to Airtable
-          // We need to create a FormData object to match the API endpoint's expectations
-          const formData = new FormData();
-          formData.append('imageUrl', imgurResult.link);
-          formData.append('filename', attachment.name);
-          
-          const airtableResponse = await fetch(`${process.env.API_URL || ''}/api/airtable/upload-image-url/${articleId}/instaPhoto`, {
-            method: 'POST',
-            body: JSON.stringify({
-              imageUrl: imgurResult.link,
-              filename: attachment.name
-            }),
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (!airtableResponse.ok) {
-            const errorData = await airtableResponse.text();
-            throw new Error(`Failed to update Airtable: ${errorData}`);
-          }
-          
-          // The API updates the article with the new image URL
-          // Now we can give the user the success message with the image preview
-          await interaction.editReply({
-            content: `Successfully uploaded Instagram image for article: **${article.title}**\n\nImage has been uploaded to Imgur and linked in Airtable.`,
-            // Include the image as an attachment
-            files: [
-              new AttachmentBuilder(imgurResult.link, { name: 'instagram-image-preview.jpg' })
-            ]
-          });
-          
-          // Add a follow-up message with more details
-          await interaction.followUp({
-            content: `Instagram image uploaded and processed:\n• Article: **${article.title}** (ID: ${articleId})\n• Image URL: ${imgurResult.link}\n• Status: Successfully linked to Airtable`,
-            ephemeral: true
-          });
-          
-        } catch (error) {
-          console.error('Error processing Instagram image upload:', error);
-          await interaction.editReply({
-            content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
-          });
-        }
-      });
-      
-      collector.on('end', (collected, reason) => {
-        if (reason === 'time' && collected.size === 0) {
+      try {
+        // Use awaitMessages instead of createMessageCollector
+        const collected = await channel.awaitMessages({ 
+          filter, 
+          max: 1, // Only collect one message
+          time: 300000, // 5 minute timeout
+          errors: ['time']
+        }).catch(() => {
+          // Handle timeout
           interaction.editReply({
             content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
           }).catch(console.error);
+          return null;
+        });
+        
+        if (!collected || collected.size === 0) return;
+        
+        // Get the message with the attachment
+        const message = collected.first();
+        if (!message) return;
+        
+        // Get the first attachment
+        const attachment = message.attachments.first();
+        
+        if (!attachment) {
+          await interaction.followUp({
+            content: 'No valid image attachment found. Please try again with the command.',
+            ephemeral: true
+          });
+          return;
         }
-      });
+        
+        // Check if the attachment is an image
+        if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
+          await interaction.followUp({
+            content: 'The attachment must be an image. Please try again with an image file.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Update the status message
+        await interaction.editReply({
+          content: `Processing your Instagram image for article: **${article.title}**\n\nThis may take a few moments...`
+        });
+        
+        // Download the image
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`Failed to download image: ${response.statusText}`);
+        }
+        
+        const buffer = await response.buffer();
+        
+        // Create a temporary file to save the image
+        const tempDir = path.join(process.cwd(), 'temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        
+        const tempFilePath = path.join(tempDir, attachment.name);
+        fs.writeFileSync(tempFilePath, buffer);
+        
+        // Now we have the image file, upload it to Imgur
+        const fileInfo = {
+          path: tempFilePath,
+          filename: attachment.name,
+          mimetype: attachment.contentType || 'image/jpeg', // Fallback to jpeg if no content type
+          size: attachment.size
+        };
+        
+        const imgurResult = await uploadImageToImgur(fileInfo);
+        
+        // Clean up the temp file
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (e) {
+          console.error('Error removing temp file:', e);
+        }
+        
+        if (!imgurResult) {
+          throw new Error('Failed to upload image to Imgur');
+        }
+        
+        // Now upload the Imgur URL to Airtable
+        // We need to create a FormData object to match the API endpoint's expectations
+        const formData = new FormData();
+        formData.append('imageUrl', imgurResult.link);
+        formData.append('filename', attachment.name);
+        
+        const airtableResponse = await fetch(`${process.env.API_URL || ''}/api/airtable/upload-image-url/${articleId}/instaPhoto`, {
+          method: 'POST',
+          body: JSON.stringify({
+            imageUrl: imgurResult.link,
+            filename: attachment.name
+          }),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!airtableResponse.ok) {
+          const errorData = await airtableResponse.text();
+          throw new Error(`Failed to update Airtable: ${errorData}`);
+        }
+        
+        // The API updates the article with the new image URL
+        // Now we can give the user the success message with the image preview
+        await interaction.editReply({
+          content: `Successfully uploaded Instagram image for article: **${article.title}**\n\nImage has been uploaded to Imgur and linked in Airtable.`,
+          // Include the image as an attachment
+          files: [
+            new AttachmentBuilder(imgurResult.link, { name: 'instagram-image-preview.jpg' })
+          ]
+        });
+        
+        // Add a follow-up message with more details
+        await interaction.followUp({
+          content: `Instagram image uploaded and processed:\n• Article: **${article.title}** (ID: ${articleId})\n• Image URL: ${imgurResult.link}\n• Status: Successfully linked to Airtable`,
+          ephemeral: true
+        });
+        
+      } catch (error) {
+        console.error('Error processing Instagram image upload:', error);
+        await interaction.editReply({
+          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
+        });
+      }
     }
     // Handle Web image upload button
     else if (interaction.customId.startsWith('upload_web_image_')) {
@@ -1035,7 +1127,6 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         content: `Please upload a web (main) image for the article: **${article.title}**\n\nAttach your image to your next message in this channel. The image will be automatically uploaded.`
       });
       
-      // Create a message collector to get the next message with an attachment from this user
       // This will be limited to the channel where the interaction occurred
       const filter = (msg: any) => {
         return msg.author.id === interaction.user.id && msg.attachments.size > 0;
@@ -1047,130 +1138,134 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         return;
       }
       
-      const collector = channel.createMessageCollector({ 
-        filter, 
-        max: 1, // Only collect one message
-        time: 300000 // 5 minute timeout
-      });
-      
-      collector.on('collect', async (message: any) => {
-        try {
-          // Get the first attachment
-          const attachment = message.attachments.first();
-          
-          if (!attachment) {
-            await interaction.followUp({
-              content: 'No valid image attachment found. Please try again with the command.',
-              ephemeral: true
-            });
-            return;
-          }
-          
-          // Check if the attachment is an image
-          if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-            await interaction.followUp({
-              content: 'The attachment must be an image. Please try again with an image file.',
-              ephemeral: true
-            });
-            return;
-          }
-          
-          // Update the status message
-          await interaction.editReply({
-            content: `Processing your web image for article: **${article.title}**\n\nThis may take a few moments...`
-          });
-          
-          // Download the image
-          const response = await fetch(attachment.url);
-          if (!response.ok) {
-            throw new Error(`Failed to download image: ${response.statusText}`);
-          }
-          
-          const buffer = await response.buffer();
-          
-          // Create a temporary file to save the image
-          const tempDir = path.join(process.cwd(), 'temp');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-          
-          const tempFilePath = path.join(tempDir, attachment.name);
-          fs.writeFileSync(tempFilePath, buffer);
-          
-          // Now we have the image file, upload it to Imgur
-          const fileInfo = {
-            path: tempFilePath,
-            filename: attachment.name,
-            mimetype: attachment.contentType || 'image/jpeg', // Fallback to jpeg if no content type
-            size: attachment.size
-          };
-          
-          const imgurResult = await uploadImageToImgur(fileInfo);
-          
-          // Clean up the temp file
-          try {
-            fs.unlinkSync(tempFilePath);
-          } catch (e) {
-            console.error('Error removing temp file:', e);
-          }
-          
-          if (!imgurResult) {
-            throw new Error('Failed to upload image to Imgur');
-          }
-          
-          // Now upload the Imgur URL to Airtable
-          // We need to create a FormData object to match the API endpoint's expectations
-          const formData = new FormData();
-          formData.append('imageUrl', imgurResult.link);
-          formData.append('filename', attachment.name);
-          
-          const airtableResponse = await fetch(`${process.env.API_URL || ''}/api/airtable/upload-image-url/${articleId}/MainImage`, {
-            method: 'POST',
-            body: JSON.stringify({
-              imageUrl: imgurResult.link,
-              filename: attachment.name
-            }),
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (!airtableResponse.ok) {
-            const errorData = await airtableResponse.text();
-            throw new Error(`Failed to update Airtable: ${errorData}`);
-          }
-          
-          // The API updates the article with the new image URL
-          // Now we can give the user the success message with the image preview
-          await interaction.editReply({
-            content: `Successfully uploaded web image for article: **${article.title}**\n\nImage has been uploaded to Imgur and linked in Airtable.`,
-            // Include the image as an attachment
-            files: [
-              new AttachmentBuilder(imgurResult.link, { name: 'web-image-preview.jpg' })
-            ]
-          });
-          
-          // Add a follow-up message with more details
-          await interaction.followUp({
-            content: `Web image uploaded and processed:\n• Article: **${article.title}** (ID: ${articleId})\n• Image URL: ${imgurResult.link}\n• Status: Successfully linked to Airtable`,
-            ephemeral: true
-          });
-          
-        } catch (error) {
-          console.error('Error processing web image upload:', error);
-          await interaction.editReply({
-            content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
-          });
-        }
-      });
-      
-      collector.on('end', (collected, reason) => {
-        if (reason === 'time' && collected.size === 0) {
+      try {
+        // Use awaitMessages instead of createMessageCollector
+        const collected = await channel.awaitMessages({ 
+          filter, 
+          max: 1, // Only collect one message
+          time: 300000, // 5 minute timeout
+          errors: ['time']
+        }).catch(() => {
+          // Handle timeout
           interaction.editReply({
             content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
           }).catch(console.error);
+          return null;
+        });
+        
+        if (!collected || collected.size === 0) return;
+        
+        // Get the message with the attachment
+        const message = collected.first();
+        if (!message) return;
+        
+        // Get the first attachment
+        const attachment = message.attachments.first();
+        
+        if (!attachment) {
+          await interaction.followUp({
+            content: 'No valid image attachment found. Please try again with the command.',
+            ephemeral: true
+          });
+          return;
         }
-      });
+        
+        // Check if the attachment is an image
+        if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
+          await interaction.followUp({
+            content: 'The attachment must be an image. Please try again with an image file.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Update the status message
+        await interaction.editReply({
+          content: `Processing your web image for article: **${article.title}**\n\nThis may take a few moments...`
+        });
+        
+        // Download the image
+        const response = await fetch(attachment.url);
+        if (!response.ok) {
+          throw new Error(`Failed to download image: ${response.statusText}`);
+        }
+        
+        const buffer = await response.buffer();
+        
+        // Create a temporary file to save the image
+        const tempDir = path.join(process.cwd(), 'temp');
+        if (!fs.existsSync(tempDir)) {
+          fs.mkdirSync(tempDir, { recursive: true });
+        }
+        
+        const tempFilePath = path.join(tempDir, attachment.name);
+        fs.writeFileSync(tempFilePath, buffer);
+        
+        // Now we have the image file, upload it to Imgur
+        const fileInfo = {
+          path: tempFilePath,
+          filename: attachment.name,
+          mimetype: attachment.contentType || 'image/jpeg', // Fallback to jpeg if no content type
+          size: attachment.size
+        };
+        
+        const imgurResult = await uploadImageToImgur(fileInfo);
+        
+        // Clean up the temp file
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (e) {
+          console.error('Error removing temp file:', e);
+        }
+        
+        if (!imgurResult) {
+          throw new Error('Failed to upload image to Imgur');
+        }
+        
+        // Now upload the Imgur URL to Airtable
+        // We need to create a FormData object to match the API endpoint's expectations
+        const formData = new FormData();
+        formData.append('imageUrl', imgurResult.link);
+        formData.append('filename', attachment.name);
+        
+        const airtableResponse = await fetch(`${process.env.API_URL || ''}/api/airtable/upload-image-url/${articleId}/MainImage`, {
+          method: 'POST',
+          body: JSON.stringify({
+            imageUrl: imgurResult.link,
+            filename: attachment.name
+          }),
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!airtableResponse.ok) {
+          const errorData = await airtableResponse.text();
+          throw new Error(`Failed to update Airtable: ${errorData}`);
+        }
+        
+        // The API updates the article with the new image URL
+        // Now we can give the user the success message with the image preview
+        await interaction.editReply({
+          content: `Successfully uploaded web image for article: **${article.title}**\n\nImage has been uploaded to Imgur and linked in Airtable.`,
+          // Include the image as an attachment
+          files: [
+            new AttachmentBuilder(imgurResult.link, { name: 'web-image-preview.jpg' })
+          ]
+        });
+        
+        // Add a follow-up message with more details
+        await interaction.followUp({
+          content: `Web image uploaded and processed:\n• Article: **${article.title}** (ID: ${articleId})\n• Image URL: ${imgurResult.link}\n• Status: Successfully linked to Airtable`,
+          ephemeral: true
+        });
+        
+      } catch (error) {
+        console.error('Error processing web image upload:', error);
+        await interaction.editReply({
+          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
+        });
+      }
     }
   } catch (error) {
     console.error('Error handling button interaction:', error);
@@ -1604,16 +1699,30 @@ async function handleInstaImageCommand(interaction: any) {
   
   try {
     // Create a select menu for article selection
-    const articleSelect = await createArticleSelectMenu();
+    const articles = await storage.getArticles();
+    const unpublishedArticles = articles.filter(article => 
+      article.status !== 'published'
+    );
     
-    // If no articles available to edit
-    if (articleSelect.options[0].data.value === '0') {
+    if (unpublishedArticles.length === 0) {
       await interaction.editReply('No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.');
       return;
     }
     
-    // Create an action row with the article select menu
-    const row = new ActionRowBuilder().addComponents(articleSelect);
+    // Create a select menu for article selection
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('select_article_for_insta_image')
+      .setPlaceholder('Select an article to add Instagram image')
+      .addOptions(
+        unpublishedArticles.slice(0, 25).map(article => ({
+          label: article.title.substring(0, 100), // Max 100 chars for option label
+          description: `Status: ${article.status} | ID: ${article.id}`,
+          value: article.id.toString()
+        }))
+      );
+    
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(selectMenu);
     
     // Show the selection menu to the user
     await interaction.editReply({
@@ -1621,71 +1730,8 @@ async function handleInstaImageCommand(interaction: any) {
       components: [row]
     });
     
-    // We'll have a custom handler for the article selection in the interaction handler
-    // that will identify this is for Instagram images based on the custom ID
-    
-    // Capture the original interaction for the collector
-    const message = await interaction.fetchReply();
-    
-    // Create a collector to wait for article selection
-    const collector = message.createMessageComponentCollector({ 
-      time: 3_600_000 // 1 hour timeout
-    });
-    
-    collector.on('collect', async (i: any) => {
-      // Ensure this is the expected interaction type
-      if (i.customId === 'article_select') {
-        // Extract the article ID
-        const articleId = parseInt(i.values[0]);
-        
-        if (isNaN(articleId) || articleId === 0) {
-          await i.update({
-            content: 'Invalid article selection. Please try again.',
-            components: []
-          });
-          collector.stop();
-          return;
-        }
-        
-        // Get the article details to confirm
-        const article = await storage.getArticle(articleId);
-        
-        if (!article) {
-          await i.update({
-            content: `No article found with ID ${articleId}. It may have been deleted.`,
-            components: []
-          });
-          collector.stop();
-          return;
-        }
-        
-        // Confirm selection and prompt for image upload
-        await i.update({
-          content: `Selected article: **${article.title}**\n\nPlease upload an Instagram image using the button below:`,
-          components: [
-            new ActionRowBuilder<ButtonBuilder>().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`upload_insta_image_${articleId}`)
-                .setLabel('Upload Instagram Image')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('📸')
-            )
-          ]
-        });
-        
-        // Stop this collector as we've handled the selection
-        collector.stop();
-      }
-    });
-    
-    collector.on('end', (collected, reason) => {
-      if (reason === 'time' && collected.size === 0) {
-        interaction.editReply({
-          content: 'Selection timed out. Please run the command again if you still want to upload an image.',
-          components: []
-        }).catch(console.error);
-      }
-    });
+    // We'll handle the selection in the handleStringSelectMenuInteraction function
+    // which will check for the 'select_article_for_insta_image' custom ID
   } catch (error) {
     console.error('Error handling Instagram image command:', error);
     await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
@@ -1701,16 +1747,30 @@ async function handleWebImageCommand(interaction: any) {
   
   try {
     // Create a select menu for article selection
-    const articleSelect = await createArticleSelectMenu();
+    const articles = await storage.getArticles();
+    const unpublishedArticles = articles.filter(article => 
+      article.status !== 'published'
+    );
     
-    // If no articles available to edit
-    if (articleSelect.options[0].data.value === '0') {
+    if (unpublishedArticles.length === 0) {
       await interaction.editReply('No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.');
       return;
     }
     
-    // Create an action row with the article select menu
-    const row = new ActionRowBuilder().addComponents(articleSelect);
+    // Create a select menu for article selection
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('select_article_for_web_image')
+      .setPlaceholder('Select an article to add web image')
+      .addOptions(
+        unpublishedArticles.slice(0, 25).map(article => ({
+          label: article.title.substring(0, 100), // Max 100 chars for option label
+          description: `Status: ${article.status} | ID: ${article.id}`,
+          value: article.id.toString()
+        }))
+      );
+    
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(selectMenu);
     
     // Show the selection menu to the user
     await interaction.editReply({
@@ -1718,68 +1778,8 @@ async function handleWebImageCommand(interaction: any) {
       components: [row]
     });
     
-    // Capture the original interaction for the collector
-    const message = await interaction.fetchReply();
-    
-    // Create a collector to wait for article selection
-    const collector = message.createMessageComponentCollector({ 
-      time: 3_600_000 // 1 hour timeout
-    });
-    
-    collector.on('collect', async (i: any) => {
-      // Ensure this is the expected interaction type
-      if (i.customId === 'article_select') {
-        // Extract the article ID
-        const articleId = parseInt(i.values[0]);
-        
-        if (isNaN(articleId) || articleId === 0) {
-          await i.update({
-            content: 'Invalid article selection. Please try again.',
-            components: []
-          });
-          collector.stop();
-          return;
-        }
-        
-        // Get the article details to confirm
-        const article = await storage.getArticle(articleId);
-        
-        if (!article) {
-          await i.update({
-            content: `No article found with ID ${articleId}. It may have been deleted.`,
-            components: []
-          });
-          collector.stop();
-          return;
-        }
-        
-        // Confirm selection and prompt for image upload
-        await i.update({
-          content: `Selected article: **${article.title}**\n\nPlease upload a web (main) image using the button below:`,
-          components: [
-            new ActionRowBuilder<ButtonBuilder>().addComponents(
-              new ButtonBuilder()
-                .setCustomId(`upload_web_image_${articleId}`)
-                .setLabel('Upload Web Image')
-                .setStyle(ButtonStyle.Primary)
-                .setEmoji('🖼️')
-            )
-          ]
-        });
-        
-        // Stop this collector as we've handled the selection
-        collector.stop();
-      }
-    });
-    
-    collector.on('end', (collected, reason) => {
-      if (reason === 'time' && collected.size === 0) {
-        interaction.editReply({
-          content: 'Selection timed out. Please run the command again if you still want to upload an image.',
-          components: []
-        }).catch(console.error);
-      }
-    });
+    // We'll handle the selection in the handleStringSelectMenuInteraction function
+    // which will check for the 'select_article_for_web_image' custom ID
   } catch (error) {
     console.error('Error handling web image command:', error);
     await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
