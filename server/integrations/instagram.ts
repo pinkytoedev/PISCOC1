@@ -136,6 +136,108 @@ function verifyWebhookSignature(req: Request, appSecret: string): boolean {
   return signatureHash === expectedHash;
 }
 
+
+
+// Handler functions for Instagram webhooks
+
+/**
+ * Handle Instagram mention webhooks
+ */
+function handleInstagramMention(value: any) {
+  try {
+    // Instagram mentions typically include:
+    // - user_id: ID of the mentioned user
+    // - media_id: ID of the media where the mention happened
+    // - comment_id: ID of the comment if mention is in a comment
+    
+    console.log("Processing Instagram mention with data:", value);
+    
+    // Additional processing can be implemented as needed
+    // For example, fetching media details and storing in the database
+  } catch (error) {
+    console.error("Error handling Instagram mention:", error);
+  }
+}
+
+/**
+ * Handle Instagram comment webhooks
+ */
+function handleInstagramComment(value: any) {
+  try {
+    // Instagram comments typically include:
+    // - media_id: ID of the media commented on
+    // - comment_id: ID of the comment
+    // - text: Comment text
+    // - user_id: User ID of commenter
+    
+    console.log("Processing Instagram comment with data:", value);
+    
+    // Additional processing can be implemented as needed
+  } catch (error) {
+    console.error("Error handling Instagram comment:", error);
+  }
+}
+
+/**
+ * Handle Instagram media webhooks
+ */
+function handleInstagramMedia(value: any) {
+  try {
+    // Instagram media updates typically include:
+    // - media_id: ID of the media
+    // - media_product_type: Type of media (FEED, STORY, REELS)
+    // - status: Status change (CREATED, DELETED, etc.)
+    
+    console.log("Processing Instagram media with data:", value);
+    
+    // Additional processing can be implemented as needed
+  } catch (error) {
+    console.error("Error handling Instagram media:", error);
+  }
+}
+
+/**
+ * Handle Instagram direct message webhooks
+ */
+function handleInstagramMessage(value: any) {
+  try {
+    console.log("Processing Instagram message with data:", value);
+    
+    // Record the message
+    // Additional processing can be implemented as needed
+  } catch (error) {
+    console.error("Error handling Instagram message:", error);
+  }
+}
+
+/**
+ * Handle Instagram story insights webhooks
+ */
+function handleInstagramStoryInsights(value: any) {
+  try {
+    console.log("Processing Instagram story insights with data:", value);
+    
+    // Record the story insights
+    // Additional processing can be implemented as needed
+  } catch (error) {
+    console.error("Error handling Instagram story insights:", error);
+  }
+}
+
+/**
+ * Handle Instagram messaging platform webhooks
+ */
+function handleInstagramMessagingEvent(field: string, value: any) {
+  try {
+    console.log(`Processing Instagram ${field} event with data:`, value);
+    
+    // Record the messaging platform event
+    // Additional processing can be implemented as needed
+  } catch (error) {
+    console.error(`Error handling Instagram ${field}:`, error);
+  }
+}
+
 export function setupInstagramRoutes(app: Express) {
   // Get Instagram integration settings
   app.get("/api/instagram/settings", async (req, res) => {
@@ -565,12 +667,31 @@ ${article.hashtags || ''}`;
   });
   
   // Instagram Webhook Setup
+  /**
+   * Instagram Webhook Verification Endpoint
+   * 
+   * Facebook/Instagram will call this endpoint to verify the webhook during registration.
+   * 
+   * When creating a webhook subscription, Instagram will make a GET request to this endpoint 
+   * with the following query parameters:
+   * - hub.mode: Should be "subscribe"
+   * - hub.verify_token: The token we provided during subscription
+   * - hub.challenge: A challenge string that we need to echo back to confirm
+   * 
+   * For more information see: https://developers.facebook.com/docs/graph-api/webhooks/getting-started
+   */
   app.get("/api/instagram/webhook", (req, res) => {
     try {
       // Facebook sends a verification request to confirm the webhook
       const mode = req.query['hub.mode'];
       const token = req.query['hub.verify_token'];
       const challenge = req.query['hub.challenge'];
+      
+      console.log("Instagram webhook verification request received", {
+        mode, 
+        tokenProvided: !!token,
+        challengeProvided: !!challenge
+      });
       
       // Get the verification token from settings
       const webhookTokenSetting = INSTAGRAM_APP_SECRET;
@@ -595,7 +716,33 @@ ${article.hashtags || ''}`;
     }
   });
   
-  // Instagram Webhook Event Reception
+  /**
+   * Instagram Webhook Event Reception
+   * 
+   * This endpoint handles incoming webhook events from Instagram.
+   * It processes events like mentions, comments, media updates, etc.
+   * 
+   * The webhook data format from Instagram follows this structure:
+   * {
+   *   "object": "instagram",
+   *   "entry": [
+   *     {
+   *       "id": "<INSTAGRAM_ID>",
+   *       "time": 1234567890,
+   *       "changes": [
+   *         {
+   *           "field": "<FIELD_TYPE>",
+   *           "value": {
+   *             // Field-specific data
+   *           }
+   *         }
+   *       ]
+   *     }
+   *   ]
+   * }
+   * 
+   * For more information see: https://developers.facebook.com/docs/instagram-platform/webhooks
+   */
   app.post("/api/instagram/webhook", (req, res) => {
     try {
       // Verify the request signature
@@ -631,16 +778,58 @@ ${article.hashtags || ''}`;
               const field = change.field;
               const value = change.value;
               
-              // Process mentions, comments, media, etc.
-              if (field === 'mentions') {
-                // Process mentions
-                console.log("Instagram mention received:", value);
-              } else if (field === 'comments') {
-                // Process comments
-                console.log("Instagram comment received:", value);
-              } else if (field === 'media') {
-                // Process media updates
-                console.log("Instagram media update received:", value);
+              try {
+                switch (field) {
+                  case 'mentions':
+                    // Process mentions
+                    console.log("Instagram mention received:", value);
+                    handleInstagramMention(value);
+                    break;
+                    
+                  case 'comments':
+                    // Process comments
+                    console.log("Instagram comment received:", value);
+                    handleInstagramComment(value);
+                    break;
+                    
+                  case 'media':
+                    // Process media updates
+                    console.log("Instagram media update received:", value);
+                    handleInstagramMedia(value);
+                    break;
+                    
+                  case 'messages':
+                    // Process direct messages
+                    console.log("Instagram message received:", value);
+                    handleInstagramMessage(value);
+                    break;
+                    
+                  case 'story_insights':
+                    // Process story insights
+                    console.log("Instagram story insights received:", value);
+                    handleInstagramStoryInsights(value);
+                    break;
+                    
+                  case 'messaging_account_linking':
+                  case 'messaging_feedback':
+                  case 'messaging_handovers':
+                  case 'messaging_optins':
+                  case 'messaging_payments':
+                  case 'messaging_policy_enforcement':
+                  case 'messaging_postbacks':
+                  case 'messaging_pre_checkouts':
+                  case 'messaging_referrals':
+                    // Process messaging platform events
+                    console.log(`Instagram ${field} event received:`, value);
+                    handleInstagramMessagingEvent(field, value);
+                    break;
+                    
+                  default:
+                    console.log(`Unhandled Instagram webhook field: ${field}`, value);
+                }
+              } catch (err) {
+                console.error(`Error processing Instagram webhook field ${field}:`, err);
+                // Continue processing other changes even if one fails
               }
             }
           }
@@ -656,7 +845,77 @@ ${article.hashtags || ''}`;
     }
   });
 
-  // Subscribe to Instagram webhooks
+  /**
+   * Get Instagram webhook subscriptions
+   * 
+   * Returns a list of all active webhook subscriptions for the Instagram app
+   */
+  app.get("/api/instagram/webhooks", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      if (!INSTAGRAM_APP_ID || !INSTAGRAM_APP_SECRET) {
+        return res.status(400).json({ message: "Missing Instagram app credentials" });
+      }
+      
+      const pageAccessTokenSetting = await storage.getIntegrationSettingByKey("instagram", "page_access_token");
+      
+      if (!pageAccessTokenSetting?.value) {
+        return res.status(400).json({ message: "Instagram integration not fully configured" });
+      }
+      
+      const accessToken = pageAccessTokenSetting.value;
+      const appId = INSTAGRAM_APP_ID;
+      
+      try {
+        // Get existing webhook subscriptions
+        const subscriptionsResponse = await fetch(`https://graph.facebook.com/v19.0/${appId}/subscriptions?access_token=${accessToken}`);
+        
+        if (!subscriptionsResponse.ok) {
+          const errorData = await subscriptionsResponse.json();
+          console.error("Failed to fetch Instagram webhook subscriptions:", errorData);
+          return res.status(subscriptionsResponse.status).json({
+            message: "Failed to fetch webhook subscriptions",
+            error: errorData
+          });
+        }
+        
+        const subscriptionsData = await subscriptionsResponse.json();
+        
+        // Get webhook settings from our database
+        const webhookUrlSetting = await storage.getIntegrationSettingByKey("instagram", "webhook_url");
+        const webhookFieldsSetting = await storage.getIntegrationSettingByKey("instagram", "webhook_fields");
+        
+        res.json({
+          externalSubscriptions: subscriptionsData.data,
+          settings: {
+            webhookUrl: webhookUrlSetting?.value,
+            webhookFields: webhookFieldsSetting?.value
+          }
+        });
+      } catch (error: any) {
+        console.error("Error fetching Instagram webhook subscriptions:", error);
+        res.status(500).json({ 
+          message: "Failed to fetch webhook subscriptions", 
+          error: error.message 
+        });
+      }
+    } catch (error: any) {
+      console.error("Instagram webhook fetching error:", error);
+      res.status(500).json({ 
+        message: "Failed to fetch Instagram webhook information", 
+        error: error.message 
+      });
+    }
+  });
+  
+  /**
+   * Subscribe to Instagram webhooks
+   * 
+   * Creates or updates webhook subscriptions for Instagram events
+   */
   app.post("/api/instagram/webhooks/subscribe", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
@@ -679,6 +938,53 @@ ${article.hashtags || ''}`;
       // Get the callback URL
       const webhookCallbackUrl = req.body.webhookUrl || `${req.protocol}://${req.get('host')}/api/instagram/webhook`;
       
+      // Define available Instagram webhook fields
+      const availableWebhookFields: Record<string, string[]> = {
+        basic: ['mentions', 'comments', 'media', 'messages', 'story_insights'],
+        messaging: [
+          'messaging_account_linking', 
+          'messaging_feedback', 
+          'messaging_handovers', 
+          'messaging_optins', 
+          'messaging_payments', 
+          'messaging_policy_enforcement', 
+          'messaging_postbacks', 
+          'messaging_pre_checkouts', 
+          'messaging_referrals'
+        ]
+      };
+      
+      // Process requested fields
+      let fields;
+      
+      if (req.body.fields) {
+        // If specific fields requested, use them
+        fields = req.body.fields;
+      } else if (req.body.fieldGroups && Array.isArray(req.body.fieldGroups)) {
+        // If field groups requested, build the list
+        const fieldSet = new Set<string>();
+        
+        if (req.body.fieldGroups.includes('all')) {
+          // If 'all' requested, use all available fields
+          Object.values(availableWebhookFields).forEach(group => 
+            group.forEach(field => fieldSet.add(field))
+          );
+        } else {
+          // Otherwise, add requested field groups
+          req.body.fieldGroups.forEach((group: string) => {
+            if (availableWebhookFields[group]) {
+              availableWebhookFields[group].forEach(field => fieldSet.add(field));
+            }
+          });
+        }
+        
+        // Convert to comma-separated string
+        fields = Array.from(fieldSet).join(',');
+      } else {
+        // Default to all fields if nothing specified
+        fields = [...availableWebhookFields.basic, ...availableWebhookFields.messaging].join(',');
+      }
+      
       // Create or update a webhook subscription for the app
       const subscribeResponse = await fetch(`https://graph.facebook.com/v19.0/${appId}/subscriptions`, {
         method: 'POST',
@@ -689,13 +995,14 @@ ${article.hashtags || ''}`;
           object: 'instagram',
           callback_url: webhookCallbackUrl,
           verify_token: INSTAGRAM_APP_SECRET,
-          fields: 'mentions,comments,media',
+          fields: fields,
           access_token: accessToken
         }).toString()
       });
       
       if (!subscribeResponse.ok) {
         const errorData = await subscribeResponse.json();
+        console.error("Instagram webhook subscription API error:", JSON.stringify(errorData));
         return res.status(400).json({ 
           message: "Failed to subscribe to Instagram webhooks", 
           error: errorData 
@@ -720,6 +1027,22 @@ ${article.hashtags || ''}`;
         });
       }
       
+      // Save webhook fields to settings
+      const webhookFieldsSetting = await storage.getIntegrationSettingByKey("instagram", "webhook_fields");
+      
+      if (webhookFieldsSetting) {
+        await storage.updateIntegrationSetting(webhookFieldsSetting.id, {
+          value: fields
+        });
+      } else {
+        await storage.createIntegrationSetting({
+          service: "instagram",
+          key: "webhook_fields",
+          value: fields,
+          enabled: true
+        });
+      }
+      
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -728,14 +1051,17 @@ ${article.hashtags || ''}`;
         resourceId: appId,
         details: { 
           service: "instagram",
-          webhookUrl: webhookCallbackUrl
+          webhookUrl: webhookCallbackUrl,
+          fields: fields
         }
       });
       
       res.json({ 
         success: true, 
         message: "Successfully subscribed to Instagram webhooks",
-        data: subscribeData
+        data: subscribeData,
+        fieldGroups: availableWebhookFields,
+        selectedFields: fields.split(',')
       });
     } catch (error: any) {
       console.error("Instagram webhook subscription error:", error);
