@@ -677,19 +677,25 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
-      // Create the upload button
+      // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_insta_image_${articleId}`)
-        .setLabel('Upload Instagram Image')
+        .setLabel('Upload via Bot')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('📸');
       
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(uploadButton);
+      const dashboardButton = new ButtonBuilder()
+        .setLabel('Open in Dashboard')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
+        .setEmoji('🔗');
       
-      // Confirm selection and prompt for image upload
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(dashboardButton, uploadButton);
+      
+      // Confirm selection and provide options
       await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nPlease upload an Instagram image using the button below:`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading an Instagram image:\n\n1. Use the dashboard link to upload through the website (recommended)\n2. Try the bot upload button, but note that due to Discord permission constraints, this may redirect you to use the web dashboard instead.`,
         components: [buttonRow]
       });
     }
@@ -720,19 +726,25 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
-      // Create the upload button
+      // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_web_image_${articleId}`)
-        .setLabel('Upload Web Image')
+        .setLabel('Upload via Bot')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🖼️');
       
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(uploadButton);
+      const dashboardButton = new ButtonBuilder()
+        .setLabel('Open in Dashboard')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
+        .setEmoji('🔗');
       
-      // Confirm selection and prompt for image upload
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(dashboardButton, uploadButton);
+      
+      // Confirm selection and provide options
       await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nPlease upload a web (main) image using the button below:`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the dashboard link to upload through the website (recommended)\n2. Try the bot upload button, but note that due to Discord permission constraints, this may redirect you to use the web dashboard instead.`,
         components: [buttonRow]
       });
     }
@@ -946,135 +958,22 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       // Defer the reply since image upload may take time
       await interaction.deferReply({ ephemeral: true });
       
-      // Request the user to upload an image
-      await interaction.editReply({
-        content: `Please upload an Instagram image for the article: **${article.title}**\n\nAttach your image to your next message in this channel. The image will be automatically uploaded.`
-      });
-      
-      // This will be limited to the channel where the interaction occurred
-      const filter = (msg: any) => {
-        return msg.author.id === interaction.user.id && msg.attachments.size > 0;
-      };
-      
-      const channel = interaction.channel;
-      if (!channel) {
-        await interaction.editReply('Error: Could not access the channel. Please try again later.');
-        return;
-      }
-      
       try {
-        // Use our helper function to collect the message with the image
-        const message = await collectImageMessage(channel, filter);
+        // Since we can't use message collectors due to intent limitations,
+        // provide users with alternative ways to upload images
         
-        // If no message was received (timeout)
-        if (!message) {
-          await interaction.editReply({
-            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-          });
-          return;
-        }
+        // Create a button that will take the user to the article in the dashboard
+        const viewInDashboardButton = new ButtonBuilder()
+          .setLabel('View in Dashboard')
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
         
-        // Get the first attachment
-        const attachment = message.attachments.first();
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(viewInDashboardButton);
         
-        if (!attachment) {
-          await interaction.followUp({
-            content: 'No valid image attachment found. Please try again with the command.',
-            ephemeral: true
-          });
-          return;
-        }
-        
-        // Check if the attachment is an image
-        if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-          await interaction.followUp({
-            content: 'The attachment must be an image. Please try again with an image file.',
-            ephemeral: true
-          });
-          return;
-        }
-        
-        // Update the status message
         await interaction.editReply({
-          content: `Processing your Instagram image for article: **${article.title}**\n\nThis may take a few moments...`
-        });
-        
-        // Download the image
-        const response = await fetch(attachment.url);
-        if (!response.ok) {
-          throw new Error(`Failed to download image: ${response.statusText}`);
-        }
-        
-        // Use arrayBuffer instead of buffer
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        
-        // Create a temporary file to save the image
-        const tempDir = path.join(process.cwd(), 'temp');
-        if (!fs.existsSync(tempDir)) {
-          fs.mkdirSync(tempDir, { recursive: true });
-        }
-        
-        const tempFilePath = path.join(tempDir, attachment.name);
-        fs.writeFileSync(tempFilePath, buffer);
-        
-        // Now we have the image file, upload it to Imgur
-        const fileInfo = {
-          path: tempFilePath,
-          filename: attachment.name,
-          mimetype: attachment.contentType || 'image/jpeg', // Fallback to jpeg if no content type
-          size: attachment.size
-        };
-        
-        const imgurResult = await uploadImageToImgur(fileInfo);
-        
-        // Clean up the temp file
-        try {
-          fs.unlinkSync(tempFilePath);
-        } catch (e) {
-          console.error('Error removing temp file:', e);
-        }
-        
-        if (!imgurResult) {
-          throw new Error('Failed to upload image to Imgur');
-        }
-        
-        // Now upload the Imgur URL to Airtable
-        // We need to create a FormData object to match the API endpoint's expectations
-        const formData = new FormData();
-        formData.append('imageUrl', imgurResult.link);
-        formData.append('filename', attachment.name);
-        
-        const airtableResponse = await fetch(`${process.env.API_URL || ''}/api/airtable/upload-image-url/${articleId}/instaPhoto`, {
-          method: 'POST',
-          body: JSON.stringify({
-            imageUrl: imgurResult.link,
-            filename: attachment.name
-          }),
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!airtableResponse.ok) {
-          const errorData = await airtableResponse.text();
-          throw new Error(`Failed to update Airtable: ${errorData}`);
-        }
-        
-        // The API updates the article with the new image URL
-        // Now we can give the user the success message with the image preview
-        await interaction.editReply({
-          content: `Successfully uploaded Instagram image for article: **${article.title}**\n\nImage has been uploaded to Imgur and linked in Airtable.`,
-          // Include the image as an attachment
-          files: [
-            new AttachmentBuilder(imgurResult.link, { name: 'instagram-image-preview.jpg' })
-          ]
-        });
-        
-        // Add a follow-up message with more details
-        await interaction.followUp({
-          content: `Instagram image uploaded and processed:\n• Article: **${article.title}** (ID: ${articleId})\n• Image URL: ${imgurResult.link}\n• Status: Successfully linked to Airtable`,
-          ephemeral: true
+          content: `Due to Discord permission constraints, image upload via the bot is not available.\n\nTo upload an Instagram image for article **${article.title}**, please:\n\n1. Go to the website dashboard and find the article\n2. Use the upload button in the article details view\n3. Select an image to upload for Instagram\n\nNote: You can also upload directly through Airtable if you have access.`,
+          components: [buttonRow]
         });
         
       } catch (error) {
@@ -1119,135 +1018,22 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       // Defer the reply since image upload may take time
       await interaction.deferReply({ ephemeral: true });
       
-      // Request the user to upload an image
-      await interaction.editReply({
-        content: `Please upload a web (main) image for the article: **${article.title}**\n\nAttach your image to your next message in this channel. The image will be automatically uploaded.`
-      });
-      
-      // This will be limited to the channel where the interaction occurred
-      const filter = (msg: any) => {
-        return msg.author.id === interaction.user.id && msg.attachments.size > 0;
-      };
-      
-      const channel = interaction.channel;
-      if (!channel) {
-        await interaction.editReply('Error: Could not access the channel. Please try again later.');
-        return;
-      }
-      
       try {
-        // Use our helper function to collect the message with the image
-        const message = await collectImageMessage(channel, filter);
+        // Since we can't use message collectors due to intent limitations,
+        // provide users with alternative ways to upload images
         
-        // If no message was received (timeout)
-        if (!message) {
-          await interaction.editReply({
-            content: 'Image upload timed out. Please run the command again if you still want to upload an image.'
-          });
-          return;
-        }
+        // Create a button that will take the user to the article in the dashboard
+        const viewInDashboardButton = new ButtonBuilder()
+          .setLabel('View in Dashboard')
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
         
-        // Get the first attachment
-        const attachment = message.attachments.first();
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(viewInDashboardButton);
         
-        if (!attachment) {
-          await interaction.followUp({
-            content: 'No valid image attachment found. Please try again with the command.',
-            ephemeral: true
-          });
-          return;
-        }
-        
-        // Check if the attachment is an image
-        if (!attachment.contentType || !attachment.contentType.startsWith('image/')) {
-          await interaction.followUp({
-            content: 'The attachment must be an image. Please try again with an image file.',
-            ephemeral: true
-          });
-          return;
-        }
-        
-        // Update the status message
         await interaction.editReply({
-          content: `Processing your web image for article: **${article.title}**\n\nThis may take a few moments...`
-        });
-        
-        // Download the image
-        const response = await fetch(attachment.url);
-        if (!response.ok) {
-          throw new Error(`Failed to download image: ${response.statusText}`);
-        }
-        
-        // Use arrayBuffer instead of buffer
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-        
-        // Create a temporary file to save the image
-        const tempDir = path.join(process.cwd(), 'temp');
-        if (!fs.existsSync(tempDir)) {
-          fs.mkdirSync(tempDir, { recursive: true });
-        }
-        
-        const tempFilePath = path.join(tempDir, attachment.name);
-        fs.writeFileSync(tempFilePath, buffer);
-        
-        // Now we have the image file, upload it to Imgur
-        const fileInfo = {
-          path: tempFilePath,
-          filename: attachment.name,
-          mimetype: attachment.contentType || 'image/jpeg', // Fallback to jpeg if no content type
-          size: attachment.size
-        };
-        
-        const imgurResult = await uploadImageToImgur(fileInfo);
-        
-        // Clean up the temp file
-        try {
-          fs.unlinkSync(tempFilePath);
-        } catch (e) {
-          console.error('Error removing temp file:', e);
-        }
-        
-        if (!imgurResult) {
-          throw new Error('Failed to upload image to Imgur');
-        }
-        
-        // Now upload the Imgur URL to Airtable
-        // We need to create a FormData object to match the API endpoint's expectations
-        const formData = new FormData();
-        formData.append('imageUrl', imgurResult.link);
-        formData.append('filename', attachment.name);
-        
-        const airtableResponse = await fetch(`${process.env.API_URL || ''}/api/airtable/upload-image-url/${articleId}/MainImage`, {
-          method: 'POST',
-          body: JSON.stringify({
-            imageUrl: imgurResult.link,
-            filename: attachment.name
-          }),
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!airtableResponse.ok) {
-          const errorData = await airtableResponse.text();
-          throw new Error(`Failed to update Airtable: ${errorData}`);
-        }
-        
-        // The API updates the article with the new image URL
-        // Now we can give the user the success message with the image preview
-        await interaction.editReply({
-          content: `Successfully uploaded web image for article: **${article.title}**\n\nImage has been uploaded to Imgur and linked in Airtable.`,
-          // Include the image as an attachment
-          files: [
-            new AttachmentBuilder(imgurResult.link, { name: 'web-image-preview.jpg' })
-          ]
-        });
-        
-        // Add a follow-up message with more details
-        await interaction.followUp({
-          content: `Web image uploaded and processed:\n• Article: **${article.title}** (ID: ${articleId})\n• Image URL: ${imgurResult.link}\n• Status: Successfully linked to Airtable`,
-          ephemeral: true
+          content: `Due to Discord permission constraints, image upload via the bot is not available.\n\nTo upload a web (main) image for article **${article.title}**, please:\n\n1. Go to the website dashboard and find the article\n2. Use the upload button in the article details view\n3. Select an image to upload for the main web display\n\nNote: You can also upload directly through Airtable if you have access.`,
+          components: [buttonRow]
         });
         
       } catch (error) {
@@ -1304,13 +1090,12 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
       client = null;
     }
 
-    // Create a new client
+    // Create a new client with minimal required intents
+    // Note: MessageContent is a privileged intent and must be enabled in the Discord Developer Portal
     client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent, // Need this to read message content
-        GatewayIntentBits.GuildMessageReactions // Need this for message reactions
+        GatewayIntentBits.GuildMessages
       ]
     });
 
@@ -1745,7 +1530,7 @@ async function handleInstaImageCommand(interaction: any) {
     
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to upload an Instagram image to:',
+      content: 'Please select an article to upload an Instagram image to.\n\nNote: Due to Discord permission constraints, you\'ll need to use the web dashboard to actually upload the image after selecting an article.',
       components: [row]
     });
     
@@ -1793,7 +1578,7 @@ async function handleWebImageCommand(interaction: any) {
     
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to upload a web (main) image to:',
+      content: 'Please select an article to upload a web (main) image to.\n\nNote: Due to Discord permission constraints, you\'ll need to use the web dashboard to actually upload the image after selecting an article.',
       components: [row]
     });
     

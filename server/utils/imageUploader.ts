@@ -146,10 +146,13 @@ export async function uploadImageToAirtable(
     // While this isn't ideal for production, it's a simple approach for prototyping
     const dataUrl = `data:${file.mimetype};base64,${fileBuffer.toString('base64')}`;
     
-    // Create the attachment object with the data URL
+    // Create the attachment object with the data URL and all required properties
     const attachment = {
+      id: `upload_${Date.now()}`, // Generate a unique ID
       url: dataUrl,
-      filename: file.filename
+      filename: file.filename,
+      size: file.size, // Include the file size
+      type: file.mimetype // Include the MIME type
     };
     
     const payload = {
@@ -261,10 +264,26 @@ export async function uploadImageUrlToAirtable(
     // For URL-based uploads, Airtable will fetch the image from the provided URL
     // The URL must be publicly accessible
     
-    // Create the attachment object with the URL
+    // Determine MIME type based on URL and filename
+    let mimeType = "image/jpeg"; // Default
+    const urlLower = imageUrl.toLowerCase();
+    const filenameLower = filename.toLowerCase();
+    
+    if (urlLower.endsWith('.png') || filenameLower.endsWith('.png')) {
+      mimeType = "image/png";
+    } else if (urlLower.endsWith('.gif') || filenameLower.endsWith('.gif')) {
+      mimeType = "image/gif";
+    } else if (urlLower.endsWith('.webp') || filenameLower.endsWith('.webp')) {
+      mimeType = "image/webp";
+    }
+    
+    // Create the attachment object with the URL and required properties for UploadAttachment
     const attachment = {
-      url: imageUrl,
-      filename: filename
+      id: `airtable_${Date.now()}`, // Generate a unique ID
+      url: imageUrl, 
+      filename: filename,
+      size: 0, // Size is unknown for remote URLs
+      type: mimeType // Use the MIME type we determined
     };
     
     // Log URL being used (helps with debugging)
