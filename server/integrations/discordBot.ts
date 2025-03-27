@@ -926,21 +926,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Instagram image upload button
     else if (interaction.customId.startsWith('upload_insta_image_')) {
-      // Extract article ID from the custom ID - need to handle numeric IDs only
+      // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
       const idPart = fullId.substring('upload_insta_image_'.length);
       console.log('Instagram image upload - full ID:', fullId);
       console.log('Instagram image upload - extracted ID part:', idPart);
-      
-      // Make sure we're only taking numbers
-      const matches = idPart.match(/^(\d+)$/);
-      const articleId = matches ? parseInt(matches[1], 10) : NaN;
-      
-      console.log('Instagram image upload - parsed article ID:', articleId);
+      const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1001,22 +996,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Instagram image upload now button
     else if (interaction.customId.startsWith('upload_insta_image_now_')) {
-      // Extract article ID from the custom ID - using the same extraction logic as Web image uploads
+      // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
       const idPart = fullId.substring('upload_insta_image_now_'.length);
       console.log('Instagram image upload NOW - full ID:', fullId);
       console.log('Instagram image upload NOW - extracted ID part:', idPart);
-      
-      // Make sure we're only taking numbers
-      const matches = idPart.match(/^(\d+)$/);
-      const articleId = matches ? parseInt(matches[1], 10) : NaN;
-      
-      console.log('Instagram image upload NOW - full ID:', fullId);
-      console.log('Instagram image upload NOW - extracted article ID:', articleId);
+      const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1125,21 +1114,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Web image upload now button
     else if (interaction.customId.startsWith('upload_web_image_now_')) {
-      // Extract article ID from the custom ID - need to handle numeric IDs only
+      // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
       const idPart = fullId.substring('upload_web_image_now_'.length);
       console.log('Web image upload NOW - full ID:', fullId);
       console.log('Web image upload NOW - extracted ID part:', idPart);
-      
-      // Make sure we're only taking numbers
-      const matches = idPart.match(/^(\d+)$/);
-      const articleId = matches ? parseInt(matches[1], 10) : NaN;
-      
-      console.log('Web image upload NOW - parsed article ID:', articleId);
+      const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1246,21 +1230,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Web image upload button
     else if (interaction.customId.startsWith('upload_web_image_')) {
-      // Extract article ID from the custom ID - need to handle numeric IDs only
+      // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
       const idPart = fullId.substring('upload_web_image_'.length);
       console.log('Web image upload - full ID:', fullId);
       console.log('Web image upload - extracted ID part:', idPart);
-      
-      // Make sure we're only taking numbers
-      const matches = idPart.match(/^(\d+)$/);
-      const articleId = matches ? parseInt(matches[1], 10) : NaN;
-      
-      console.log('Web image upload - parsed article ID:', articleId);
+      const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
