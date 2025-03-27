@@ -301,6 +301,26 @@ export default function InstagramPage() {
                     <span className="text-sm font-medium">Not Configured</span>
                   </div>
                 )}
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    toast({
+                      title: "Refreshing status",
+                      description: "Checking Instagram connection status...",
+                    });
+                    refetchStatus();
+                  }}
+                  disabled={isLoadingStatus}
+                >
+                  {isLoadingStatus ? (
+                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                  )}
+                  Refresh
+                </Button>
               </div>
             </div>
 
@@ -617,6 +637,26 @@ export default function InstagramPage() {
                               You'll be redirected to Facebook to authorize this application and connect your Instagram Professional account.
                             </p>
                             <div className="space-y-4">
+                              <div className="rounded-md bg-amber-50 p-4 border border-amber-100 mb-4">
+                                <div className="flex">
+                                  <div className="flex-shrink-0">
+                                    <Info className="h-5 w-5 text-amber-500" />
+                                  </div>
+                                  <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-amber-800">Important Connection Steps</h3>
+                                    <div className="mt-2 text-sm text-amber-700">
+                                      <ol className="list-decimal pl-5 space-y-1">
+                                        <li>You'll be redirected to Facebook Login</li>
+                                        <li>Select the Facebook Page connected to your Instagram account</li>
+                                        <li>Approve all requested permissions</li>
+                                        <li>You'll be redirected back automatically</li>
+                                        <li>If not redirected, use the "Refresh Status" button above</li>
+                                      </ol>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              
                               <div className="rounded-md bg-blue-50 p-4 border border-blue-100">
                                 <div className="flex">
                                   <div className="flex-shrink-0">

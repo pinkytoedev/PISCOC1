@@ -218,26 +218,55 @@ export function setupInstagramRoutes(app: Express) {
       const clientSecret = clientSecretSetting.value;
       const redirectUri = redirectUriSetting.value;
       
-      console.log("Exchanging authorization code for access token");
+      console.log("Instagram auth: Exchanging authorization code for access token");
+      console.log("Instagram auth: Using redirect URI:", redirectUri);
+      console.log("Instagram auth: Using client ID:", clientId.substring(0, 4) + '...');
       
-      // Exchange code for access token from Facebook
-      const tokenResponse = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`, {
-        method: "GET"
-      });
+      // Define this variable in the outer scope so it's available throughout the function
+      let shortLivedAccessToken;
       
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error("Failed to exchange code for token:", errorText);
-        return res.status(tokenResponse.status).json({
-          message: "Failed to exchange code for token",
-          error: errorText
+      try {
+        // Exchange code for access token from Facebook
+        const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${clientId}&client_secret=${clientSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`;
+        console.log("Instagram auth: Token exchange URL format:", 
+          `https://graph.facebook.com/v19.0/oauth/access_token?client_id=XXXX...&client_secret=XXXX...&redirect_uri=${encodeURIComponent(redirectUri)}&code=XXXX...`);
+        
+        const tokenResponse = await fetch(tokenUrl, {
+          method: "GET"
+        });
+        
+        if (!tokenResponse.ok) {
+          const errorText = await tokenResponse.text();
+          console.error("Instagram auth: Failed to exchange code for token:", {
+            status: tokenResponse.status,
+            statusText: tokenResponse.statusText,
+            response: errorText
+          });
+          return res.status(tokenResponse.status).json({
+            message: "Failed to exchange code for token",
+            error: errorText
+          });
+        }
+        
+        const tokenData = await tokenResponse.json();
+        console.log("Instagram auth: Successfully received short-lived token");
+        shortLivedAccessToken = tokenData.access_token;
+      } catch (error: any) {
+        console.error("Instagram auth: Error during token exchange:", error);
+        return res.status(500).json({
+          message: "Error exchanging authorization code",
+          error: error.message || "Unknown error during token exchange"
         });
       }
       
-      const tokenData = await tokenResponse.json();
-      const shortLivedAccessToken = tokenData.access_token;
+      if (!shortLivedAccessToken) {
+        console.error("Instagram auth: No short-lived access token received");
+        return res.status(500).json({
+          message: "Failed to receive access token from Facebook"
+        });
+      }
       
-      console.log("Exchanging short-lived token for long-lived token");
+      console.log("Instagram auth: Exchanging short-lived token for long-lived token");
       
       // Exchange short-lived token for long-lived token
       const longLivedTokenResponse = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${clientId}&client_secret=${clientSecret}&fb_exchange_token=${shortLivedAccessToken}`, {
@@ -319,6 +348,14 @@ export function setupInstagramRoutes(app: Express) {
       console.log("Successfully retrieved Instagram account:", instagramAccountData.username);
       
       // Save all the necessary tokens and IDs
+      console.log("Instagram authentication successful! Saving critical data:", {
+        hasLongLivedToken: !!longLivedAccessToken,
+        hasPageId: !!pageId,
+        hasPageAccessToken: !!pageAccessToken,
+        hasInstagramBusinessId: !!instagramBusinessId,
+        instagramUsername: instagramAccountData.username || "",
+      });
+      
       const settingsToSave = [
         { key: "facebook_access_token", value: longLivedAccessToken },
         { key: "page_id", value: pageId },
@@ -327,21 +364,41 @@ export function setupInstagramRoutes(app: Express) {
         { key: "instagram_username", value: instagramAccountData.username || "" },
       ];
       
-      for (const setting of settingsToSave) {
-        const existingSetting = await storage.getIntegrationSettingByKey("instagram", setting.key);
-        
-        if (existingSetting) {
-          await storage.updateIntegrationSetting(existingSetting.id, {
-            value: setting.value
+      // Track settings operations for debugging
+      try {
+        for (const setting of settingsToSave) {
+          const existingSetting = await storage.getIntegrationSettingByKey("instagram", setting.key);
+          
+          console.log(`Processing Instagram setting '${setting.key}':`, {
+            exists: !!existingSetting,
+            hasValue: !!setting.value,
+            operation: existingSetting ? "update" : "create"
           });
-        } else {
-          await storage.createIntegrationSetting({
-            service: "instagram",
-            key: setting.key,
-            value: setting.value,
-            enabled: true
-          });
+          
+          if (existingSetting) {
+            const updatedSetting = await storage.updateIntegrationSetting(existingSetting.id, {
+              value: setting.value
+            });
+            console.log(`Updated Instagram setting '${setting.key}':`, {
+              id: updatedSetting?.id || 'unknown',
+              hasValue: !!updatedSetting?.value
+            });
+          } else {
+            const newSetting = await storage.createIntegrationSetting({
+              service: "instagram",
+              key: setting.key,
+              value: setting.value,
+              enabled: true
+            });
+            console.log(`Created Instagram setting '${setting.key}':`, {
+              id: newSetting.id,
+              hasValue: !!newSetting.value
+            });
+          }
         }
+      } catch (err) {
+        console.error("Error saving Instagram settings:", err);
+        throw err;
       }
       
       // Log the activity
@@ -397,6 +454,15 @@ export function setupInstagramRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
+      
+      // Get all Instagram settings to help debug issues
+      const allSettings = await storage.getIntegrationSettings("instagram");
+      console.log("All Instagram settings:", allSettings.map(s => ({ 
+        key: s.key, 
+        hasValue: !!s.value, 
+        valueLength: s.value?.length || 0,
+        enabled: s.enabled
+      })));
       
       const pageAccessTokenSetting = await storage.getIntegrationSettingByKey("instagram", "page_access_token");
       const instagramBusinessIdSetting = await storage.getIntegrationSettingByKey("instagram", "instagram_business_id");
