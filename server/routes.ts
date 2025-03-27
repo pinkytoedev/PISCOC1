@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupDiscordRoutes } from "./integrations/discord";
 import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot } from "./integrations/discordBot";
-import { setupAirtableRoutes } from "./integrations/airtable";
+import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagram";
 import { setupImgurRoutes } from "./integrations/imgur";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
@@ -214,10 +214,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/articles/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      
+      // Fetch article to check if it has an externalId to remove from Airtable
+      const article = await storage.getArticle(id);
+      
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      
+      // If the article has an externalId and is from Airtable, delete it from Airtable first
+      if (article.externalId && article.source === 'airtable') {
+        try {
+          // Get Airtable settings
+          const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+          const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+          const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+          
+          if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value) {
+            // Delete the record from Airtable using the imported function
+            await deleteAirtableRecord(
+              apiKeySetting.value,
+              baseIdSetting.value,
+              tableNameSetting.value,
+              article.externalId
+            );
+            
+            console.log(`Successfully deleted article "${article.title}" (ID: ${article.externalId}) from Airtable`);
+            
+            // Log the Airtable deletion activity
+            await storage.createActivityLog({
+              userId: req.user?.id,
+              action: "delete",
+              resourceType: "airtable_article",
+              resourceId: article.externalId,
+              details: { 
+                id: article.id, 
+                title: article.title,
+                externalId: article.externalId
+              }
+            });
+          }
+        } catch (airtableError) {
+          console.error("Failed to delete article from Airtable:", airtableError);
+          // We'll still proceed with the local deletion even if Airtable deletion fails
+        }
+      }
+      
+      // Now delete from local database
       const success = await storage.deleteArticle(id);
       
       if (!success) {
-        return res.status(404).json({ message: "Article not found" });
+        return res.status(404).json({ message: "Failed to delete article from local database" });
       }
       
       // Log activity
@@ -231,6 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(204).send();
     } catch (error) {
+      console.error("Error deleting article:", error);
       res.status(500).json({ message: "Failed to delete article" });
     }
   });

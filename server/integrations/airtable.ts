@@ -144,7 +144,7 @@ async function airtableRequest(
     }
   };
   
-  if (data && (method === "POST" || method === "PATCH")) {
+  if (data && (method === "POST" || method === "PATCH" || method === "DELETE")) {
     options.body = JSON.stringify(data);
   }
   
@@ -156,6 +156,41 @@ async function airtableRequest(
   }
   
   return response.json();
+}
+
+// Helper function to delete a record from Airtable
+export async function deleteAirtableRecord(
+  apiKey: string,
+  baseId: string,
+  tableName: string,
+  recordId: string
+) {
+  try {
+    // Airtable allows deleting records using the DELETE HTTP method with recordIds
+    const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${recordId}`;
+    
+    console.log(`Deleting Airtable record: ${recordId} from table ${tableName}`);
+    
+    const options: RequestInit = {
+      method: 'DELETE',
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      }
+    };
+    
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Airtable API delete error: ${response.status} - ${errorText}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error("Error deleting Airtable record:", error);
+    throw error;
+  }
 }
 
 // Helper function to convert an Article to Airtable format
