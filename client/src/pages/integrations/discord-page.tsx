@@ -23,6 +23,11 @@ interface BotStatus {
   guilds?: number;
 }
 
+interface BotStatusResponse {
+  success: boolean;
+  status: BotStatus;
+}
+
 export default function DiscordPage() {
   const { toast } = useToast();
   const [tab, setTab] = useState("webhook");
@@ -33,10 +38,13 @@ export default function DiscordPage() {
     queryKey: ['/api/discord/settings'],
   });
   
-  const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
+  const { data: botStatusResponse, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatusResponse>({
     queryKey: ['/api/discord/bot/status'],
     refetchInterval: () => tab === "bot" ? 10000 : 0, // Only refresh status when on bot tab
   });
+  
+  // Extract the actual bot status from the response
+  const botStatus = botStatusResponse?.status;
   
   // When settings are loaded, set the bot token and client ID fields
   useEffect(() => {
