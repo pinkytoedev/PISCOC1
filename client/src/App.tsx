@@ -5,9 +5,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { FacebookProvider } from "@/contexts/FacebookContext";
 import { Toaster } from "@/components/ui/toaster";
 import { ProtectedRoute } from "@/lib/protected-route";
-
-// Facebook App ID from environment variable (fallback to empty string if not available)
-const FACEBOOK_APP_ID = import.meta.env.VITE_FACEBOOK_APP_ID || '';
+import { useState, useEffect } from "react";
 
 // Pages
 import AuthPage from "@/pages/auth-page";
@@ -47,10 +45,45 @@ function Router() {
 }
 
 function App() {
+  const [facebookAppId, setFacebookAppId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    // Fetch Facebook App ID from our backend API
+    fetch('/api/config/facebook')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Failed to fetch Facebook config: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.appId) {
+          setFacebookAppId(data.appId);
+        } else {
+          // Fallback to the environment variable if the API doesn't return a value
+          setFacebookAppId(import.meta.env.VITE_FACEBOOK_APP_ID || '');
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching Facebook App ID:', err);
+        // Fallback to the environment variable if the API fails
+        setFacebookAppId(import.meta.env.VITE_FACEBOOK_APP_ID || '');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
+
+  // Show a loading message while we're fetching the Facebook App ID
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen">Loading application configuration...</div>;
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <FacebookProvider appId={FACEBOOK_APP_ID}>
+        <FacebookProvider appId={facebookAppId}>
           <Router />
           <Toaster />
         </FacebookProvider>

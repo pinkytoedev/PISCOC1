@@ -39,6 +39,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendFile(path.join(process.cwd(), "client/public/privacy.html"));
   });
 
+  // Config routes - expose environment variables safely to the frontend
+  app.get("/api/config/facebook", (req, res) => {
+    // Send the Facebook App ID to the client
+    const facebookAppId = process.env.FACEBOOK_APP_ID || '';
+    res.json({ appId: facebookAppId });
+  });
+
   // Team member routes
   app.get("/api/team-members", async (req, res) => {
     try {
@@ -644,6 +651,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch metrics" });
     }
+  });
+
+  // Expose Facebook App ID to frontend
+  app.get('/api/config/facebook', (req, res) => {
+    const appId = process.env.FACEBOOK_APP_ID || '';
+    res.json({ appId });
   });
 
   // Set up integration-specific routes
