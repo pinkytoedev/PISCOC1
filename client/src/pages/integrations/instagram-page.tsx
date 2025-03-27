@@ -140,7 +140,14 @@ export default function InstagramPage() {
     }
     
     try {
+      // Log domain information for debugging
+      console.log('Current hostname:', window.location.hostname);
+      console.log('Current origin:', window.location.origin);
+      
+      // For testing on Replit, we need a publicly accessible URL
+      // This domain needs to be registered in your Facebook App settings
       const baseUrl = window.location.origin;
+      console.log('Using base URL for callback:', baseUrl);
       const callbackUrl = `${baseUrl}/api/instagram/webhooks/callback`;
       
       const response = await fetch('/api/instagram/webhooks/subscribe', {

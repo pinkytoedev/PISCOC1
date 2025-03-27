@@ -129,14 +129,22 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
           console.log('Retrying login after delay...');
           try {
             window.FB.login((response) => {
+              console.log('Facebook login response:', response);
               if (response.status === 'connected') {
                 handleStatusChange('connected', response);
                 onSuccess && onSuccess();
               } else {
-                onError && onError(response);
+                // Handle auth failure but don't trigger error for user cancellations
+                if (response.status === 'not_authorized') {
+                  console.log('User cancelled login or did not fully authorize.');
+                } else {
+                  onError && onError(response);
+                }
               }
             }, {
-              scope: 'email,public_profile,instagram_basic,pages_show_list'
+              scope: 'email,public_profile,instagram_basic,pages_show_list',
+              auth_type: 'rerequest',  // Ask for login even if previously denied
+              return_scopes: true      // Return granted scopes in response
             });
           } catch (error) {
             console.error('Facebook login retry error:', error);
@@ -154,14 +162,22 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
     try {
       console.log('Attempting Facebook login with initialized SDK');
       window.FB.login((response) => {
+        console.log('Facebook login response:', response);
         if (response.status === 'connected') {
           handleStatusChange('connected', response);
           onSuccess && onSuccess();
         } else {
-          onError && onError(response);
+          // Handle auth failure but don't trigger error for user cancellations
+          if (response.status === 'not_authorized') {
+            console.log('User cancelled login or did not fully authorize.');
+          } else {
+            onError && onError(response);
+          }
         }
       }, {
-        scope: 'email,public_profile,instagram_basic,pages_show_list'
+        scope: 'email,public_profile,instagram_basic,pages_show_list',
+        auth_type: 'rerequest',  // Ask for login even if previously denied
+        return_scopes: true      // Return granted scopes in response
       });
     } catch (error) {
       console.error('Facebook login error:', error);
