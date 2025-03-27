@@ -1,78 +1,113 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 
-// Add FacebookSDK to the global Window interface
+// Types for Facebook SDK
 declare global {
   interface Window {
-    FB: any;
     fbAsyncInit: () => void;
+    FB: {
+      init: (options: {
+        appId: string;
+        cookie: boolean;
+        xfbml: boolean;
+        version: string;
+      }) => void;
+      AppEvents: {
+        logPageView: () => void;
+      };
+      XFBML: {
+        parse: () => void;
+      };
+      getLoginStatus: (callback: (response: {
+        status: 'connected' | 'not_authorized' | 'unknown';
+        authResponse?: {
+          accessToken: string;
+          expiresIn: string;
+          signedRequest: string;
+          userID: string;
+        }
+      }) => void) => void;
+      login: (callback: (response: any) => void, options?: { scope: string }) => void;
+      logout: (callback: (response: any) => void) => void;
+      api: (path: string, callback: (response: any) => void) => void;
+    };
   }
 }
 
 interface FacebookSDKProps {
   appId: string;
   version?: string;
+  onStatusChange?: (status: 'connected' | 'not_authorized' | 'unknown', response?: any) => void;
+  onInit?: () => void;
 }
 
 /**
  * FacebookSDK Component
  * 
- * This component loads the Facebook SDK asynchronously.
- * It sets up Facebook SDK initialization when the component mounts.
+ * This component handles loading the Facebook SDK and initializing it with your app ID.
+ * It manages the async loading pattern and triggers appropriate callbacks.
  * 
- * @param {string} appId - Your Facebook application ID
- * @param {string} version - The Facebook Graph API version to use (default: v19.0)
+ * @param appId Facebook App ID
+ * @param version Facebook API version (default v18.0)
+ * @param onStatusChange Callback when login status changes
+ * @param onInit Callback when SDK is initialized
  */
-export function FacebookSDK({ appId, version = 'v19.0' }: FacebookSDKProps) {
+export function FacebookSDK({ 
+  appId, 
+  version = 'v18.0',
+  onStatusChange,
+  onInit
+}: FacebookSDKProps) {
   useEffect(() => {
-    // Only load the SDK if we have an app ID
-    if (!appId) {
-      console.warn('Facebook App ID is missing. Facebook SDK initialization skipped.');
+    // Only load the SDK once
+    if (document.getElementById('facebook-jssdk')) {
       return;
     }
 
-    // Load the Facebook SDK asynchronously
-    (function (d, s, id) {
-      const fjs = d.getElementsByTagName(s)[0];
-      if (d.getElementById(id)) return;
+    // Initialize Facebook SDK
+    window.fbAsyncInit = function() {
+      window.FB.init({
+        appId,
+        cookie: true,
+        xfbml: true,
+        version,
+      });
       
-      const js = d.createElement(s) as HTMLScriptElement;
+      // Log page view
+      window.FB.AppEvents.logPageView();
+      
+      // Check login status
+      window.FB.getLoginStatus(function(response) {
+        if (onStatusChange) {
+          onStatusChange(response.status, response);
+        }
+      });
+      
+      // Trigger init callback
+      if (onInit) {
+        onInit();
+      }
+    };
+
+    // Load the SDK asynchronously
+    (function(d, s, id) {
+      var js, fjs = d.getElementsByTagName(s)[0];
+      if (d.getElementById(id)) return;
+      js = d.createElement(s) as HTMLScriptElement;
       js.id = id;
       js.src = `https://connect.facebook.net/en_US/sdk.js`;
-      
       if (fjs && fjs.parentNode) {
         fjs.parentNode.insertBefore(js, fjs);
       }
     }(document, 'script', 'facebook-jssdk'));
-
-    // Initialize the SDK
-    window.fbAsyncInit = function() {
-      window.FB?.init({
-        appId: appId,
-        cookie: true,
-        xfbml: true,
-        version: version
-      });
-    };
-
-    // Cleanup function
+    
+    // Cleanup
     return () => {
-      // Cleanup any SDK-related resources if needed
-      if (window.FB) {
-        window.FB = undefined;
-      }
-      
-      if (window.fbAsyncInit) {
-        window.fbAsyncInit = () => {};
-      }
-      
-      // Remove the SDK script tag if it exists
-      const facebookScript = document.getElementById('facebook-jssdk');
-      if (facebookScript && facebookScript.parentNode) {
-        facebookScript.parentNode.removeChild(facebookScript);
-      }
+      // FB SDK doesn't have a direct cleanup method, but we could remove the script if needed
+      // In practice, this is rarely necessary as the SDK is typically needed throughout the app
     };
-  }, [appId, version]);
+  }, [appId, version, onStatusChange, onInit]);
 
-  // This component doesn't render anything visible
-  return null;
+  return null; // This component doesn't render anything
 }
+
+export default FacebookSDK;
