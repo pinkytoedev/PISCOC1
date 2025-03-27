@@ -5,11 +5,7 @@ import {
   Newspaper,
   Users,
   Quote,
-  Images,
-  Settings,
   UserCog,
-  BarChart2,
-  History,
   Headphones,
   ChevronLeft,
   ChevronRight
@@ -43,11 +39,6 @@ export function Sidebar() {
           name: "Carousel Quotes",
           path: "/carousel-quotes",
           icon: <Quote className="w-5 h-5" />
-        },
-        {
-          name: "Image Assets",
-          path: "/image-assets",
-          icon: <Images className="w-5 h-5" />
         }
       ]
     },
@@ -80,24 +71,9 @@ export function Sidebar() {
       section: "System",
       items: [
         {
-          name: "Settings",
-          path: "/settings",
-          icon: <Settings className="w-5 h-5" />
-        },
-        {
           name: "Users & Permissions",
           path: "/users",
           icon: <UserCog className="w-5 h-5" />
-        },
-        {
-          name: "Analytics",
-          path: "/analytics",
-          icon: <BarChart2 className="w-5 h-5" />
-        },
-        {
-          name: "Activity Log",
-          path: "/activity-log",
-          icon: <History className="w-5 h-5" />
         }
       ]
     }
