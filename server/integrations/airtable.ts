@@ -37,11 +37,8 @@ interface Attachment {
 // Airtable API only requires url and filename for attachments when uploading
 // But our codebase expects Attachment type for the fields, so we include minimal required properties
 interface UploadAttachment {
-  id: string;         // Required for type compatibility
   url: string;        // The actual image URL
   filename: string;   // Name of the file
-  size: number;       // Required for type compatibility
-  type: string;       // Required for type compatibility
 }
 
 interface UrlObject {
@@ -91,7 +88,7 @@ interface AirtableArticleRequest {
 }
 
 // Type alias for compatibility with existing code
-type AirtableArticle = AirtableArticleResponse;
+type AirtableArticle = AirtableArticleRequest;
 
 interface AirtableTeamMember {
   Name: string;                   // Long text
@@ -162,7 +159,7 @@ async function airtableRequest(
 }
 
 // Helper function to convert an Article to Airtable format
-async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticle>> {
+async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
   // Get the team member for author reference (if applicable)
   let authorRecord = null;
   if (article.author && article.author !== "Anonymous") {
@@ -174,7 +171,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   }
   
   // Convert to Airtable format
-  const airtableData: Partial<AirtableArticle> = {
+  const airtableData: Partial<AirtableArticleRequest> = {
     Name: article.title,
     Body: article.content,
     Description: article.description || "",
@@ -247,13 +244,10 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         const filename = article.imageUrl.split('/').pop() || `main_image.${fileExt}`;
         
         // Create the Airtable Attachment structure for MainImage
-        // For upload, Airtable API only needs url and filename, but we include additional fields for type compatibility
-        const mainImageAttachment: UploadAttachment = {
-          id: `main_${Date.now()}`,
+        // For upload, Airtable API only needs url and filename
+        const mainImageAttachment = {
           url: article.imageUrl,
-          filename: filename,
-          size: 0, // Size is unknown for remote URLs
-          type: mimeType // Use the MIME type we determined
+          filename: filename
         };
         
         airtableData.MainImage = [mainImageAttachment];
@@ -289,13 +283,10 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
       
       // Create the Airtable Attachment structure for instaPhoto
-      // For upload, Airtable API only needs url and filename, but we include additional fields for type compatibility
-      const instaPhotoAttachment: UploadAttachment = {
-        id: `insta_${Date.now()}`,
+      // For upload, Airtable API only needs url and filename
+      const instaPhotoAttachment = {
         url: article.instagramImageUrl,
-        filename: filename,
-        size: 0, // Size is unknown for remote URLs
-        type: mimeType // Use the MIME type we determined
+        filename: filename
       };
       
       airtableData.instaPhoto = [instaPhotoAttachment];
@@ -330,13 +321,10 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
       
       // Create the Airtable Attachment structure for instaPhoto (fallback from main image)
-      // For upload, Airtable API only needs url and filename, but we include additional fields for type compatibility
-      const instaPhotoAttachment: UploadAttachment = {
-        id: `fallback_${Date.now()}`,
+      // For upload, Airtable API only needs url and filename
+      const instaPhotoAttachment = {
         url: article.imageUrl,
-        filename: filename,
-        size: 0, // Size is unknown for remote URLs
-        type: mimeType // Use the MIME type we determined
+        filename: filename
       };
       
       airtableData.instaPhoto = [instaPhotoAttachment];
