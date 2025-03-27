@@ -688,7 +688,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       const dashboardButton = new ButtonBuilder()
         .setLabel('Open in Dashboard')
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
+        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinnkytoepaper'}/articles?id=${articleId}`)
         .setEmoji('🔗');
       
       const buttonRow = new ActionRowBuilder<ButtonBuilder>()
@@ -737,7 +737,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       const dashboardButton = new ButtonBuilder()
         .setLabel('Open in Dashboard')
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
+        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`)
         .setEmoji('🔗');
       
       const buttonRow = new ActionRowBuilder<ButtonBuilder>()
