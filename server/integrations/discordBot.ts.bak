@@ -940,7 +940,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1001,14 +1001,13 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     }
     // Handle Instagram image upload now button
     else if (interaction.customId.startsWith('upload_insta_image_now_')) {
-      // Extract article ID from the custom ID - using the same extraction logic as Web image uploads
+      // Extract article ID from the custom ID - special approach to extract just the numeric ID
       const fullId = interaction.customId;
-      const idPart = fullId.substring('upload_insta_image_now_'.length);
-      console.log('Instagram image upload NOW - full ID:', fullId);
-      console.log('Instagram image upload NOW - extracted ID part:', idPart);
       
-      // Make sure we're only taking numbers
-      const matches = idPart.match(/^(\d+)$/);
+      // Look for any number in the custom ID - this will grab just the article ID
+      const matches = fullId.match(/(\d+)/);
+      
+      // If we found a numeric match, use it
       const articleId = matches ? parseInt(matches[1], 10) : NaN;
       
       console.log('Instagram image upload NOW - full ID:', fullId);
@@ -1139,7 +1138,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
@@ -1260,7 +1259,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Could not extract a valid article ID from "${fullId}". Please try again.`,
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
           ephemeral: true
         });
         return;
