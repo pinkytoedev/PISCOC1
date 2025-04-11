@@ -158,29 +158,52 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
       return;
     }
 
-    // Normal login flow
+    // Enhanced login flow for iframe environments like Replit
     try {
       console.log('Attempting Facebook login with initialized SDK');
-      window.FB.login((response) => {
-        console.log('Facebook login response:', response);
-        if (response.status === 'connected') {
-          handleStatusChange('connected', response);
-          onSuccess && onSuccess();
-        } else {
-          // Handle auth failure but don't trigger error for user cancellations
-          if (response.status === 'not_authorized') {
-            console.log('User cancelled login or did not fully authorize.');
+      
+      // Use a try-catch block to handle potential errors with FB.login
+      try {
+        // First check if we are already logged in
+        window.FB.getLoginStatus((statusResponse) => {
+          console.log('Pre-login status check:', statusResponse);
+          
+          if (statusResponse.status === 'connected') {
+            // Already logged in
+            console.log('User already connected, using existing session');
+            handleStatusChange('connected', statusResponse);
+            onSuccess && onSuccess();
           } else {
-            onError && onError(response);
+            // Need to log in - use a popup that should work better in iframe environments
+            window.FB.login((response) => {
+              console.log('Facebook login response:', response);
+              
+              if (response.status === 'connected') {
+                handleStatusChange('connected', response);
+                onSuccess && onSuccess();
+              } else {
+                // Handle auth failure but don't trigger error for user cancellations
+                if (response.status === 'not_authorized') {
+                  console.log('User cancelled login or did not fully authorize.');
+                } else {
+                  console.error('Login failed:', response);
+                  onError && onError(response);
+                }
+              }
+            }, {
+              scope: 'email,public_profile,instagram_basic,pages_show_list',
+              auth_type: 'rerequest',  // Ask for login even if previously denied
+              return_scopes: true,     // Return granted scopes in response
+              display: 'popup'         // Use popup to avoid iframe issues
+            });
           }
-        }
-      }, {
-        scope: 'email,public_profile,instagram_basic,pages_show_list',
-        auth_type: 'rerequest',  // Ask for login even if previously denied
-        return_scopes: true      // Return granted scopes in response
-      });
+        });
+      } catch (fbError) {
+        console.error('Facebook SDK login error:', fbError);
+        onError && onError(fbError);
+      }
     } catch (error) {
-      console.error('Facebook login error:', error);
+      console.error('Login function error:', error);
       onError && onError(error);
     }
   };

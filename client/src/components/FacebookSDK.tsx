@@ -10,6 +10,8 @@ declare global {
         cookie: boolean;
         xfbml: boolean;
         version: string;
+        status?: boolean;
+        frictionlessRequests?: boolean;
       }) => void;
       AppEvents: {
         logPageView: () => void;
@@ -26,7 +28,12 @@ declare global {
           userID: string;
         }
       }) => void) => void;
-      login: (callback: (response: any) => void, options?: { scope: string, auth_type?: string, return_scopes?: boolean }) => void;
+      login: (callback: (response: any) => void, options?: { 
+        scope: string, 
+        auth_type?: string, 
+        return_scopes?: boolean,
+        display?: 'popup' | 'page' | 'iframe' | 'async'
+      }) => void;
       logout: (callback: (response: any) => void) => void;
       api: (path: string, callback: (response: any) => void) => void;
     };
@@ -98,12 +105,14 @@ export function FacebookSDK({
         console.log('Current domain:', window.location.hostname);
         console.log('Current origin:', window.location.origin);
         
-        // Initialize with cookie set to false to prevent domain cookie errors
+        // Initialize with adjusted settings for iframe/embedded environments like Replit
         window.FB.init({
           appId,
-          cookie: false, // Changed from true to prevent domain-related cookie errors
+          cookie: false, // Disable cookies to prevent cross-domain issues
           xfbml: true,
           version,
+          status: true,  // Enable status checking
+          frictionlessRequests: true // Make requests smoother
         });
         
         // Log page view
