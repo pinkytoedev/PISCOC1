@@ -44,6 +44,50 @@ export function setupDiscordRoutes(app: Express) {
       res.status(500).json({ message: "Failed to fetch Discord settings" });
     }
   });
+  
+  // Get all Discord webhooks
+  app.get("/api/discord/webhooks", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const allSettings = await storage.getIntegrationSettings("discord");
+      const webhookSettings = allSettings.filter(setting => 
+        setting.key === 'webhook_url' || setting.key.startsWith('webhook_')
+      );
+      
+      // Transform into a more usable format for the frontend
+      const webhooks = webhookSettings.map(setting => {
+        // For the default webhook
+        if (setting.key === 'webhook_url') {
+          return {
+            id: 'default',
+            name: 'Default Webhook',
+            url: setting.value,
+            enabled: setting.enabled
+          };
+        }
+        
+        // For named webhooks with IDs (webhook_123456)
+        const webhookId = setting.key.replace('webhook_', '');
+        // Try to find a corresponding label setting
+        const labelSetting = allSettings.find(s => s.key === `webhook_label_${webhookId}`);
+        
+        return {
+          id: webhookId,
+          name: labelSetting?.value || `Webhook ${webhookId}`,
+          url: setting.value,
+          enabled: setting.enabled
+        };
+      });
+      
+      res.json(webhooks);
+    } catch (error) {
+      console.error("Error fetching Discord webhooks:", error);
+      res.status(500).json({ message: "Failed to fetch Discord webhooks" });
+    }
+  });
 
   // Update Discord integration settings
   app.post("/api/discord/settings", async (req, res) => {
@@ -286,17 +330,17 @@ export function setupDiscordRoutes(app: Express) {
       
       let webhookUrl;
       
-      // Check if we're using a specific webhook from our bot
-      if (webhookId && discordBot.client) {
+      // Check if we're using a specific webhook from a setting
+      if (webhookId) {
         try {
-          // Try to find the webhook in our cached webhooks
-          const webhook = await discordBot.client.fetchWebhook(webhookId);
-          if (webhook) {
-            webhookUrl = webhook.url;
+          // Look for a specific webhook URL in settings
+          const webhookSetting = await storage.getIntegrationSettingByKey("discord", `webhook_${webhookId}`);
+          if (webhookSetting && webhookSetting.value) {
+            webhookUrl = webhookSetting.value;
           }
         } catch (error) {
-          console.error("Error fetching webhook:", error);
-          // If we can't find the webhook, we'll fall back to the default one
+          console.error("Error fetching webhook setting:", error);
+          // If we can't find the webhook setting, we'll fall back to the default one
         }
       }
       

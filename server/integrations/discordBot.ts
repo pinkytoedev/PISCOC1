@@ -36,6 +36,11 @@ import { uploadImageToAirtable, uploadImageUrlToAirtable } from '../utils/imageU
 
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
+
+// Export the Discord bot for use in other modules
+export const discordBot = {
+  get client() { return client; }
+};
 // Define more detailed bot status interface
 interface GuildInfo {
   id: string;

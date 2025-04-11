@@ -63,6 +63,13 @@ interface WebhookInfo {
   guildName: string;
 }
 
+interface DiscordWebhook {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+}
+
 interface BotStatus {
   connected: boolean;
   status: string;
