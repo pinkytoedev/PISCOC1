@@ -1798,6 +1798,138 @@ export function setupDiscordBotRoutes(app: Express) {
       });
     }
   });
+  
+  // Get available channels in a server where webhooks can be created
+  app.get("/api/discord/bot/server/:serverId/channels", async (req: Request, res: Response) => {
+    try {
+      const { serverId } = req.params;
+      
+      if (!client || !client.isReady()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Discord bot is not connected'
+        });
+      }
+      
+      // Try to fetch the guild
+      const guild = client.guilds.cache.get(serverId);
+      if (!guild) {
+        return res.status(404).json({
+          success: false,
+          message: 'Server not found or bot does not have access'
+        });
+      }
+      
+      // Check if the bot has permissions to manage webhooks in this guild
+      if (!guild.members.me || !guild.members.me.permissions.has('ManageWebhooks')) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bot does not have permission to manage webhooks in this server'
+        });
+      }
+      
+      // Get all text channels where webhooks can be created
+      // Filter for only text channels where the bot has VIEW_CHANNEL permission
+      const channels = guild.channels.cache
+        .filter(channel => 
+          channel.type === 0 && // 0 is GUILD_TEXT
+          guild.members.me && channel.permissionsFor(guild.members.me)?.has(['ViewChannel', 'ManageWebhooks'])
+        )
+        .map(channel => ({
+          id: channel.id,
+          name: channel.name,
+          type: 'text'
+        }));
+      
+      res.json({
+        success: true,
+        serverId: guild.id,
+        serverName: guild.name,
+        channels
+      });
+    } catch (error) {
+      console.error('Error getting server channels:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while fetching server channels' 
+      });
+    }
+  });
+  
+  // Create a new webhook in a server channel
+  app.post("/api/discord/bot/webhook", async (req: Request, res: Response) => {
+    try {
+      const { serverId, channelId, name, avatarUrl } = req.body;
+      
+      // Validate required fields
+      if (!serverId || !channelId || !name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Server ID, channel ID, and webhook name are required'
+        });
+      }
+      
+      if (!client || !client.isReady()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Discord bot is not connected'
+        });
+      }
+      
+      // Try to fetch the guild
+      const guild = client.guilds.cache.get(serverId);
+      if (!guild) {
+        return res.status(404).json({
+          success: false,
+          message: 'Server not found or bot does not have access'
+        });
+      }
+      
+      // Try to fetch the channel
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel || channel.type !== 0) { // 0 is GUILD_TEXT
+        return res.status(404).json({
+          success: false,
+          message: 'Channel not found or not a text channel'
+        });
+      }
+      
+      // Check if the bot has permissions to manage webhooks in this channel
+      if (!guild.members.me || !channel.permissionsFor(guild.members.me)?.has('ManageWebhooks')) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bot does not have permission to manage webhooks in this channel'
+        });
+      }
+      
+      // Create the webhook
+      const webhook = await (channel as any).createWebhook({
+        name,
+        avatar: avatarUrl // Optional, will use default if not provided
+      });
+      
+      res.status(201).json({
+        success: true,
+        webhook: {
+          id: webhook.id,
+          name: webhook.name,
+          token: webhook.token,
+          url: webhook.url,
+          channelId: webhook.channelId,
+          channelName: channel.name,
+          guildId: guild.id,
+          guildName: guild.name
+        }
+      });
+    } catch (error) {
+      console.error('Error creating webhook:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while creating the webhook',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
 }
 
 /**
