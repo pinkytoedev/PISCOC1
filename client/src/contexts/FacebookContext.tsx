@@ -174,6 +174,11 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
             handleStatusChange('connected', statusResponse);
             onSuccess && onSuccess();
           } else {
+            // Replit-specific handling for iframe environments
+            // Open login in a new tab/window to avoid cross-domain issues
+            const isInIframe = window !== window.parent;
+            console.log('Is in iframe:', isInIframe);
+            
             // Need to log in - use a popup that should work better in iframe environments
             window.FB.login((response) => {
               console.log('Facebook login response:', response);
@@ -191,10 +196,11 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
                 }
               }
             }, {
-              scope: 'email,public_profile,instagram_basic,pages_show_list',
-              auth_type: 'rerequest',  // Ask for login even if previously denied
-              return_scopes: true,     // Return granted scopes in response
-              display: 'popup'         // Use popup to avoid iframe issues
+              scope: 'email,public_profile,instagram_basic,pages_show_list,pages_read_engagement,instagram_content_publish',
+              auth_type: 'rerequest',       // Ask for login even if previously denied
+              return_scopes: true,          // Return granted scopes in response
+              display: 'popup',             // Force popup mode to avoid iframe issues
+              enable_profile_selector: true // Allow selecting between multiple profiles 
             });
           }
         });
