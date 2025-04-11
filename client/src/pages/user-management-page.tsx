@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, COPX$       
- dit, Loader2, Trash2, User, UserCog, Users } from "lucide-react";
+import { AlertTriangle, Edit, Loader2, Trash2, User, UserCog, Users } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/queryClient";
 import { InsertUser, User as UserType } from "@shared/schema";
