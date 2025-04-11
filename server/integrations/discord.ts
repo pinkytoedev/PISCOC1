@@ -278,19 +278,38 @@ export function setupDiscordRoutes(app: Express) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       
-      const { message, username } = req.body;
+      const { message, username, webhookId } = req.body;
       
       if (!message || typeof message !== 'string' || !message.trim()) {
         return res.status(400).json({ message: "Message content is required" });
       }
       
-      const webhookUrlSetting = await storage.getIntegrationSettingByKey("discord", "webhook_url");
+      let webhookUrl;
       
-      if (!webhookUrlSetting || !webhookUrlSetting.enabled || !webhookUrlSetting.value) {
-        return res.status(400).json({ message: "Discord webhook URL not configured" });
+      // Check if we're using a specific webhook from our bot
+      if (webhookId && discordBot.client) {
+        try {
+          // Try to find the webhook in our cached webhooks
+          const webhook = await discordBot.client.fetchWebhook(webhookId);
+          if (webhook) {
+            webhookUrl = webhook.url;
+          }
+        } catch (error) {
+          console.error("Error fetching webhook:", error);
+          // If we can't find the webhook, we'll fall back to the default one
+        }
       }
       
-      const webhookUrl = webhookUrlSetting.value;
+      // If no specific webhook was found or requested, use the default one
+      if (!webhookUrl) {
+        const webhookUrlSetting = await storage.getIntegrationSettingByKey("discord", "webhook_url");
+        
+        if (!webhookUrlSetting || !webhookUrlSetting.enabled || !webhookUrlSetting.value) {
+          return res.status(400).json({ message: "Discord webhook URL not configured" });
+        }
+        
+        webhookUrl = webhookUrlSetting.value;
+      }
       
       // Create the message payload
       const discordMessage: DiscordWebhookData = {
