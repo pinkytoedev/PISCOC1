@@ -10,6 +10,22 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting } from "@shared/schema";
 import { SiDiscord } from "react-icons/si";
@@ -25,7 +41,9 @@ import {
   PowerOff, 
   Terminal,
   Server,
-  UserPlus
+  UserPlus,
+  Plus,
+  Settings
 } from "lucide-react";
 
 interface GuildInfo {
@@ -53,6 +71,163 @@ interface BotStatus {
   guilds?: number;
   guildsList?: GuildInfo[];
   webhooks?: WebhookInfo[];
+}
+
+// Define a new interface for server channels
+interface ChannelInfo {
+  id: string;
+  name: string;
+  type: string;
+}
+
+// CreateWebhookDialog component
+function CreateWebhookDialog({ serverId, serverName }: { serverId: string, serverName: string }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [webhookName, setWebhookName] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  
+  // Query for getting available channels in the server
+  const { data: channelsData, isLoading: isLoadingChannels } = useQuery<{
+    success: boolean;
+    serverId: string;
+    serverName: string;
+    channels: ChannelInfo[];
+  }>({
+    queryKey: ['/api/discord/bot/server', serverId, 'channels'],
+    queryFn: async () => {
+      const res = await fetch(`/api/discord/bot/server/${serverId}/channels`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch channels');
+      }
+      return res.json();
+    },
+    enabled: open, // Only fetch when the dialog is open
+  });
+  
+  // Mutation for creating a webhook
+  const createWebhookMutation = useMutation({
+    mutationFn: async () => {
+      if (!webhookName || !selectedChannelId) {
+        throw new Error('Webhook name and channel are required');
+      }
+      
+      setIsCreating(true);
+      const res = await apiRequest("POST", "/api/discord/bot/webhook", {
+        serverId,
+        channelId: selectedChannelId,
+        name: webhookName
+      });
+      
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to create webhook');
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      setIsCreating(false);
+      toast({
+        title: "Webhook created",
+        description: `Webhook "${data.webhook.name}" was created in channel #${data.webhook.channelName}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/discord/bot/servers'] });
+      setOpen(false);
+      setWebhookName("");
+      setSelectedChannelId("");
+    },
+    onError: (error) => {
+      setIsCreating(false);
+      toast({
+        title: "Failed to create webhook",
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    }
+  });
+  
+  const handleCreateWebhook = () => {
+    createWebhookMutation.mutate();
+  };
+  
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="ml-2">
+          <Webhook className="h-4 w-4 mr-2" />
+          Add Webhook
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Webhook in {serverName}</DialogTitle>
+          <DialogDescription>
+            Create a new webhook in a channel on this Discord server. The webhook will be used to send content from your platform to Discord.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="webhook-name">Webhook Name</Label>
+            <Input
+              id="webhook-name"
+              placeholder="Content Publisher"
+              value={webhookName}
+              onChange={(e) => setWebhookName(e.target.value)}
+            />
+            <p className="text-xs text-gray-500">
+              This name will be displayed as the sender of messages in Discord.
+            </p>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="channel">Channel</Label>
+            {isLoadingChannels ? (
+              <div className="flex items-center justify-center h-10 bg-gray-100 rounded">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading channels...
+              </div>
+            ) : channelsData?.channels && channelsData.channels.length > 0 ? (
+              <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  {channelsData.channels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      #{channel.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-sm text-gray-500 p-2 border rounded bg-gray-50">
+                No suitable channels found. Make sure the bot has the necessary permissions.
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button 
+            type="submit" 
+            onClick={handleCreateWebhook}
+            disabled={!webhookName || !selectedChannelId || isCreating}
+          >
+            {isCreating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Webhook
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function DiscordPage() {
