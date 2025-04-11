@@ -13,7 +13,20 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting } from "@shared/schema";
 import { SiDiscord } from "react-icons/si";
-import { CheckCircle, AlertCircle, Loader2, Copy, RefreshCw, Webhook, Bot, Shield, PowerOff, Terminal } from "lucide-react";
+import { 
+  CheckCircle, 
+  AlertCircle, 
+  Loader2, 
+  Copy, 
+  RefreshCw, 
+  Webhook, 
+  Bot, 
+  Shield, 
+  PowerOff, 
+  Terminal,
+  Server,
+  UserPlus
+} from "lucide-react";
 
 interface GuildInfo {
   id: string;
@@ -900,7 +913,7 @@ function AddBotToServerButton() {
             </>
           ) : (
             <>
-              <SiDiscord className="mr-2 h-4 w-4 text-[#5865F2]" />
+              <UserPlus className="mr-2 h-4 w-4" />
               Add to Discord Server
             </>
           )}
