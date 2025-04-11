@@ -378,8 +378,8 @@ export default function DiscordPage() {
   });
   
   const sendDiscordMessageMutation = useMutation({
-    mutationFn: async ({ message, username }: { message: string, username: string }) => {
-      const res = await apiRequest("POST", "/api/discord/send-message", { message, username });
+    mutationFn: async ({ message, username, webhookId }: { message: string, username: string, webhookId?: string }) => {
+      const res = await apiRequest("POST", "/api/discord/send-message", { message, username, webhookId });
       return await res.json();
     },
     onSuccess: () => {
@@ -425,7 +425,8 @@ export default function DiscordPage() {
     if (discordMessage.trim()) {
       sendDiscordMessageMutation.mutate({
         message: discordMessage,
-        username: webhookUsername
+        username: webhookUsername,
+        webhookId: selectedWebhookId || undefined
       });
     }
   };
@@ -665,6 +666,32 @@ export default function DiscordPage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
+                        {/* Webhook Selection */}
+                        {(botStatus?.webhooks && botStatus.webhooks.length > 0) && (
+                          <div className="grid gap-2">
+                            <Label htmlFor="webhook_selection">Select Webhook</Label>
+                            <Select 
+                              value={selectedWebhookId} 
+                              onValueChange={setSelectedWebhookId}
+                            >
+                              <SelectTrigger id="webhook_selection" className="w-full">
+                                <SelectValue placeholder="Select a webhook" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">Default webhook</SelectItem>
+                                {botStatus.webhooks.map((webhook) => (
+                                  <SelectItem key={webhook.id} value={webhook.id}>
+                                    {webhook.guildName} / #{webhook.channelName}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-gray-500">
+                              Choose which Discord server and channel to send the message to.
+                            </p>
+                          </div>
+                        )}
+                        
                         <div className="grid gap-2">
                           <Label htmlFor="webhook_username">Display Name</Label>
                           <Input
