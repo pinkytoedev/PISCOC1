@@ -869,7 +869,10 @@ export default function DiscordPage() {
                             
                             {botStatus?.connected && ((serverData?.guilds && serverData.guilds.length > 0) || (botStatus.guildsList && botStatus.guildsList.length > 0)) && (
                               <div className="mt-6">
-                                <h3 className="text-sm font-medium mb-2">Connected Servers</h3>
+                                <div className="flex justify-between items-center mb-2">
+                                  <h3 className="text-sm font-medium">Connected Servers</h3>
+                                  <AddBotToServerButton />
+                                </div>
                                 <div className="border rounded-md overflow-hidden">
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">
@@ -877,6 +880,7 @@ export default function DiscordPage() {
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -901,6 +905,9 @@ export default function DiscordPage() {
                                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${guild.owner ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                                               {guild.owner ? 'Admin Access' : 'Limited Access'}
                                             </span>
+                                          </td>
+                                          <td className="px-4 py-3 whitespace-nowrap text-right">
+                                            <CreateWebhookDialog serverId={guild.id} serverName={guild.name} />
                                           </td>
                                         </tr>
                                       ))}
