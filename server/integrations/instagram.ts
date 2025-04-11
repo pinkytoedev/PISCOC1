@@ -4,7 +4,7 @@ import { log } from '../vite';
 import { storage } from '../storage';
 
 // Constants
-const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'your_verify_token';
+const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'ieatpissandpoop123';
 const APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
 const APP_ID = process.env.FACEBOOK_APP_ID || '';
 
