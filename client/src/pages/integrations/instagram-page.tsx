@@ -50,14 +50,31 @@ export default function InstagramPage() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isTestingWebhook, setIsTestingWebhook] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [instagramAccount, setInstagramAccount] = useState<any>(null);
+  const [instagramPosts, setInstagramPosts] = useState<any[]>([]);
+  const [isLoadingAccount, setIsLoadingAccount] = useState(false);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+  const [postImageUrl, setPostImageUrl] = useState<string>('');
+  const [postCaption, setPostCaption] = useState<string>('');
+  const [isCreatingPost, setIsCreatingPost] = useState(false);
 
   // Fetch webhook subscriptions and field groups on component mount
   useEffect(() => {
     if (isInitialized) {
       fetchWebhookData();
       fetchWebhookEvents();
+      
+      // Only fetch Instagram account and posts if user is logged in
+      if (status === 'connected' && accessToken) {
+        // Store the token when the user connects
+        storeAccessToken(accessToken);
+        
+        // Then fetch Instagram data
+        fetchInstagramAccount();
+        fetchInstagramPosts();
+      }
     }
-  }, [isInitialized]);
+  }, [isInitialized, status, accessToken]);
   
   // Function to fetch webhook events
   const fetchWebhookEvents = async () => {
@@ -223,6 +240,166 @@ export default function InstagramPage() {
     }
   };
 
+  // Store Facebook access token in our backend for Instagram API calls
+  const storeAccessToken = async (token: string) => {
+    try {
+      const response = await fetch('/api/instagram/auth/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          accessToken: token,
+          userId: user?.id,
+        }),
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to store access token:', await response.text());
+      }
+    } catch (err) {
+      console.error('Error storing access token:', err);
+    }
+  };
+  
+  // Fetch Instagram account information
+  const fetchInstagramAccount = async () => {
+    setIsLoadingAccount(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/instagram/account');
+      
+      // Try to get JSON response even for error cases
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        // If we can't parse JSON, use text
+        const text = await response.text();
+        responseData = { message: text || response.statusText };
+      }
+      
+      if (!response.ok) {
+        // Do not show error for "NO_ACCESS_TOKEN" since we handle auth separately
+        if (responseData.code !== 'NO_ACCESS_TOKEN') {
+          if (responseData.code === 'NO_INSTAGRAM_ACCOUNT') {
+            throw new Error('No Instagram Business Account found linked to your Facebook Page. Please ensure you have connected an Instagram Business Account to your Facebook Page.');
+          } else if (responseData.message) {
+            throw new Error(responseData.message);
+          } else {
+            throw new Error(`Failed to get Instagram account: ${response.statusText}`);
+          }
+        }
+        return;
+      }
+      
+      setInstagramAccount(responseData);
+    } catch (err) {
+      console.error('Error fetching Instagram account:', err);
+      setError(err instanceof Error ? err.message : 'Failed to get Instagram account information.');
+    } finally {
+      setIsLoadingAccount(false);
+    }
+  };
+  
+  // Fetch Instagram media posts
+  const fetchInstagramPosts = async () => {
+    setIsLoadingPosts(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/instagram/media');
+      
+      // Try to get JSON response even for error cases
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        // If we can't parse JSON, use text
+        const text = await response.text();
+        responseData = { message: text || response.statusText };
+        throw new Error(responseData.message);
+      }
+      
+      if (!response.ok) {
+        // Do not show error for "NO_ACCESS_TOKEN" since we handle auth separately
+        if (responseData.code !== 'NO_ACCESS_TOKEN') {
+          if (responseData.message) {
+            throw new Error(responseData.message);
+          } else {
+            throw new Error(`Failed to get Instagram posts: ${response.statusText}`);
+          }
+        }
+        return;
+      }
+      
+      setInstagramPosts(responseData);
+    } catch (err) {
+      console.error('Error fetching Instagram posts:', err);
+      setError(err instanceof Error ? err.message : 'Failed to get Instagram posts.');
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  };
+  
+  // Create a new Instagram post
+  const createInstagramPost = async () => {
+    if (!postImageUrl) {
+      setError('Image URL is required to create an Instagram post.');
+      return;
+    }
+    
+    setIsCreatingPost(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/instagram/media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          imageUrl: postImageUrl,
+          caption: postCaption,
+        }),
+      });
+      
+      // Try to get JSON response even for error cases
+      let responseData;
+      try {
+        responseData = await response.json();
+      } catch (parseError) {
+        // If we can't parse JSON, use text
+        const text = await response.text();
+        responseData = { message: text || response.statusText };
+      }
+      
+      if (!response.ok) {
+        if (responseData.code === 'NO_ACCESS_TOKEN') {
+          throw new Error('Facebook access token is missing. Please connect with Facebook first.');
+        } else if (responseData.code === 'MISSING_IMAGE_URL') {
+          throw new Error('Image URL is required to create an Instagram post.');
+        } else if (responseData.message) {
+          throw new Error(responseData.message);
+        } else {
+          throw new Error(`Failed to create Instagram post: ${response.statusText}`);
+        }
+      }
+      
+      // Success!
+      setPostImageUrl('');
+      setPostCaption('');
+      fetchInstagramPosts(); // Refresh the posts list
+      
+    } catch (err) {
+      console.error('Error creating Instagram post:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create Instagram post.');
+    } finally {
+      setIsCreatingPost(false);
+    }
+  };
+
   // Test webhook configuration
   const testWebhookConnection = async () => {
     setIsTestingWebhook(true);
@@ -339,12 +516,179 @@ export default function InstagramPage() {
         </CardFooter>
       </Card>
 
-      <Tabs defaultValue="subscriptions" className="w-full">
+      <Tabs defaultValue="media" className="w-full">
         <TabsList className="mb-6">
+          <TabsTrigger value="media">Instagram Media</TabsTrigger>
+          <TabsTrigger value="create">Create Post</TabsTrigger>
           <TabsTrigger value="subscriptions">Webhook Subscriptions</TabsTrigger>
           <TabsTrigger value="events">Recent Events</TabsTrigger>
           <TabsTrigger value="test">Diagnostic Tests</TabsTrigger>
         </TabsList>
+        
+        <TabsContent value="media">
+          <Card>
+            <CardHeader>
+              <CardTitle>Instagram Media</CardTitle>
+              <CardDescription>
+                View your recent Instagram posts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!status || status !== 'connected' ? (
+                <div className="text-center py-10 border rounded-md">
+                  <LogIn className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground">
+                    Please connect with Facebook to view your Instagram posts.
+                  </p>
+                </div>
+              ) : isLoadingPosts ? (
+                <div className="flex justify-center py-10">
+                  <RefreshCcw className="animate-spin h-6 w-6" />
+                </div>
+              ) : instagramPosts && instagramPosts.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {instagramPosts.map((post) => (
+                    <div key={post.id} className="border rounded-md overflow-hidden">
+                      {post.media_url && (
+                        <div className="aspect-square relative overflow-hidden">
+                          <img 
+                            src={post.media_url} 
+                            alt={post.caption || 'Instagram post'} 
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Badge>
+                              {post.media_type === 'IMAGE' ? 'Photo' : 
+                               post.media_type === 'VIDEO' ? 'Video' : 
+                               post.media_type === 'CAROUSEL_ALBUM' ? 'Album' : 
+                               post.media_type}
+                            </Badge>
+                          </div>
+                        </div>
+                      )}
+                      <div className="p-4">
+                        <p className="text-sm line-clamp-3 mb-2">
+                          {post.caption || 'No caption'}
+                        </p>
+                        <div className="flex justify-between items-center text-xs text-muted-foreground">
+                          <span className="flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {new Date(post.timestamp).toLocaleDateString()}
+                          </span>
+                          {post.permalink && (
+                            <a 
+                              href={post.permalink} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="text-blue-500 hover:underline"
+                            >
+                              View on Instagram
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-10 border rounded-md">
+                  <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground">
+                    No Instagram posts found. Create a post or check your Instagram account.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant="outline" 
+                onClick={fetchInstagramPosts} 
+                disabled={isLoadingPosts || !status || status !== 'connected'}
+              >
+                <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
+                Refresh Posts
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="create">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create Instagram Post</CardTitle>
+              <CardDescription>
+                Create and publish a new post to your Instagram account
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!status || status !== 'connected' ? (
+                <div className="text-center py-10 border rounded-md">
+                  <LogIn className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                  <p className="text-muted-foreground">
+                    Please connect with Facebook to create Instagram posts.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Image URL</label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={postImageUrl}
+                        onChange={(e) => setPostImageUrl(e.target.value)}
+                        placeholder="https://example.com/image.jpg"
+                        className="flex-1 p-2 border rounded-md"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Enter the URL of an image to post. The image must be publicly accessible.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Caption</label>
+                    <textarea
+                      value={postCaption}
+                      onChange={(e) => setPostCaption(e.target.value)}
+                      placeholder="Write a caption for your post..."
+                      className="w-full h-32 p-2 border rounded-md"
+                    />
+                  </div>
+                  
+                  <Button
+                    onClick={createInstagramPost}
+                    disabled={isCreatingPost || !postImageUrl}
+                    className="w-full"
+                  >
+                    {isCreatingPost ? (
+                      <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Image className="mr-2 h-4 w-4" />
+                    )}
+                    {isCreatingPost ? 'Creating Post...' : 'Create Post'}
+                  </Button>
+                  
+                  <div className="rounded-lg border p-4">
+                    <h3 className="font-medium flex items-center">
+                      <Info className="mr-2 h-4 w-4" />
+                      Important Information
+                    </h3>
+                    <div className="text-sm text-muted-foreground mt-2 space-y-1">
+                      <p>To create Instagram posts, please note:</p>
+                      <ul className="list-disc pl-6 mt-2 space-y-1">
+                        <li>You need an Instagram Business Account connected to a Facebook Page</li>
+                        <li>The image URL must be publicly accessible on the internet</li>
+                        <li>Images must follow Instagram's content guidelines</li>
+                        <li>There may be rate limits on the number of posts you can create</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         
         <TabsContent value="subscriptions">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
