@@ -237,6 +237,7 @@ export default function DiscordPage() {
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
   const [webhookUsername, setWebhookUsername] = useState("Website User");
+  const [selectedWebhookId, setSelectedWebhookId] = useState<string>("");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
