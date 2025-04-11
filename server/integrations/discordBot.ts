@@ -36,12 +36,32 @@ import { uploadImageToAirtable, uploadImageUrlToAirtable } from '../utils/imageU
 
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
+// Define more detailed bot status interface
+interface GuildInfo {
+  id: string;
+  name: string;
+  memberCount: number;
+  icon?: string;
+  owner?: boolean;
+}
+
+interface WebhookInfo {
+  id: string;
+  name: string;
+  channelId: string;
+  channelName: string;
+  guildId: string;
+  guildName: string;
+}
+
 let botStatus = {
   connected: false,
   status: 'Not initialized',
   username: '',
   id: '',
-  guilds: 0
+  guilds: 0,
+  guildsList: [] as GuildInfo[],
+  webhooks: [] as WebhookInfo[]
 };
 
 /**
@@ -1362,7 +1382,9 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
         status: 'Connected and ready',
         username: c.user.username,
         id: c.user.id,
-        guilds: c.guilds.cache.size
+        guilds: c.guilds.cache.size,
+        guildsList: [],
+        webhooks: []
       };
       console.log(`Ready! Logged in as ${c.user.tag}`);
     });
@@ -1481,7 +1503,9 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
       status: `Initialization error: ${error instanceof Error ? error.message : String(error)}`,
       username: '',
       id: '',
-      guilds: 0
+      guilds: 0,
+      guildsList: [],
+      webhooks: []
     };
     console.error('Error initializing Discord bot:', error);
     return { success: false, message: 'Failed to initialize bot', error };
@@ -1538,7 +1562,9 @@ export const stopDiscordBot = async () => {
       status: 'Disconnected',
       username: botStatus.username,
       id: botStatus.id,
-      guilds: 0
+      guilds: 0,
+      guildsList: [],
+      webhooks: []
     };
     
     return { success: true, message: 'Bot stopped successfully' };
@@ -1549,16 +1575,63 @@ export const stopDiscordBot = async () => {
 };
 
 /**
- * Get the Discord bot status
+ * Get the Discord bot status with detailed guild and webhook information
  */
-export const getDiscordBotStatus = () => {
+export const getDiscordBotStatus = async () => {
   if (client) {
     // Update the connected status based on client's readiness
     botStatus.connected = client.isReady();
     
-    // Update guild count if connected
+    // Update guild count and list if connected
     if (client.isReady()) {
       botStatus.guilds = client.guilds.cache.size;
+      
+      // Get detailed information about each guild
+      botStatus.guildsList = client.guilds.cache.map(guild => ({
+        id: guild.id,
+        name: guild.name,
+        memberCount: guild.memberCount,
+        icon: guild.iconURL() || undefined,
+        owner: guild.members.me?.permissions.has('Administrator') || false
+      }));
+      
+      // Get webhook information from each guild where bot has necessary permissions
+      botStatus.webhooks = [];
+      
+      // Fetch webhooks from each guild if bot has permission
+      const webhookPromises = client.guilds.cache.map(async (guild) => {
+        // Check if bot has permission to manage webhooks in this guild
+        if (guild.members.me?.permissions.has('ManageWebhooks')) {
+          try {
+            const guildWebhooks = await guild.fetchWebhooks();
+            
+            // Map to our webhook info format
+            const webhookInfos = guildWebhooks.map(webhook => {
+              if (webhook.type === 1) { // Only include standard webhooks
+                return {
+                  id: webhook.id,
+                  name: webhook.name,
+                  channelId: webhook.channelId,
+                  channelName: guild.channels.cache.get(webhook.channelId)?.name || 'unknown',
+                  guildId: guild.id,
+                  guildName: guild.name
+                };
+              }
+              return null;
+            }).filter(Boolean) as WebhookInfo[];
+            
+            return webhookInfos;
+          } catch (error) {
+            console.error(`Error fetching webhooks for guild ${guild.name} (${guild.id}):`, error);
+            return [];
+          }
+        }
+        return [];
+      });
+      
+      // Wait for all webhook fetch operations to complete
+      const webhookResults = await Promise.all(webhookPromises);
+      botStatus.webhooks = webhookResults.flat();
     }
   }
   
@@ -1658,15 +1731,70 @@ export function setupDiscordBotRoutes(app: Express) {
   });
 
   // Get bot status
-  app.get("/api/discord/bot/status", (req: Request, res: Response) => {
+  app.get("/api/discord/bot/status", async (req: Request, res: Response) => {
     try {
-      const status = getDiscordBotStatus();
+      const status = await getDiscordBotStatus();
       res.json(status);
     } catch (error) {
       console.error('Error getting Discord bot status:', error);
       res.status(500).json({ 
         success: false, 
         message: 'An error occurred while getting Discord bot status' 
+      });
+    }
+  });
+  
+  // Get detailed information about Discord servers (guilds)
+  app.get("/api/discord/bot/servers", async (req: Request, res: Response) => {
+    try {
+      const status = await getDiscordBotStatus();
+      
+      res.json({
+        guilds: status.guildsList,
+        webhooks: status.webhooks
+      });
+    } catch (error) {
+      console.error('Error getting Discord server information:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while getting Discord server information' 
+      });
+    }
+  });
+  
+  // Get OAuth URL for adding the bot to a server
+  app.get("/api/discord/bot/invite-url", async (req: Request, res: Response) => {
+    try {
+      const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
+      
+      if (!clientIdSetting || !clientIdSetting.value) {
+        return res.status(400).json({
+          success: false,
+          message: 'Discord client ID not configured'
+        });
+      }
+      
+      // Calculate the permissions needed by the bot
+      // Using the Discord permission calculator values:
+      // - View Channels: 1024
+      // - Send Messages: 2048
+      // - Manage Webhooks: 536870912
+      // - Read Message History: 65536
+      // Summing these gives the permission integer: 536939520
+      const permissions = 536939520;
+      
+      // Create the OAuth URL with the necessary scopes (bot and applications.commands)
+      const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientIdSetting.value}&permissions=${permissions}&scope=bot%20applications.commands`;
+      
+      res.json({
+        success: true,
+        invite_url: inviteUrl
+      });
+    } catch (error) {
+      console.error('Error generating Discord bot invite URL:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while generating the Discord bot invite URL' 
       });
     }
   });
