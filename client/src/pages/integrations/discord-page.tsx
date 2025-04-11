@@ -237,6 +237,8 @@ export default function DiscordPage() {
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
   const [webhookUsername, setWebhookUsername] = useState("Website User");
+  const [selectedWebhookId, setSelectedWebhookId] = useState<string>("");
+  const [selectedWebhookUrl, setSelectedWebhookUrl] = useState<string>("");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
@@ -377,8 +379,12 @@ export default function DiscordPage() {
   });
   
   const sendDiscordMessageMutation = useMutation({
-    mutationFn: async ({ message, username }: { message: string, username: string }) => {
-      const res = await apiRequest("POST", "/api/discord/send-message", { message, username });
+    mutationFn: async ({ message, username, webhookUrl }: { message: string, username: string, webhookUrl?: string }) => {
+      const res = await apiRequest("POST", "/api/discord/send-message", { 
+        message, 
+        username,
+        webhookUrl: webhookUrl || getSettingValue('webhook_url')
+      });
       return await res.json();
     },
     onSuccess: () => {
@@ -531,7 +537,7 @@ export default function DiscordPage() {
                   onValueChange={setTab}
                   className="w-full"
                 >
-                  <TabsList className="grid w-full grid-cols-2">
+                  <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="webhook" className="flex items-center">
                       <Webhook className="h-4 w-4 mr-2" />
                       Webhook Integration
@@ -539,6 +545,10 @@ export default function DiscordPage() {
                     <TabsTrigger value="bot" className="flex items-center">
                       <Bot className="h-4 w-4 mr-2" />
                       Discord Bot
+                    </TabsTrigger>
+                    <TabsTrigger value="webhook-message" className="flex items-center">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Webhook Messages
                     </TabsTrigger>
                   </TabsList>
                   
@@ -927,6 +937,7 @@ export default function DiscordPage() {
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -942,6 +953,19 @@ export default function DiscordPage() {
                                           </td>
                                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                             #{webhook.channelName}
+                                          </td>
+                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
+                                            <Button 
+                                              variant="outline" 
+                                              size="sm"
+                                              onClick={() => {
+                                                setSelectedWebhookId(webhook.id);
+                                                setTab("webhook-message");
+                                              }}
+                                            >
+                                              <MessageSquare className="h-4 w-4 mr-1" />
+                                              Send Message
+                                            </Button>
                                           </td>
                                         </tr>
                                       ))}
