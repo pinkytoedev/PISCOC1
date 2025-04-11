@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Link } from 'wouter';
 import { useFacebook } from '../../contexts/FacebookContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +25,8 @@ import {
   TestTube,
   Info
 } from 'lucide-react';
+import { Header } from '@/components/layout/header';
+import { Sidebar } from '@/components/layout/sidebar';
 
 /**
  * Instagram Integration Page
@@ -32,6 +35,7 @@ import {
  * and allows users to connect their Instagram account via Facebook.
  */
 export default function InstagramPage() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { 
     isInitialized, 
     status, 
@@ -42,6 +46,7 @@ export default function InstagramPage() {
     logout 
   } = useFacebook();
   
+  // States for Instagram data
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [webhookFields, setWebhookFields] = useState<{[key: string]: string[]}>({});
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
@@ -437,601 +442,638 @@ export default function InstagramPage() {
     }
   };
 
+  // Main component render
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6 flex items-center">
-        <Instagram className="mr-2" />
-        Instagram Integration
-      </h1>
+    <div className="flex flex-col min-h-screen">
+      <Header 
+        title="Instagram Integration" 
+        onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} 
+      />
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar 
+          mobileOpen={mobileMenuOpen} 
+          onMobileClose={() => setMobileMenuOpen(false)} 
+        />
+        <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
+          <div className="container mx-auto">
+            {/* Breadcrumbs */}
+            <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
+              <ol className="flex items-center space-x-2">
+                <li>
+                  <Link href="/integrations">Integrations</Link>
+                </li>
+                <li>
+                  <span className="text-gray-500 mx-2">/</span>
+                </li>
+                <li>
+                  <span className="text-gray-900">Instagram</span>
+                </li>
+              </ol>
+            </nav>
+            
+            <h1 className="text-3xl font-bold mb-6 flex items-center">
+              <Instagram className="mr-2" />
+              Instagram Integration
+            </h1>
       
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Facebook Authentication
-            <Badge variant={status === 'connected' ? 'default' : 'destructive'}>
-              {status === 'connected' ? 'Connected' : 'Not Connected'}
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            Connect to Facebook to access Instagram integration features. This is required for Instagram API access.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* SDK initialization status */}
-          {!isInitialized && (
-            <div className="flex items-center justify-center space-x-2 mb-4 p-2 border rounded bg-muted">
-              <RefreshCcw className="animate-spin h-4 w-4" />
-              <p>Facebook SDK is initializing...</p>
-            </div>
-          )}
-
-          {status === 'connected' && user && (
-            <div className="rounded-lg bg-muted p-4 mb-4">
-              <div className="flex items-center">
-                {user.picture && (
-                  <img 
-                    src={user.picture.data.url} 
-                    alt={user.name || 'User'} 
-                    className="w-12 h-12 rounded-full mr-4"
-                  />
-                )}
-                <div>
-                  <h3 className="font-medium">{user.name}</h3>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Display SDK initialization errors */}
-          {initializationError && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Facebook SDK Error</AlertTitle>
-              <AlertDescription>{initializationError}</AlertDescription>
-            </Alert>
-          )}
-          
-          {/* Display other errors */}
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-        <CardFooter>
-          {status === 'connected' ? (
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Disconnect
-            </Button>
-          ) : (
-            <Button onClick={handleLogin}>
-              <LogIn className="mr-2 h-4 w-4" />
-              Connect with Facebook
-            </Button>
-          )}
-        </CardFooter>
-      </Card>
-
-      <Tabs defaultValue="media" className="w-full">
-        <TabsList className="mb-6">
-          <TabsTrigger value="media">Instagram Media</TabsTrigger>
-          <TabsTrigger value="create">Create Post</TabsTrigger>
-          <TabsTrigger value="subscriptions">Webhook Subscriptions</TabsTrigger>
-          <TabsTrigger value="events">Recent Events</TabsTrigger>
-          <TabsTrigger value="test">Diagnostic Tests</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="media">
-          <Card>
-            <CardHeader>
-              <CardTitle>Instagram Media</CardTitle>
-              <CardDescription>
-                View your recent Instagram posts
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!status || status !== 'connected' ? (
-                <div className="text-center py-10 border rounded-md">
-                  <LogIn className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">
-                    Please connect with Facebook to view your Instagram posts.
-                  </p>
-                </div>
-              ) : isLoadingPosts ? (
-                <div className="flex justify-center py-10">
-                  <RefreshCcw className="animate-spin h-6 w-6" />
-                </div>
-              ) : instagramPosts && instagramPosts.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {instagramPosts.map((post) => (
-                    <div key={post.id} className="border rounded-md overflow-hidden">
-                      {post.media_url && (
-                        <div className="aspect-square relative overflow-hidden">
-                          <img 
-                            src={post.media_url} 
-                            alt={post.caption || 'Instagram post'} 
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute top-2 right-2">
-                            <Badge>
-                              {post.media_type === 'IMAGE' ? 'Photo' : 
-                               post.media_type === 'VIDEO' ? 'Video' : 
-                               post.media_type === 'CAROUSEL_ALBUM' ? 'Album' : 
-                               post.media_type}
-                            </Badge>
-                          </div>
-                        </div>
-                      )}
-                      <div className="p-4">
-                        <p className="text-sm line-clamp-3 mb-2">
-                          {post.caption || 'No caption'}
-                        </p>
-                        <div className="flex justify-between items-center text-xs text-muted-foreground">
-                          <span className="flex items-center">
-                            <Calendar className="h-3 w-3 mr-1" />
-                            {new Date(post.timestamp).toLocaleDateString()}
-                          </span>
-                          {post.permalink && (
-                            <a 
-                              href={post.permalink} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="text-blue-500 hover:underline"
-                            >
-                              View on Instagram
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-10 border rounded-md">
-                  <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">
-                    No Instagram posts found. Create a post or check your Instagram account.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button 
-                variant="outline" 
-                onClick={fetchInstagramPosts} 
-                disabled={isLoadingPosts || !status || status !== 'connected'}
-              >
-                <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
-                Refresh Posts
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="create">
-          <Card>
-            <CardHeader>
-              <CardTitle>Create Instagram Post</CardTitle>
-              <CardDescription>
-                Create and publish a new post to your Instagram account
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!status || status !== 'connected' ? (
-                <div className="text-center py-10 border rounded-md">
-                  <LogIn className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
-                  <p className="text-muted-foreground">
-                    Please connect with Facebook to create Instagram posts.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Image URL</label>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={postImageUrl}
-                        onChange={(e) => setPostImageUrl(e.target.value)}
-                        placeholder="https://example.com/image.jpg"
-                        className="flex-1 p-2 border rounded-md"
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Enter the URL of an image to post. The image must be publicly accessible.
-                    </p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Caption</label>
-                    <textarea
-                      value={postCaption}
-                      onChange={(e) => setPostCaption(e.target.value)}
-                      placeholder="Write a caption for your post..."
-                      className="w-full h-32 p-2 border rounded-md"
-                    />
-                  </div>
-                  
-                  <Button
-                    onClick={createInstagramPost}
-                    disabled={isCreatingPost || !postImageUrl}
-                    className="w-full"
-                  >
-                    {isCreatingPost ? (
-                      <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Image className="mr-2 h-4 w-4" />
-                    )}
-                    {isCreatingPost ? 'Creating Post...' : 'Create Post'}
-                  </Button>
-                  
-                  <div className="rounded-lg border p-4">
-                    <h3 className="font-medium flex items-center">
-                      <Info className="mr-2 h-4 w-4" />
-                      Important Information
-                    </h3>
-                    <div className="text-sm text-muted-foreground mt-2 space-y-1">
-                      <p>To create Instagram posts, please note:</p>
-                      <ul className="list-disc pl-6 mt-2 space-y-1">
-                        <li>You need an Instagram Business Account connected to a Facebook Page</li>
-                        <li>The image URL must be publicly accessible on the internet</li>
-                        <li>Images must follow Instagram's content guidelines</li>
-                        <li>There may be rate limits on the number of posts you can create</li>
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="subscriptions">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Active Webhooks Section */}
-            <Card>
+            {/* Facebook Authentication Card */}
+            <Card className="mb-8">
               <CardHeader>
-                <CardTitle>Active Webhooks</CardTitle>
+                <CardTitle className="flex items-center justify-between">
+                  Facebook Authentication
+                  <Badge variant={status === 'connected' ? 'default' : 'destructive'}>
+                    {status === 'connected' ? 'Connected' : 'Not Connected'}
+                  </Badge>
+                </CardTitle>
                 <CardDescription>
-                  Currently active Instagram webhook subscriptions
+                  Connect to Facebook to access Instagram integration features. This is required for Instagram API access.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoadingWebhooks ? (
-                  <div className="flex justify-center py-4">
-                    <RefreshCcw className="animate-spin h-6 w-6" />
+                {/* SDK initialization status */}
+                {!isInitialized && (
+                  <div className="flex items-center justify-center space-x-2 mb-4 p-2 border rounded bg-muted">
+                    <RefreshCcw className="animate-spin h-4 w-4" />
+                    <p>Facebook SDK is initializing...</p>
                   </div>
-                ) : webhooks.length > 0 ? (
-                  <div className="space-y-4">
-                    {webhooks.map((webhook) => (
-                      <div 
-                        key={webhook.subscription_id} 
-                        className="rounded-lg border p-4 relative"
-                      >
-                        <div className="absolute top-2 right-2">
-                          <Badge variant={webhook.active ? 'default' : 'secondary'}>
-                            {webhook.active ? 'Active' : 'Inactive'}
-                          </Badge>
-                        </div>
-                        <h3 className="font-medium">{webhook.object}</h3>
-                        <p className="text-sm text-muted-foreground truncate mb-2">
-                          {webhook.callback_url}
-                        </p>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {webhook.fields.map((field: any, index: number) => {
-                            // Handle both string fields and object fields with name/version
-                            const isObjectField = typeof field === 'object' && field !== null;
-                            const fieldName = isObjectField && field.name ? field.name : field;
-                            const fieldVersion = isObjectField && field.version ? field.version : null;
-                            
-                            return (
-                              <Badge key={`field-${index}-${fieldName}`} variant="outline">
-                                {fieldName}
-                                {fieldVersion && (
-                                  <span className="ml-1 text-xs opacity-70">
-                                    v{fieldVersion.toString().replace('v', '')}
-                                  </span>
-                                )}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteWebhookSubscription(webhook.subscription_id)}
-                        >
-                          <XCircle className="mr-2 h-4 w-4" />
-                          Unsubscribe
-                        </Button>
+                )}
+
+                {status === 'connected' && user && (
+                  <div className="rounded-lg bg-muted p-4 mb-4">
+                    <div className="flex items-center">
+                      {user.picture && (
+                        <img 
+                          src={user.picture.data.url} 
+                          alt={user.name || 'User'} 
+                          className="w-12 h-12 rounded-full mr-4"
+                        />
+                      )}
+                      <div>
+                        <h3 className="font-medium">{user.name}</h3>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                ) : (
-                  <div className="text-center py-6 text-muted-foreground">
-                    No active webhook subscriptions. Create a subscription below.
-                  </div>
+                )}
+                
+                {/* Display SDK initialization errors */}
+                {initializationError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Facebook SDK Error</AlertTitle>
+                    <AlertDescription>{initializationError}</AlertDescription>
+                  </Alert>
+                )}
+                
+                {/* Display other errors */}
+                {error && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
                 )}
               </CardContent>
               <CardFooter>
-                <Button 
-                  variant="outline" 
-                  onClick={fetchWebhookData} 
-                  disabled={isLoadingWebhooks}
-                >
-                  <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingWebhooks ? 'animate-spin' : ''}`} />
-                  Refresh
-                </Button>
+                {status === 'connected' ? (
+                  <Button variant="outline" onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button onClick={handleLogin}>
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Connect with Facebook
+                  </Button>
+                )}
               </CardFooter>
             </Card>
 
-            {/* Create Webhook Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Create Webhook</CardTitle>
-                <CardDescription>
-                  Subscribe to Instagram webhook events
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="rounded-lg border p-4">
-                    <h3 className="font-medium flex items-center">
-                      <Bell className="mr-2 h-4 w-4" />
-                      Basic Notifications
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Receive notifications for mentions and comments
-                    </p>
-                    <Button
-                      onClick={() => createWebhookSubscription('BASIC')}
-                      disabled={!status || status !== 'connected'}
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Subscribe
-                    </Button>
-                  </div>
-
-                  <div className="rounded-lg border p-4">
-                    <h3 className="font-medium flex items-center">
-                      <Image className="mr-2 h-4 w-4" />
-                      Media Updates
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Receive notifications for new media posts
-                    </p>
-                    <Button
-                      onClick={() => createWebhookSubscription('MEDIA')}
-                      disabled={!status || status !== 'connected'}
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Subscribe
-                    </Button>
-                  </div>
-
-                  <div className="rounded-lg border p-4">
-                    <h3 className="font-medium flex items-center">
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      Story Insights
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Receive insights about story views and interactions
-                    </p>
-                    <Button
-                      onClick={() => createWebhookSubscription('STORIES')}
-                      disabled={!status || status !== 'connected'}
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Subscribe
-                    </Button>
-                  </div>
-
-                  <div className="rounded-lg border p-4">
-                    <h3 className="font-medium flex items-center">
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Messaging Events
-                    </h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Receive notifications for direct messages
-                    </p>
-                    <Button
-                      onClick={() => createWebhookSubscription('MESSAGING')}
-                      disabled={!status || status !== 'connected'}
-                    >
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Subscribe
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="events">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Instagram Events</CardTitle>
-              <CardDescription>
-                Recent events received from Instagram webhooks
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingEvents ? (
-                <div className="flex justify-center py-10">
-                  <RefreshCcw className="animate-spin h-6 w-6" />
-                </div>
-              ) : webhookEvents.length > 0 ? (
-                <ScrollArea className="h-[500px] rounded-md border">
-                  <div className="p-4 space-y-4">
-                    {webhookEvents.map((event, index) => (
-                      <div key={index} className="rounded-lg border p-4">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex items-center">
-                            <Badge className="mr-2">{event.object || 'instagram'}</Badge>
-                            <Badge variant="outline">{event.field || 'webhook'}</Badge>
-                          </div>
-                          <div className="text-xs text-muted-foreground flex items-center">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {new Date(event.timestamp || Date.now()).toLocaleString()}
-                          </div>
-                        </div>
-                        
-                        <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
-                          {JSON.stringify(event.payload || event, null, 2)}
-                        </pre>
+            {/* Main Tabs */}
+            <Tabs defaultValue="media" className="w-full">
+              <TabsList className="mb-6">
+                <TabsTrigger value="media">Instagram Media</TabsTrigger>
+                <TabsTrigger value="create">Create Post</TabsTrigger>
+                <TabsTrigger value="subscriptions">Webhook Subscriptions</TabsTrigger>
+                <TabsTrigger value="events">Recent Events</TabsTrigger>
+                <TabsTrigger value="test">Diagnostic Tests</TabsTrigger>
+              </TabsList>
+              
+              {/* Media Tab */}
+              <TabsContent value="media">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Instagram Media</CardTitle>
+                    <CardDescription>
+                      View your recent Instagram posts
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {!status || status !== 'connected' ? (
+                      <div className="text-center py-10 border rounded-md">
+                        <LogIn className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground">
+                          Please connect with Facebook to view your Instagram posts.
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              ) : (
-                <div className="text-center py-10 text-muted-foreground">
-                  No webhook events received yet. Events will appear here when received.
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button 
-                variant="outline" 
-                onClick={fetchWebhookEvents} 
-                disabled={isLoadingEvents}
-              >
-                <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingEvents ? 'animate-spin' : ''}`} />
-                Refresh Events
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="test">
-          <Card>
-            <CardHeader>
-              <CardTitle>Webhook Connection Test</CardTitle>
-              <CardDescription>
-                Test your webhook configuration to diagnose any issues
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                {webhookTestResult && (
-                  <div className={`rounded-lg border p-4 ${webhookTestResult.success ? 'border-green-500' : 'border-red-500'}`}>
-                    <h3 className="font-medium flex items-center mb-4">
-                      {webhookTestResult.success ? (
-                        <CheckCircle2 className="mr-2 h-5 w-5 text-green-500" />
-                      ) : (
-                        <AlertTriangle className="mr-2 h-5 w-5 text-amber-500" />
-                      )}
-                      {webhookTestResult.message}
-                    </h3>
-                    
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          {webhookTestResult.appId ? (
-                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                          )}
-                          <span>Facebook App ID</span>
+                    ) : isLoadingPosts ? (
+                      <div className="flex justify-center py-10">
+                        <RefreshCcw className="animate-spin h-6 w-6" />
+                      </div>
+                    ) : instagramPosts && instagramPosts.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {instagramPosts.map((post) => (
+                          <div key={post.id} className="border rounded-md overflow-hidden">
+                            {post.media_url && (
+                              <div className="aspect-square relative overflow-hidden">
+                                <img 
+                                  src={post.media_url} 
+                                  alt={post.caption || 'Instagram post'} 
+                                  className="w-full h-full object-cover"
+                                />
+                                <div className="absolute top-2 right-2">
+                                  <Badge>
+                                    {post.media_type === 'IMAGE' ? 'Photo' : 
+                                     post.media_type === 'VIDEO' ? 'Video' : 
+                                     post.media_type === 'CAROUSEL_ALBUM' ? 'Album' : 
+                                     post.media_type}
+                                  </Badge>
+                                </div>
+                              </div>
+                            )}
+                            <div className="p-4">
+                              <p className="text-sm line-clamp-3 mb-2">
+                                {post.caption || 'No caption'}
+                              </p>
+                              <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                <span className="flex items-center">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  {new Date(post.timestamp).toLocaleDateString()}
+                                </span>
+                                {post.permalink && (
+                                  <a 
+                                    href={post.permalink} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="text-blue-500 hover:underline"
+                                  >
+                                    View on Instagram
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 border rounded-md">
+                        <Image className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground">
+                          No Instagram posts found. Create a post or check your Instagram account.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={fetchInstagramPosts} 
+                      disabled={isLoadingPosts || !status || status !== 'connected'}
+                    >
+                      <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
+                      Refresh Posts
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+              
+              {/* Create Post Tab */}
+              <TabsContent value="create">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Create Instagram Post</CardTitle>
+                    <CardDescription>
+                      Create and publish a new post to your Instagram account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {!status || status !== 'connected' ? (
+                      <div className="text-center py-10 border rounded-md">
+                        <LogIn className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-muted-foreground">
+                          Please connect with Facebook to create Instagram posts.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Image URL</label>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="text"
+                              value={postImageUrl}
+                              onChange={(e) => setPostImageUrl(e.target.value)}
+                              placeholder="https://example.com/image.jpg"
+                              className="flex-1 p-2 border rounded-md"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Enter the URL of an image to post. The image must be publicly accessible.
+                          </p>
                         </div>
                         
-                        <div className="flex items-center">
-                          {webhookTestResult.appSecret ? (
-                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                          )}
-                          <span>Facebook App Secret</span>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Caption</label>
+                          <textarea
+                            value={postCaption}
+                            onChange={(e) => setPostCaption(e.target.value)}
+                            placeholder="Write a caption for your post..."
+                            className="w-full h-32 p-2 border rounded-md"
+                          />
                         </div>
+                        
+                        <Button
+                          onClick={createInstagramPost}
+                          disabled={isCreatingPost || !postImageUrl}
+                          className="w-full"
+                        >
+                          {isCreatingPost ? (
+                            <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <Image className="mr-2 h-4 w-4" />
+                          )}
+                          {isCreatingPost ? 'Creating Post...' : 'Create Post'}
+                        </Button>
+                        
+                        <div className="rounded-lg border p-4">
+                          <h3 className="font-medium flex items-center">
+                            <Info className="mr-2 h-4 w-4" />
+                            Important Information
+                          </h3>
+                          <div className="text-sm text-muted-foreground mt-2 space-y-1">
+                            <p>To create Instagram posts, please note:</p>
+                            <ul className="list-disc pl-6 mt-2 space-y-1">
+                              <li>You need an Instagram Business Account connected to a Facebook Page</li>
+                              <li>The image URL must be publicly accessible on the internet</li>
+                              <li>Images must follow Instagram's content guidelines</li>
+                              <li>There may be rate limits on the number of posts you can create</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Webhooks Tab */}
+              <TabsContent value="subscriptions">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Active Webhooks Section */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Active Webhooks</CardTitle>
+                      <CardDescription>
+                        Currently active Instagram webhook subscriptions
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingWebhooks ? (
+                        <div className="flex justify-center py-4">
+                          <RefreshCcw className="animate-spin h-6 w-6" />
+                        </div>
+                      ) : webhooks.length > 0 ? (
+                        <div className="space-y-4">
+                          {webhooks.map((webhook) => (
+                            <div 
+                              key={webhook.subscription_id} 
+                              className="rounded-lg border p-4 relative"
+                            >
+                              <div className="absolute top-2 right-2">
+                                <Badge variant={webhook.active ? 'default' : 'secondary'}>
+                                  {webhook.active ? 'Active' : 'Inactive'}
+                                </Badge>
+                              </div>
+                              <h3 className="font-medium">{webhook.object}</h3>
+                              <p className="text-sm text-muted-foreground truncate mb-2">
+                                {webhook.callback_url}
+                              </p>
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                {webhook.fields.map((field: any, index: number) => {
+                                  // Handle both string fields and object fields with name/version
+                                  const isObjectField = typeof field === 'object' && field !== null;
+                                  const fieldName = isObjectField && field.name ? field.name : field;
+                                  const fieldVersion = isObjectField && field.version ? field.version : null;
+                                  
+                                  return (
+                                    <Badge key={`field-${index}-${fieldName}`} variant="outline">
+                                      {fieldName}
+                                      {fieldVersion && (
+                                        <span className="ml-1 text-xs opacity-70">
+                                          v{fieldVersion.toString().replace('v', '')}
+                                        </span>
+                                      )}
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deleteWebhookSubscription(webhook.subscription_id)}
+                              >
+                                <XCircle className="mr-2 h-4 w-4" />
+                                Unsubscribe
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 text-muted-foreground">
+                          No active webhook subscriptions. Create a subscription below.
+                        </div>
+                      )}
+                    </CardContent>
+                    <CardFooter>
+                      <Button 
+                        variant="outline" 
+                        onClick={fetchWebhookData} 
+                        disabled={isLoadingWebhooks}
+                      >
+                        <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingWebhooks ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                    </CardFooter>
+                  </Card>
+
+                  {/* Create Webhook Section */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Create Webhook</CardTitle>
+                      <CardDescription>
+                        Subscribe to Instagram webhook events
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="rounded-lg border p-4">
+                          <h3 className="font-medium flex items-center">
+                            <Bell className="mr-2 h-4 w-4" />
+                            Basic Notifications
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Receive notifications for mentions and comments
+                          </p>
+                          <Button
+                            onClick={() => createWebhookSubscription('BASIC')}
+                            disabled={!status || status !== 'connected'}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Subscribe
+                          </Button>
+                        </div>
+
+                        <div className="rounded-lg border p-4">
+                          <h3 className="font-medium flex items-center">
+                            <Image className="mr-2 h-4 w-4" />
+                            Media Updates
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Receive notifications for new media posts
+                          </p>
+                          <Button
+                            onClick={() => createWebhookSubscription('MEDIA')}
+                            disabled={!status || status !== 'connected'}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Subscribe
+                          </Button>
+                        </div>
+
+                        <div className="rounded-lg border p-4">
+                          <h3 className="font-medium flex items-center">
+                            <BookOpen className="mr-2 h-4 w-4" />
+                            Story Insights
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Receive insights about story views and interactions
+                          </p>
+                          <Button
+                            onClick={() => createWebhookSubscription('STORIES')}
+                            disabled={!status || status !== 'connected'}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Subscribe
+                          </Button>
+                        </div>
+
+                        <div className="rounded-lg border p-4">
+                          <h3 className="font-medium flex items-center">
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            Messaging Events
+                          </h3>
+                          <p className="text-sm text-muted-foreground mb-4">
+                            Receive notifications for direct messages
+                          </p>
+                          <Button
+                            onClick={() => createWebhookSubscription('MESSAGING')}
+                            disabled={!status || status !== 'connected'}
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Subscribe
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+              
+              {/* Events Tab */}
+              <TabsContent value="events">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Recent Instagram Events</CardTitle>
+                    <CardDescription>
+                      Recent events received from Instagram webhooks
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingEvents ? (
+                      <div className="flex justify-center py-10">
+                        <RefreshCcw className="animate-spin h-6 w-6" />
+                      </div>
+                    ) : webhookEvents.length > 0 ? (
+                      <ScrollArea className="h-[500px] rounded-md border">
+                        <div className="p-4 space-y-4">
+                          {webhookEvents.map((event, index) => (
+                            <div key={index} className="rounded-lg border p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex items-center">
+                                  <Badge className="mr-2">{event.object || 'instagram'}</Badge>
+                                  <Badge variant="outline">{event.field || 'webhook'}</Badge>
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {new Date(event.timestamp || Date.now()).toLocaleString()}
+                                </div>
+                              </div>
+                              
+                              <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
+                                {JSON.stringify(event.payload || event, null, 2)}
+                              </pre>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    ) : (
+                      <div className="text-center py-10 text-muted-foreground">
+                        No webhook events received yet. Events will appear here when received.
+                      </div>
+                    )}
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={fetchWebhookEvents} 
+                      disabled={isLoadingEvents}
+                    >
+                      <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingEvents ? 'animate-spin' : ''}`} />
+                      Refresh Events
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+              
+              {/* Test Tab */}
+              <TabsContent value="test">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Webhook Connection Test</CardTitle>
+                    <CardDescription>
+                      Test your webhook configuration to diagnose any issues
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      {webhookTestResult && (
+                        <div className={`rounded-lg border p-4 ${webhookTestResult.success ? 'border-green-500' : 'border-red-500'}`}>
+                          <h3 className="font-medium flex items-center mb-4">
+                            {webhookTestResult.success ? (
+                              <CheckCircle2 className="mr-2 h-5 w-5 text-green-500" />
+                            ) : (
+                              <AlertTriangle className="mr-2 h-5 w-5 text-amber-500" />
+                            )}
+                            {webhookTestResult.message}
+                          </h3>
+                          
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="space-y-2">
+                              <div className="flex items-center">
+                                {webhookTestResult.appId ? (
+                                  <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                                )}
+                                <span>Facebook App ID</span>
+                              </div>
+                              
+                              <div className="flex items-center">
+                                {webhookTestResult.appSecret ? (
+                                  <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                                )}
+                                <span>Facebook App Secret</span>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex items-center">
+                                {webhookTestResult.accessToken ? (
+                                  <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                                )}
+                                <span>User Access Token</span>
+                              </div>
+                              
+                              <div className="flex items-center">
+                                {webhookTestResult.appAccessToken ? (
+                                  <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+                                ) : (
+                                  <XCircle className="mr-2 h-4 w-4 text-red-500" />
+                                )}
+                                <span>App Access Token</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {webhookTestResult.details && (
+                            <div className="mt-4">
+                              <h4 className="text-sm font-medium mb-2">Additional Details</h4>
+                              <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
+                                {JSON.stringify(webhookTestResult.details, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      
+                      <div className="rounded-lg border p-4">
+                        <h3 className="font-medium flex items-center">
+                          <TestTube className="mr-2 h-4 w-4" />
+                          Configuration Test
+                        </h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Check if your Facebook App is correctly configured for Instagram webhooks
+                        </p>
+                        <Button
+                          onClick={testWebhookConnection}
+                          disabled={isTestingWebhook}
+                        >
+                          {isTestingWebhook ? (
+                            <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <TestTube className="mr-2 h-4 w-4" />
+                          )}
+                          Run Test
+                        </Button>
                       </div>
                       
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          {webhookTestResult.accessToken ? (
-                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                          )}
-                          <span>User Access Token</span>
-                        </div>
-                        
-                        <div className="flex items-center">
-                          {webhookTestResult.appAccessToken ? (
-                            <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                          ) : (
-                            <XCircle className="mr-2 h-4 w-4 text-red-500" />
-                          )}
-                          <span>App Access Token</span>
+                      <div className="rounded-lg border p-4">
+                        <h3 className="font-medium flex items-center">
+                          <Info className="mr-2 h-4 w-4" />
+                          Webhook Requirements
+                        </h3>
+                        <div className="text-sm text-muted-foreground mt-2 space-y-1">
+                          <p>To use Instagram webhooks, you need:</p>
+                          <ul className="list-disc pl-6 mt-2 space-y-1">
+                            <li>A Facebook App with Instagram permissions</li>
+                            <li>Facebook App ID and App Secret environment variables</li>
+                            <li>User authentication via Facebook login</li>
+                            <li>A public URL for your webhook endpoint</li>
+                          </ul>
                         </div>
                       </div>
                     </div>
-                    
-                    {webhookTestResult.details && (
-                      <div className="mt-4">
-                        <h4 className="text-sm font-medium mb-2">Additional Details</h4>
-                        <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
-                          {JSON.stringify(webhookTestResult.details, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <div className="rounded-lg border p-4">
-                  <h3 className="font-medium flex items-center">
-                    <TestTube className="mr-2 h-4 w-4" />
-                    Configuration Test
-                  </h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Check if your Facebook App is correctly configured for Instagram webhooks
-                  </p>
-                  <Button
-                    onClick={testWebhookConnection}
-                    disabled={isTestingWebhook}
-                  >
-                    {isTestingWebhook ? (
-                      <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <TestTube className="mr-2 h-4 w-4" />
-                    )}
-                    Run Test
-                  </Button>
-                </div>
-                
-                <div className="rounded-lg border p-4">
-                  <h3 className="font-medium flex items-center">
-                    <Info className="mr-2 h-4 w-4" />
-                    Webhook Requirements
-                  </h3>
-                  <div className="text-sm text-muted-foreground mt-2 space-y-1">
-                    <p>To use Instagram webhooks, you need:</p>
-                    <ul className="list-disc pl-6 mt-2 space-y-1">
-                      <li>A Facebook App with Instagram permissions</li>
-                      <li>Facebook App ID and App Secret environment variables</li>
-                      <li>User authentication via Facebook login</li>
-                      <li>A public URL for your webhook endpoint</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                variant="outline" 
-                onClick={() => setWebhookTestResult(null)}
-                disabled={!webhookTestResult || isTestingWebhook}
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Clear Results
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                  </CardContent>
+                  <CardFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setWebhookTestResult(null)}
+                      disabled={!webhookTestResult || isTestingWebhook}
+                    >
+                      <XCircle className="mr-2 h-4 w-4" />
+                      Clear Results
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
