@@ -378,9 +378,16 @@ export default function InstagramPage() {
                           {webhook.callback_url}
                         </p>
                         <div className="flex flex-wrap gap-2 mb-4">
-                          {webhook.fields.map((field: string) => (
-                            <Badge key={field} variant="outline">{field}</Badge>
-                          ))}
+                          {webhook.fields.map((field: any, index: number) => {
+                            // Handle both string fields and object fields with name/version
+                            const fieldName = typeof field === 'string' ? field : field.name;
+                            return (
+                              <Badge key={`${fieldName}-${index}`} variant="outline">
+                                {fieldName}
+                                {field.version && <span className="ml-1 text-xs opacity-70">v{field.version.replace('v', '')}</span>}
+                              </Badge>
+                            );
+                          })}
                         </div>
                         <Button
                           variant="destructive"
