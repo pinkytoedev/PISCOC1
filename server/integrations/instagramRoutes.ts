@@ -8,7 +8,12 @@ import {
   getWebhookSubscriptions, 
   unsubscribeFromWebhook, 
   WEBHOOK_FIELD_GROUPS, 
-  testWebhookConnection 
+  testWebhookConnection,
+  getInstagramMedia,
+  getInstagramMediaById,
+  createInstagramMediaContainer,
+  publishInstagramMedia,
+  getInstagramAccountId
 } from './instagram';
 
 /**
@@ -187,6 +192,167 @@ export function setupInstagramRoutes(app: Express) {
       log(`Error storing Facebook access token: ${error}`, 'instagram');
       res.status(500).json({
         error: 'Failed to store access token',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // API route to get Instagram account ID
+  app.get('/api/instagram/account', async (req: Request, res: Response) => {
+    try {
+      // Check if we have an access token
+      const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+      
+      if (!tokenSetting?.value) {
+        return res.status(403).json({
+          error: 'Authorization required',
+          message: 'Facebook access token is required. Please log in with Facebook and try again.',
+          code: 'NO_ACCESS_TOKEN'
+        });
+      }
+      
+      const accountId = await getInstagramAccountId();
+      
+      if (!accountId) {
+        return res.status(404).json({
+          error: 'Instagram account not found',
+          message: 'No Instagram Business Account was found connected to your Facebook account. Please ensure you have an Instagram Business Account linked to a Facebook Page you manage.',
+          code: 'NO_INSTAGRAM_ACCOUNT'
+        });
+      }
+      
+      res.status(200).json({ 
+        id: accountId,
+        success: true
+      });
+    } catch (error) {
+      log(`Error getting Instagram account ID: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to get Instagram account ID', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // API route to get Instagram media posts
+  app.get('/api/instagram/media', async (req: Request, res: Response) => {
+    try {
+      // Check if we have an access token
+      const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+      
+      if (!tokenSetting?.value) {
+        return res.status(403).json({
+          error: 'Authorization required',
+          message: 'Facebook access token is required. Please log in with Facebook and try again.',
+          code: 'NO_ACCESS_TOKEN'
+        });
+      }
+      
+      // Get limit from query string if available
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 25;
+      
+      const media = await getInstagramMedia(limit);
+      res.status(200).json(media);
+    } catch (error) {
+      log(`Error getting Instagram media: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to get Instagram media', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // API route to get a specific Instagram media post
+  app.get('/api/instagram/media/:id', async (req: Request, res: Response) => {
+    try {
+      const mediaId = req.params.id;
+      
+      // Check if we have an access token
+      const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+      
+      if (!tokenSetting?.value) {
+        return res.status(403).json({
+          error: 'Authorization required',
+          message: 'Facebook access token is required. Please log in with Facebook and try again.',
+          code: 'NO_ACCESS_TOKEN'
+        });
+      }
+      
+      const media = await getInstagramMediaById(mediaId);
+      
+      if (!media) {
+        return res.status(404).json({
+          error: 'Media not found',
+          message: `No Instagram media found with ID ${mediaId}`,
+          code: 'MEDIA_NOT_FOUND'
+        });
+      }
+      
+      res.status(200).json(media);
+    } catch (error) {
+      log(`Error getting Instagram media: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to get Instagram media', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // API route to create a new Instagram post
+  app.post('/api/instagram/media', async (req: Request, res: Response) => {
+    try {
+      const { imageUrl, caption } = req.body;
+      
+      if (!imageUrl) {
+        return res.status(400).json({
+          error: 'Invalid request',
+          message: 'Image URL is required',
+          code: 'MISSING_IMAGE_URL'
+        });
+      }
+      
+      // Check if we have an access token
+      const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+      
+      if (!tokenSetting?.value) {
+        return res.status(403).json({
+          error: 'Authorization required',
+          message: 'Facebook access token is required. Please log in with Facebook and try again.',
+          code: 'NO_ACCESS_TOKEN'
+        });
+      }
+      
+      // Two-step process: First create a container
+      log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
+      const containerId = await createInstagramMediaContainer(imageUrl, caption || '');
+      
+      // Then publish it
+      log(`Publishing Instagram media container: ${containerId}`, 'instagram');
+      const mediaId = await publishInstagramMedia(containerId);
+      
+      // Log the activity
+      await storage.createActivityLog({
+        action: 'instagram_media_created',
+        userId: null,
+        resourceType: 'instagram_media',
+        resourceId: mediaId,
+        details: {
+          timestamp: new Date().toISOString(),
+          containerId,
+          mediaId
+        }
+      });
+      
+      // Return the result
+      res.status(201).json({
+        success: true,
+        mediaId,
+        message: 'Instagram post created successfully'
+      });
+    } catch (error) {
+      log(`Error creating Instagram post: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to create Instagram post', 
         message: error instanceof Error ? error.message : String(error)
       });
     }

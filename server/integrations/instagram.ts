@@ -8,6 +8,9 @@ const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'your_verify_
 const APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
 const APP_ID = process.env.FACEBOOK_APP_ID || '';
 
+// Helper to get Instagram media fields
+const INSTAGRAM_MEDIA_FIELDS = 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username,children{id,media_type,media_url,thumbnail_url}';
+
 /**
  * Get an app access token for API calls that require it
  * @returns App access token or null if unavailable
@@ -607,6 +610,268 @@ export async function getWebhookSubscriptions() {
  * @param subscriptionId The ID of the subscription to delete
  * @returns Success status
  */
+/**
+ * Get the Instagram Business Account ID for the authenticated user
+ * 
+ * @returns Instagram Business Account ID or null if not found
+ */
+export async function getInstagramAccountId(): Promise<string | null> {
+  try {
+    // First check if we have it cached
+    const idSetting = await storage.getIntegrationSettingByKey("instagram", "account_id");
+    if (idSetting?.value) {
+      return idSetting.value;
+    }
+    
+    // Get user access token
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    if (!tokenSetting?.value) {
+      log('Cannot get Instagram account ID: User access token missing', 'instagram');
+      return null;
+    }
+    
+    const accessToken = tokenSetting.value;
+    
+    // First get the user's pages
+    const pagesResponse = await fetch(
+      `https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`
+    );
+    
+    if (!pagesResponse.ok) {
+      throw new Error(`Failed to get user pages: ${await pagesResponse.text()}`);
+    }
+    
+    const pagesData = await pagesResponse.json();
+    
+    if (!pagesData.data || !pagesData.data.length) {
+      log('User has no Facebook Pages associated with their account', 'instagram');
+      return null;
+    }
+    
+    // For each page, try to get the Instagram Business Account
+    for (const page of pagesData.data) {
+      try {
+        const igResponse = await fetch(
+          `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${accessToken}`
+        );
+        
+        if (!igResponse.ok) continue;
+        
+        const igData = await igResponse.json();
+        
+        if (igData.instagram_business_account && igData.instagram_business_account.id) {
+          const instagramAccountId = igData.instagram_business_account.id;
+          
+          // Cache the ID for future use
+          await storage.createIntegrationSetting({
+            service: "instagram",
+            key: "account_id",
+            value: instagramAccountId,
+            enabled: true
+          });
+          
+          log(`Found and stored Instagram account ID: ${instagramAccountId}`, 'instagram');
+          return instagramAccountId;
+        }
+      } catch (pageError) {
+        log(`Error checking page ${page.id} for Instagram account: ${pageError}`, 'instagram');
+        // Continue to next page
+      }
+    }
+    
+    log('No Instagram Business Account found for any of the user\'s pages', 'instagram');
+    return null;
+  } catch (error) {
+    log(`Error getting Instagram account ID: ${error}`, 'instagram');
+    return null;
+  }
+}
+
+/**
+ * Get recent media from an Instagram Business Account
+ * 
+ * @param limit Number of posts to retrieve (default: 25)
+ * @returns Array of Instagram media objects
+ */
+export async function getInstagramMedia(limit: number = 25) {
+  try {
+    // Get Instagram account ID
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
+    }
+    
+    // Get user access token
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    if (!tokenSetting?.value) {
+      throw new Error('User access token missing');
+    }
+    
+    const accessToken = tokenSetting.value;
+    
+    // Fetch media from the Instagram Graph API
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${instagramAccountId}/media?fields=${INSTAGRAM_MEDIA_FIELDS}&limit=${limit}&access_token=${accessToken}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${await response.text()}`);
+    }
+    
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    log(`Error getting Instagram media: ${error}`, 'instagram');
+    throw error;
+  }
+}
+
+/**
+ * Get a single Instagram media post by ID
+ * 
+ * @param mediaId ID of the Instagram media post
+ * @returns Instagram media object or null if not found
+ */
+export async function getInstagramMediaById(mediaId: string) {
+  try {
+    // Get user access token
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    if (!tokenSetting?.value) {
+      throw new Error('User access token missing');
+    }
+    
+    const accessToken = tokenSetting.value;
+    
+    // Fetch the specific media from the Instagram Graph API
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${mediaId}?fields=${INSTAGRAM_MEDIA_FIELDS}&access_token=${accessToken}`
+    );
+    
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${await response.text()}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    log(`Error getting Instagram media by ID: ${error}`, 'instagram');
+    throw error;
+  }
+}
+
+/**
+ * Create a new Instagram media container
+ * This is step 1 of publishing content to Instagram (create container)
+ * 
+ * @param imageUrl URL of the image to publish
+ * @param caption Caption for the post
+ * @returns Container ID to use in the publish step
+ */
+export async function createInstagramMediaContainer(imageUrl: string, caption: string) {
+  try {
+    // Get Instagram account ID
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
+    }
+    
+    // Get user access token
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    if (!tokenSetting?.value) {
+      throw new Error('User access token missing');
+    }
+    
+    const accessToken = tokenSetting.value;
+    
+    // Create the media container
+    const formData = new URLSearchParams();
+    formData.append('image_url', imageUrl);
+    formData.append('caption', caption);
+    formData.append('access_token', accessToken);
+    
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${await response.text()}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.id) {
+      throw new Error('No container ID returned from API');
+    }
+    
+    return data.id;
+  } catch (error) {
+    log(`Error creating Instagram media container: ${error}`, 'instagram');
+    throw error;
+  }
+}
+
+/**
+ * Publish an Instagram media container
+ * This is step 2 of publishing content to Instagram (publish container)
+ * 
+ * @param containerId Container ID from createInstagramMediaContainer
+ * @returns ID of the published media
+ */
+export async function publishInstagramMedia(containerId: string) {
+  try {
+    // Get Instagram account ID
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
+    }
+    
+    // Get user access token
+    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
+    if (!tokenSetting?.value) {
+      throw new Error('User access token missing');
+    }
+    
+    const accessToken = tokenSetting.value;
+    
+    // Publish the media
+    const formData = new URLSearchParams();
+    formData.append('creation_id', containerId);
+    formData.append('access_token', accessToken);
+    
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/${instagramAccountId}/media_publish`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString()
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`API returned ${response.status}: ${await response.text()}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data.id) {
+      throw new Error('No media ID returned from API');
+    }
+    
+    return data.id;
+  } catch (error) {
+    log(`Error publishing Instagram media: ${error}`, 'instagram');
+    throw error;
+  }
+}
+
 export async function unsubscribeFromWebhook(subscriptionId: string) {
   try {
     log(`Unsubscribing from Instagram webhook: ${subscriptionId}`, 'instagram');
