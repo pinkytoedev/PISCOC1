@@ -9,7 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
@@ -44,8 +43,7 @@ import {
   Server,
   UserPlus,
   Plus,
-  Settings,
-  MessageSquare
+  Settings
 } from "lucide-react";
 
 interface GuildInfo {
@@ -239,8 +237,6 @@ export default function DiscordPage() {
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
   const [webhookUsername, setWebhookUsername] = useState("Website User");
-  const [selectedWebhookId, setSelectedWebhookId] = useState<string>("");
-  const [selectedWebhookUrl, setSelectedWebhookUrl] = useState<string>("");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
@@ -253,8 +249,8 @@ export default function DiscordPage() {
   
   const { data: serverData, refetch: refetchServers } = useQuery<{guilds: GuildInfo[], webhooks: WebhookInfo[]}>({
     queryKey: ['/api/discord/bot/servers'],
-    enabled: (tab === "bot" || tab === "webhook-message") && botStatus?.connected === true,
-    refetchInterval: () => (tab === "bot" || tab === "webhook-message") ? 30000 : 0, // Refresh every 30 seconds when on bot or webhook-message tab
+    enabled: tab === "bot" && botStatus?.connected === true,
+    refetchInterval: () => tab === "bot" ? 30000 : 0, // Refresh every 30 seconds when on bot tab
   });
   
   // When settings are loaded, set the bot token and client ID fields
@@ -381,12 +377,8 @@ export default function DiscordPage() {
   });
   
   const sendDiscordMessageMutation = useMutation({
-    mutationFn: async ({ message, username, webhookUrl }: { message: string, username: string, webhookUrl?: string }) => {
-      const res = await apiRequest("POST", "/api/discord/send-message", { 
-        message, 
-        username,
-        webhookUrl: webhookUrl || getSettingValue('webhook_url')
-      });
+    mutationFn: async ({ message, username }: { message: string, username: string }) => {
+      const res = await apiRequest("POST", "/api/discord/send-message", { message, username });
       return await res.json();
     },
     onSuccess: () => {
@@ -539,7 +531,7 @@ export default function DiscordPage() {
                   onValueChange={setTab}
                   className="w-full"
                 >
-                  <TabsList className="grid w-full grid-cols-3">
+                  <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="webhook" className="flex items-center">
                       <Webhook className="h-4 w-4 mr-2" />
                       Webhook Integration
@@ -547,10 +539,6 @@ export default function DiscordPage() {
                     <TabsTrigger value="bot" className="flex items-center">
                       <Bot className="h-4 w-4 mr-2" />
                       Discord Bot
-                    </TabsTrigger>
-                    <TabsTrigger value="webhook-message" className="flex items-center">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Webhook Messages
                     </TabsTrigger>
                   </TabsList>
                   
@@ -724,117 +712,6 @@ export default function DiscordPage() {
                             </>
                           )}
                         </Button>
-                      </CardContent>
-                    </Card>
-                  </TabsContent>
-                  
-                  {/* Webhook Messages Tab */}
-                  <TabsContent value="webhook-message" className="space-y-6 mt-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center">
-                          <MessageSquare className="h-5 w-5 mr-2 text-[#5865F2]" />
-                          Send Discord Webhook Messages
-                        </CardTitle>
-                        <CardDescription>
-                          Send messages directly to your Discord channels using webhooks created with your bot.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid gap-4">
-                          <div className="grid gap-2">
-                            <Label htmlFor="webhook-select">Select Webhook</Label>
-                            <Select 
-                              value={selectedWebhookId}
-                              onValueChange={(value) => {
-                                setSelectedWebhookId(value);
-                                if (serverData?.webhooks) {
-                                  const webhook = serverData.webhooks.find(w => w.id === value);
-                                  if (webhook) {
-                                    setSelectedWebhookUrl(`https://discord.com/api/webhooks/${webhook.id}`);
-                                  }
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Choose a webhook destination" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(serverData?.webhooks || []).map((webhook) => (
-                                  <SelectItem key={webhook.id} value={webhook.id}>
-                                    {webhook.name} ({webhook.guildName} / #{webhook.channelName})
-                                  </SelectItem>
-                                ))}
-                                {(!serverData?.webhooks || serverData.webhooks.length === 0) && (
-                                  <div className="p-2 text-sm text-gray-500">
-                                    No webhooks available. Create webhooks in the Discord Bot tab.
-                                  </div>
-                                )}
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="grid gap-2">
-                            <Label htmlFor="webhook-username">Display Name</Label>
-                            <Input
-                              id="webhook-username"
-                              type="text"
-                              placeholder="Display name in Discord"
-                              value={webhookUsername}
-                              onChange={(e) => setWebhookUsername(e.target.value)}
-                              className="flex-1"
-                            />
-                            <p className="text-xs text-gray-500">
-                              The name that will appear as the sender in Discord.
-                            </p>
-                          </div>
-                      
-                          <div className="grid gap-2">
-                            <Label htmlFor="webhook-message">Message</Label>
-                            <Textarea
-                              id="webhook-message"
-                              placeholder="Enter your message here..."
-                              value={discordMessage}
-                              onChange={(e) => setDiscordMessage(e.target.value)}
-                              className="min-h-[100px]"
-                            />
-                            <p className="text-xs text-gray-500">
-                              This message will be sent to the selected Discord channel.
-                            </p>
-                          </div>
-                          
-                          <Button 
-                            variant="default"
-                            onClick={() => {
-                              if (discordMessage.trim() && selectedWebhookUrl) {
-                                sendDiscordMessageMutation.mutate({
-                                  message: discordMessage,
-                                  username: webhookUsername,
-                                  webhookUrl: selectedWebhookUrl
-                                });
-                              } else {
-                                toast({
-                                  title: "Cannot send message",
-                                  description: "Please select a webhook and enter a message.",
-                                  variant: "destructive"
-                                });
-                              }
-                            }}
-                            disabled={!selectedWebhookId || !discordMessage || sendDiscordMessageMutation.isPending}
-                          >
-                            {sendDiscordMessageMutation.isPending ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Sending...
-                              </>
-                            ) : (
-                              <>
-                                <MessageSquare className="mr-2 h-4 w-4" />
-                                Send to Discord
-                              </>
-                            )}
-                          </Button>
-                        </div>
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -1050,7 +927,6 @@ export default function DiscordPage() {
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
                                         <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
-                                        <th scope="col" className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                                       </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -1066,19 +942,6 @@ export default function DiscordPage() {
                                           </td>
                                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                                             #{webhook.channelName}
-                                          </td>
-                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-right">
-                                            <Button 
-                                              variant="outline" 
-                                              size="sm"
-                                              onClick={() => {
-                                                setSelectedWebhookId(webhook.id);
-                                                setTab("webhook-message");
-                                              }}
-                                            >
-                                              <MessageSquare className="h-4 w-4 mr-1" />
-                                              Send Message
-                                            </Button>
                                           </td>
                                         </tr>
                                       ))}
