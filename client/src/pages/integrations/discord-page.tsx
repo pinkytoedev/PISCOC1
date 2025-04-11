@@ -15,12 +15,31 @@ import { IntegrationSetting } from "@shared/schema";
 import { SiDiscord } from "react-icons/si";
 import { CheckCircle, AlertCircle, Loader2, Copy, RefreshCw, Webhook, Bot, Shield, PowerOff, Terminal } from "lucide-react";
 
+interface GuildInfo {
+  id: string;
+  name: string;
+  memberCount: number;
+  icon?: string;
+  owner?: boolean;
+}
+
+interface WebhookInfo {
+  id: string;
+  name: string;
+  channelId: string;
+  channelName: string;
+  guildId: string;
+  guildName: string;
+}
+
 interface BotStatus {
   connected: boolean;
   status: string;
   username?: string;
   id?: string;
   guilds?: number;
+  guildsList?: GuildInfo[];
+  webhooks?: WebhookInfo[];
 }
 
 export default function DiscordPage() {
@@ -38,6 +57,12 @@ export default function DiscordPage() {
   const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
     queryKey: ['/api/discord/bot/status'],
     refetchInterval: () => tab === "bot" ? 10000 : 0, // Only refresh status when on bot tab
+  });
+  
+  const { data: serverData, refetch: refetchServers } = useQuery<{guilds: GuildInfo[], webhooks: WebhookInfo[]}>({
+    queryKey: ['/api/discord/bot/servers'],
+    enabled: tab === "bot" && botStatus?.connected === true,
+    refetchInterval: () => tab === "bot" ? 30000 : 0, // Refresh every 30 seconds when on bot tab
   });
   
   // When settings are loaded, set the bot token and client ID fields
@@ -653,6 +678,88 @@ export default function DiscordPage() {
                                 </div>
                               </div>
                             </div>
+                            
+                            {botStatus?.connected && ((serverData?.guilds && serverData.guilds.length > 0) || (botStatus.guildsList && botStatus.guildsList.length > 0)) && (
+                              <div className="mt-6">
+                                <h3 className="text-sm font-medium mb-2">Connected Servers</h3>
+                                <div className="border rounded-md overflow-hidden">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Members</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {(serverData?.guilds || botStatus.guildsList || []).map((guild) => (
+                                        <tr key={guild.id}>
+                                          <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                              {guild.icon && (
+                                                <img 
+                                                  src={guild.icon} 
+                                                  alt={guild.name} 
+                                                  className="h-6 w-6 rounded-full mr-3"
+                                                />
+                                              )}
+                                              <span className="text-sm font-medium text-gray-900">{guild.name}</span>
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                            {guild.memberCount}
+                                          </td>
+                                          <td className="px-4 py-3 whitespace-nowrap">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${guild.owner ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                              {guild.owner ? 'Admin Access' : 'Limited Access'}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {botStatus?.connected && ((serverData?.webhooks && serverData.webhooks.length > 0) || (botStatus.webhooks && botStatus.webhooks.length > 0)) && (
+                              <div className="mt-6">
+                                <h3 className="text-sm font-medium mb-2">Webhook Connections</h3>
+                                <div className="border rounded-md overflow-hidden">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
+                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                      {(serverData?.webhooks || botStatus.webhooks || []).map((webhook) => (
+                                        <tr key={webhook.id}>
+                                          <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                              <span className="text-sm font-medium text-gray-900">{webhook.name}</span>
+                                            </div>
+                                          </td>
+                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                            {webhook.guildName}
+                                          </td>
+                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                            #{webhook.channelName}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                            
+                            <div className="mt-6">
+                              <h3 className="text-sm font-medium mb-2">Add Bot to Server</h3>
+                              <AddBotToServerButton />
+                            </div>
                           </div>
                         )}
                       </CardContent>
@@ -736,6 +843,85 @@ export default function DiscordPage() {
             )}
           </div>
         </main>
+      </div>
+    </div>
+  );
+}
+
+// Component for the Add Bot to Server button
+function AddBotToServerButton() {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState("");
+  
+  const getInviteUrl = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiRequest("GET", "/api/discord/bot/invite-url");
+      const data = await response.json();
+      
+      if (data.success && data.invite_url) {
+        setInviteUrl(data.invite_url);
+        window.open(data.invite_url, '_blank');
+      } else {
+        toast({
+          title: "Error",
+          description: "Could not generate bot invite URL. Please check if the bot client ID is configured correctly.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate bot invite URL. Please try again later.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  return (
+    <div className="flex flex-col space-y-2">
+      <p className="text-sm text-gray-500">
+        Add the bot to your Discord server to enable automatic commands and article management.
+      </p>
+      <div className="flex items-center space-x-2">
+        <Button 
+          variant="outline" 
+          onClick={getInviteUrl}
+          disabled={isLoading}
+          className="flex items-center"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Generating invite...
+            </>
+          ) : (
+            <>
+              <SiDiscord className="mr-2 h-4 w-4 text-[#5865F2]" />
+              Add to Discord Server
+            </>
+          )}
+        </Button>
+        {inviteUrl && (
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => {
+              navigator.clipboard.writeText(inviteUrl);
+              toast({
+                title: "Copied",
+                description: "Invite URL copied to clipboard",
+              });
+            }}
+            className="text-xs"
+          >
+            <Copy className="h-3 w-3 mr-1" />
+            Copy URL
+          </Button>
+        )}
       </div>
     </div>
   );
