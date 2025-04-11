@@ -1,0 +1,125 @@
+Warning: Encountered two children with the same key, `[object Object]`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Component Stack: 
+    div unknown:0
+    div unknown:0
+    div unknown:0
+    div unknown:0
+    _c9 card.tsx:62
+    div unknown:0
+    _c card.tsx:8
+    div unknown:0
+    div unknown:0
+    Node Primitive.tsx:38
+    Presence Presence.tsx:12
+    TabsContent Tabs.tsx:229
+    _c5 tabs.tsx:41
+    div unknown:0
+    Node Primitive.tsx:38
+    Provider createContext.tsx:59
+    Tabs Tabs.tsx:75
+    div unknown:0
+    InstagramPage instagram-page.tsx:43
+    Route index.js:227
+    ProtectedRoute protected-route.tsx:5
+    Switch index.js:314
+    Router unknown:0
+    FacebookProvider FacebookContext.tsx:51
+    AuthProvider use-auth.tsx:23
+    QueryClientProvider QueryClientProvider.tsx:29
+    App App.tsx:48
+<anonymous code>:1:145535
+Uncaught Error: Objects are not valid as a React child (found: object with keys {name, version}). If you meant to render a collection of children, use an array instead.
+    React 13
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+2 react-dom.development.js:13123:8
+Warning: Encountered two children with the same key, `[object Object]`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. Component Stack: 
+    div unknown:0
+    div unknown:0
+    div unknown:0
+    div unknown:0
+    _c9 card.tsx:62
+    div unknown:0
+    _c card.tsx:8
+    div unknown:0
+    div unknown:0
+    Node Primitive.tsx:38
+    Presence Presence.tsx:12
+    TabsContent Tabs.tsx:229
+    _c5 tabs.tsx:41
+    div unknown:0
+    Node Primitive.tsx:38
+    Provider createContext.tsx:59
+    Tabs Tabs.tsx:75
+    div unknown:0
+    InstagramPage instagram-page.tsx:43
+    Route index.js:227
+    ProtectedRoute protected-route.tsx:5
+    Switch index.js:314
+    Router unknown:0
+    FacebookProvider FacebookContext.tsx:51
+    AuthProvider use-auth.tsx:23
+    QueryClientProvider QueryClientProvider.tsx:29
+    App App.tsx:48
+<anonymous code>:1:145535
+Uncaught Error: Objects are not valid as a React child (found: object with keys {name, version}). If you meant to render a collection of children, use an array instead.
+    React 14
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+2 react-dom.development.js:13123:8
+The above error occurred in the <div> component:
+
+div
+_c@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/components/ui/badge.tsx:37:8
+div
+div
+div
+div
+_c9@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/components/ui/card.tsx:114:9
+div
+_c@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/components/ui/card.tsx:20:8
+div
+div
+Primitive</Node<@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AYSQM7VZ.js?v=ceba5204:41:44
+Presence@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-UDXVU6DY.js?v=ceba5204:24:33
+TabsContent<@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=ceba5204:175:75
+_c5@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/components/ui/tabs.tsx:72:9
+div
+Primitive</Node<@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-AYSQM7VZ.js?v=ceba5204:41:44
+Provider@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-A3CZPCDN.js?v=ceba5204:43:47
+Tabs<@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@radix-ui_react-tabs.js?v=ceba5204:61:9
+div
+InstagramPage@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/pages/integrations/instagram-page.tsx:52:7
+Route@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=ceba5204:323:13
+ProtectedRoute@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/lib/protected-route.tsx:21:31
+Switch@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/wouter.js?v=ceba5204:379:14
+Router
+FacebookProvider@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/contexts/FacebookContext.tsx:31:33
+AuthProvider@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/hooks/use-auth.tsx:26:29
+QueryClientProvider@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/@tanstack_react-query.js?v=ceba5204:2804:27
+App@https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/src/App.tsx?v=NWJnMqmqcn1Nb08diR7rB:121:53
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. 2 <anonymous code>:1:145535
+Uncaught Error: Objects are not valid as a React child (found: object with keys {name, version}). If you meant to render a collection of children, use an array instead.
+    React 11
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+react-dom.development.js:13123:8
+    React 11
+    workLoop scheduler.development.js:266
+    flushWork scheduler.development.js:239
+    performWorkUntilDeadline scheduler.development.js:533
+Source map error: Error: JSON.parse: unexpected character at line 1 column 1 of the JSON data
+Stack in the worker:parseSourceMapInput@resource://devtools/client/shared/vendor/source-map/lib/util.js:163:15
+_factory@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:1066:22
+SourceMapConsumer@resource://devtools/client/shared/vendor/source-map/lib/source-map-consumer.js:26:12
+_fetch@resource://devtools/client/shared/source-map-loader/utils/fetchSourceMap.js:83:19
+
+Resource URL: https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev/%3Canonymous%20code%3E
+Source Map URL: installHook.js.map
+
+​
+
