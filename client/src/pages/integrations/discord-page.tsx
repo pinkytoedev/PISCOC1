@@ -261,6 +261,12 @@ export default function DiscordPage() {
     refetchInterval: () => tab === "bot" ? 30000 : 0, // Refresh every 30 seconds when on bot tab
   });
   
+  // Query to get all available Discord webhooks from settings
+  const { data: webhooks, isLoading: isLoadingWebhooks } = useQuery<DiscordWebhook[]>({
+    queryKey: ['/api/discord/webhooks'],
+    refetchInterval: 60000, // Refresh webhooks every minute
+  });
+  
   // When settings are loaded, set the bot token and client ID fields
   useEffect(() => {
     if (settings) {
@@ -674,9 +680,14 @@ export default function DiscordPage() {
                       </CardHeader>
                       <CardContent className="space-y-4">
                         {/* Webhook Selection */}
-                        {(botStatus?.webhooks && botStatus.webhooks.length > 0) && (
-                          <div className="grid gap-2">
-                            <Label htmlFor="webhook_selection">Select Webhook</Label>
+                        <div className="grid gap-2">
+                          <Label htmlFor="webhook_selection">Select Webhook</Label>
+                          {isLoadingWebhooks ? (
+                            <div className="flex items-center h-10 bg-gray-50 rounded px-3">
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              <span className="text-sm text-gray-500">Loading webhooks...</span>
+                            </div>
+                          ) : webhooks && webhooks.length > 0 ? (
                             <Select 
                               value={selectedWebhookId} 
                               onValueChange={setSelectedWebhookId}
@@ -685,19 +696,26 @@ export default function DiscordPage() {
                                 <SelectValue placeholder="Select a webhook" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">Default webhook</SelectItem>
-                                {botStatus.webhooks.map((webhook) => (
-                                  <SelectItem key={webhook.id} value={webhook.id}>
-                                    {webhook.guildName} / #{webhook.channelName}
+                                {webhooks.map((webhook) => (
+                                  <SelectItem 
+                                    key={webhook.id} 
+                                    value={webhook.id}
+                                    disabled={!webhook.enabled}
+                                  >
+                                    {webhook.name} {!webhook.enabled && "(Disabled)"}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                            <p className="text-xs text-gray-500">
-                              Choose which Discord server and channel to send the message to.
-                            </p>
-                          </div>
-                        )}
+                          ) : (
+                            <div className="flex items-center justify-between h-10 bg-gray-50 rounded px-3">
+                              <span className="text-sm text-gray-500">No webhooks available</span>
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500">
+                            Choose which Discord webhook to use for sending this message.
+                          </p>
+                        </div>
                         
                         <div className="grid gap-2">
                           <Label htmlFor="webhook_username">Display Name</Label>
