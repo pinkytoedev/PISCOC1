@@ -108,12 +108,15 @@ export function FacebookSDK({
         // Initialize with adjusted settings for iframe/embedded environments like Replit
         window.FB.init({
           appId,
-          cookie: false, // Disable cookies to prevent cross-domain issues
+          cookie: true, // Enable cookies for session persistence
           xfbml: true,
           version,
           status: true,  // Enable status checking
           frictionlessRequests: true // Make requests smoother
         });
+        
+        // Add special login options for iframe environments
+        console.log('Setting up Facebook SDK for iframe environment');
         
         // Log page view
         window.FB.AppEvents.logPageView();
