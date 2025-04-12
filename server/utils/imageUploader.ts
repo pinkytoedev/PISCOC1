@@ -295,11 +295,18 @@ export async function uploadImageUrlToAirtable(
     // Log URL being used (helps with debugging)
     console.log(`Using URL for Airtable attachment: ${imageUrl.substring(0, 100)}${imageUrl.length > 100 ? '...' : ''}`);
     
-    // Create the correct attachment object - JUST the URL property
+    // Extract filename from URL if not provided
+    const extractedFilename = filename || imageUrl.split('/').pop() || 'image.jpg';
+    
+    // Create the attachment object with both URL and filename
+    // Note: Airtable documentation shows that for attachments, both url and filename
+    // are accepted parameters
     const attachment = {
-      url: imageUrl
-      // DO NOT add any other properties here - they will cause Airtable to reject the upload
+      url: imageUrl,
+      filename: extractedFilename
     };
+    
+    console.log(`Setting ${fieldName} attachment:`, JSON.stringify(attachment));
     
     const payload = {
       fields: {
