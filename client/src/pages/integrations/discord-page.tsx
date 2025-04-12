@@ -43,7 +43,9 @@ import {
   Server,
   UserPlus,
   Plus,
-  Settings
+  Settings,
+  MessageSquare,
+  Send
 } from "lucide-react";
 
 interface GuildInfo {
