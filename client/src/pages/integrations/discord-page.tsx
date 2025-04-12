@@ -579,25 +579,13 @@ export default function DiscordPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                <Tabs 
-                  defaultValue="webhook" 
-                  value={tab} 
-                  onValueChange={setTab}
-                  className="w-full"
-                >
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="webhook" className="flex items-center">
-                      <Webhook className="h-4 w-4 mr-2" />
-                      Webhook Integration
-                    </TabsTrigger>
-                    <TabsTrigger value="bot" className="flex items-center">
-                      <Bot className="h-4 w-4 mr-2" />
-                      Discord Bot
-                    </TabsTrigger>
-                  </TabsList>
+                <div className="w-full">
+                  <div className="bg-muted py-2 px-4 rounded-md mb-4 flex items-center">
+                    <Bot className="h-5 w-5 mr-2 text-primary" />
+                    <h2 className="text-lg font-semibold">Discord Bot</h2>
+                  </div>
                   
-                  {/* Webhook Tab */}
-                  <TabsContent value="webhook" className="space-y-6 mt-6">
+                  <div className="space-y-6 mt-6">
                     {/* Discord Webhook Configuration */}
                     <Card>
                       <CardHeader>
@@ -806,10 +794,10 @@ export default function DiscordPage() {
                         </Button>
                       </CardContent>
                     </Card>
-                  </TabsContent>
+                  </div>
                   
-                  {/* Bot Tab */}
-                  <TabsContent value="bot" className="space-y-6 mt-6">
+                  {/* Bot Section */}
+                  <div className="space-y-6 mt-6">
                     {/* Discord Bot Configuration */}
                     <Card>
                       <CardHeader>
@@ -1021,8 +1009,8 @@ export default function DiscordPage() {
                         )}
                       </CardContent>
                     </Card>
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                </div>
                 
                 {/* Integration Guide */}
                 <Card>
