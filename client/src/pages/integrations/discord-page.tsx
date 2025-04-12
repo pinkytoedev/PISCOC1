@@ -262,9 +262,13 @@ export default function DiscordPage() {
   });
   
   // Query to get all available Discord webhooks from settings
-  const { data: webhooks, isLoading: isLoadingWebhooks } = useQuery<DiscordWebhook[]>({
+  const { data: webhooks, isLoading: isLoadingWebhooks, refetch: refetchWebhooks } = useQuery<DiscordWebhook[]>({
     queryKey: ['/api/discord/webhooks'],
     refetchInterval: 60000, // Refresh webhooks every minute
+    retry: 3,
+    onSuccess: (data) => {
+      console.log("Successfully loaded webhooks:", data);
+    }
   });
   
   // When settings are loaded, set the bot token and client ID fields
@@ -282,6 +286,24 @@ export default function DiscordPage() {
       }
     }
   }, [settings]);
+  
+  // Debug effect to check webhook data
+  useEffect(() => {
+    if (webhooks) {
+      console.log("Loaded webhooks:", webhooks);
+      
+      // If we have a 'default' webhook, ensure it's selected by default
+      const defaultWebhook = webhooks.find(w => w.id === 'default');
+      if (defaultWebhook && !selectedWebhookId) {
+        setSelectedWebhookId('default');
+      }
+      
+      // If we have other webhooks but no default, select the first one
+      if (webhooks.length > 0 && !selectedWebhookId) {
+        setSelectedWebhookId(webhooks[0].id);
+      }
+    }
+  }, [webhooks, selectedWebhookId]);
   
   const updateSettingMutation = useMutation({
     mutationFn: async ({ key, value, enabled }: { key: string; value: string; enabled?: boolean }) => {
@@ -436,10 +458,13 @@ export default function DiscordPage() {
   
   const handleSendDiscordMessage = () => {
     if (discordMessage.trim()) {
+      // Log webhook info for debugging
+      console.log("Sending message with webhook:", selectedWebhookId);
+      
       sendDiscordMessageMutation.mutate({
         message: discordMessage,
         username: webhookUsername,
-        webhookId: selectedWebhookId || undefined
+        webhookId: selectedWebhookId || 'default' // Always use a default as fallback
       });
     }
   };
