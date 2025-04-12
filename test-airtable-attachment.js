@@ -1,5 +1,5 @@
 // Test script to debug Airtable attachment uploads
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 async function testAirtableAttachment() {
   try {
@@ -25,9 +25,9 @@ async function testAirtableAttachment() {
     // Create the URL for the API request
     const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${recordId}`;
     
-    // Using a test image URL
-    const imageUrl = 'https://i.imgur.com/UAr13LQ.jpeg'; // Same URL as in logs
-    const filename = 'test-image.jpg';
+    // Using a different test image URL - let's try a different source
+    const imageUrl = 'https://picsum.photos/800/600'; // Random image from Lorem Picsum
+    const filename = 'test-image-new.jpg';
     
     // Format for Airtable attachment field
     const payload = {
