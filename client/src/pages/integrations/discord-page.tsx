@@ -244,7 +244,7 @@ export default function DiscordPage() {
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
   const [webhookUsername, setWebhookUsername] = useState("Website User");
-  const [selectedWebhookId, setSelectedWebhookId] = useState<string>("");
+  const [selectedWebhookId, setSelectedWebhookId] = useState<string>("default");
   
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
@@ -751,7 +751,7 @@ export default function DiscordPage() {
                           variant="default" 
                           size="sm" 
                           onClick={handleSendDiscordMessage}
-                          disabled={!getSettingValue('webhook_url') || !discordMessage || sendDiscordMessageMutation.isPending}
+                          disabled={!selectedWebhookId || !discordMessage || sendDiscordMessageMutation.isPending}
                         >
                           {sendDiscordMessageMutation.isPending ? (
                             <>
