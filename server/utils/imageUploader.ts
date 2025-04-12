@@ -208,9 +208,19 @@ export async function uploadImageToAirtable(
     
     const result = await response.json() as AirtableResponse;
     
-    // Return the Airtable attachment object if it exists
+    // Check if the attachment was successfully added to the record
     if (result.fields && result.fields[fieldName] && Array.isArray(result.fields[fieldName])) {
-      return result.fields[fieldName][0] as AirtableAttachment;
+      // Get the attachment from the response - this has the correct Airtable format
+      const attachmentFromResponse = result.fields[fieldName][0];
+      
+      // Return a properly formatted AirtableAttachment object for our app to use
+      return {
+        id: attachmentFromResponse.id || `file_${Date.now()}`,
+        url: attachmentFromResponse.url,
+        filename: file.filename,
+        size: file.size,
+        type: file.mimetype
+      } as AirtableAttachment;
     }
     return null;
   } catch (error) {
@@ -277,20 +287,18 @@ export async function uploadImageUrlToAirtable(
       mimeType = "image/webp";
     }
     
-    // For Airtable, we need to provide *just the URL* in a special format
-    // According to Airtable docs, the correct format for attachment fields is different
-    // We need to send URLs in this format: { "url": "https://example.com/image.jpg" }
+    // For Airtable, we need to provide ONLY THE URL property in a special format
+    // According to Airtable API docs and error messages, we can ONLY send this format:
+    // { "url": "https://example.com/image.jpg" }
+    // Adding ANY other properties will cause a 422 INVALID_ATTACHMENT_OBJECT error
     
     // Log URL being used (helps with debugging)
     console.log(`Using URL for Airtable attachment: ${imageUrl.substring(0, 100)}${imageUrl.length > 100 ? '...' : ''}`);
     
-    // IMPORTANT: Airtable ONLY accepts URL format for upload
-    // Trying to provide additional properties like id, filename, size, type will result in 422 errors
-    
-    // Create the proper attachment format - just the URL property and nothing else
+    // Create the correct attachment object - JUST the URL property
     const attachment = {
       url: imageUrl
-      // Do not add any other properties here - they will cause Airtable to reject the upload
+      // DO NOT add any other properties here - they will cause Airtable to reject the upload
     };
     
     const payload = {
@@ -346,9 +354,21 @@ export async function uploadImageUrlToAirtable(
     
     const result = await response.json() as AirtableResponse;
     
-    // Return the Airtable attachment object if it exists
+    // Check if the attachment was successfully added to the record
     if (result.fields && result.fields[fieldName] && Array.isArray(result.fields[fieldName])) {
-      return result.fields[fieldName][0] as AirtableAttachment;
+      // Get the attachment from the response - this has the correct Airtable format
+      const attachmentFromResponse = result.fields[fieldName][0];
+      
+      // Return a properly formatted AirtableAttachment object for our app to use
+      // Create a consistent object that matches our interface expectations,
+      // but doesn't send these additional fields back to Airtable
+      return {
+        id: attachmentFromResponse.id || `airtable_${Date.now()}`,
+        url: attachmentFromResponse.url,
+        filename: filename,
+        size: attachmentFromResponse.size || 0,
+        type: mimeType
+      } as AirtableAttachment;
     }
     return null;
   } catch (error) {
