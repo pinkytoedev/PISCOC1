@@ -87,6 +87,166 @@ interface ChannelInfo {
   type: string;
 }
 
+// SendChannelMessageDialog component
+function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, serverName: string }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  
+  // Query for getting available channels in the server
+  const { data: channelsData, isLoading: isLoadingChannels } = useQuery<{
+    success: boolean;
+    serverId: string;
+    serverName: string;
+    channels: ChannelInfo[];
+  }>({
+    queryKey: [`/api/discord/bot/server/${serverId}/channels`],
+    enabled: open,
+  });
+  
+  // Mutation for sending a message to a channel
+  const sendMessageMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/discord/bot/send-channel-message", {
+        guildId: serverId,
+        channelId: selectedChannelId,
+        message
+      });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Message sent",
+        description: "Your message was sent successfully to the Discord channel.",
+      });
+      setOpen(false);
+      setMessage("");
+      setSelectedChannelId("");
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to send message",
+        description: error.message || "There was an error sending your message.",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      setIsSending(false);
+    }
+  });
+  
+  const handleSendMessage = () => {
+    if (!selectedChannelId) {
+      toast({
+        title: "Channel required",
+        description: "Please select a channel to send the message to.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!message.trim()) {
+      toast({
+        title: "Message required",
+        description: "Please enter a message to send.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSending(true);
+    sendMessageMutation.mutate();
+  };
+  
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="ml-2">
+          <Terminal className="w-4 h-4 mr-2" />
+          Send Message
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Send Message to Discord Channel</DialogTitle>
+          <DialogDescription>
+            Send a message directly to a channel in {serverName} server.
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="channel" className="text-right">
+              Channel
+            </Label>
+            <Select 
+              value={selectedChannelId} 
+              onValueChange={setSelectedChannelId}
+              disabled={isLoadingChannels}
+            >
+              <SelectTrigger className="col-span-3">
+                <SelectValue placeholder="Select a channel" />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingChannels ? (
+                  <div className="flex items-center justify-center p-2">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Loading channels...
+                  </div>
+                ) : channelsData?.channels?.length ? (
+                  channelsData.channels.map((channel) => (
+                    <SelectItem key={channel.id} value={channel.id}>
+                      #{channel.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-center text-sm">
+                    No channels available
+                  </div>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="message" className="text-right">
+              Message
+            </Label>
+            <div className="col-span-3">
+              <textarea
+                id="message"
+                rows={5}
+                className="w-full border rounded-md p-2 text-sm"
+                placeholder="Enter your message here..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+        
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSendMessage} disabled={isSending}>
+            {isSending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>Send Message</>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // CreateWebhookDialog component
 function CreateWebhookDialog({ serverId, serverName }: { serverId: string, serverName: string }) {
   const { toast } = useToast();
@@ -985,7 +1145,10 @@ export default function DiscordPage() {
                                             </span>
                                           </td>
                                           <td className="px-4 py-3 whitespace-nowrap text-right">
-                                            <CreateWebhookDialog serverId={guild.id} serverName={guild.name} />
+                                            <div className="flex justify-end space-x-2">
+                                              <SendChannelMessageDialog serverId={guild.id} serverName={guild.name} />
+                                              <CreateWebhookDialog serverId={guild.id} serverName={guild.name} />
+                                            </div>
                                           </td>
                                         </tr>
                                       ))}

@@ -1657,6 +1657,54 @@ async function getDiscordBotToken(): Promise<string> {
 }
 
 /**
+ * Send a message to a specific channel in a Discord server
+ * @param guildId The ID of the Discord server (guild)
+ * @param channelId The ID of the channel to send the message to
+ * @param message The message content to send
+ * @returns Success status and message details or error
+ */
+export async function sendMessageToChannel(guildId: string, channelId: string, message: string): Promise<{ success: boolean; message: string; error?: any }> {
+  try {
+    if (!client || !client.isReady()) {
+      return { success: false, message: 'Bot is not connected. Please start the bot first.' };
+    }
+    
+    // Try to get the guild (server)
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) {
+      return { success: false, message: `Could not find server with ID ${guildId}. The bot might not be a member of this server.` };
+    }
+    
+    // Try to get the channel
+    const channel = guild.channels.cache.get(channelId);
+    if (!channel) {
+      return { success: false, message: `Could not find channel with ID ${channelId} in server ${guild.name}.` };
+    }
+    
+    // Make sure the channel is a text channel
+    if (!channel.isTextBased()) {
+      return { success: false, message: `Channel ${channel.name} is not a text channel.` };
+    }
+    
+    // Send the message
+    const textChannel = channel as TextChannel;
+    await textChannel.send(message);
+    
+    return { 
+      success: true, 
+      message: `Message sent successfully to #${textChannel.name} in ${guild.name}.` 
+    };
+  } catch (error) {
+    console.error('Error sending message to Discord channel:', error);
+    return { 
+      success: false, 
+      message: 'Failed to send message to Discord channel.', 
+      error 
+    };
+  }
+}
+
+/**
  * Set up Discord bot routes for the Express app
  */
 export function setupDiscordBotRoutes(app: Express) {
@@ -1804,6 +1852,52 @@ export function setupDiscordBotRoutes(app: Express) {
     }
   });
   
+  // Send a message to a specific channel in a Discord server
+  app.post("/api/discord/bot/send-channel-message", async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
+      const { guildId, channelId, message } = req.body;
+      
+      if (!guildId || !channelId || !message) {
+        return res.status(400).json({
+          success: false, 
+          message: 'Server ID, channel ID, and message content are required'
+        });
+      }
+      
+      const result = await sendMessageToChannel(guildId, channelId, message);
+      
+      if (result.success) {
+        // Log the activity
+        await storage.createActivityLog({
+          userId: req.user?.id,
+          action: "send_channel_message",
+          resourceType: "discord_channel",
+          resourceId: channelId,
+          details: { 
+            guildId,
+            channelId,
+            messageContent: message.substring(0, 100) + (message.length > 100 ? '...' : '') // Log a truncated version
+          }
+        });
+        
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error) {
+      console.error('Error sending message to Discord channel:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'An error occurred while sending message to Discord channel',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Get available channels in a server where webhooks can be created
   app.get("/api/discord/bot/server/:serverId/channels", async (req: Request, res: Response) => {
     try {
