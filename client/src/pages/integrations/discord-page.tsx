@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-// Removed Tabs imports as we're using a simplified layout
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
@@ -35,6 +35,7 @@ import {
   Loader2, 
   Copy, 
   RefreshCw, 
+  Webhook, 
   Bot, 
   Shield, 
   PowerOff, 
@@ -252,6 +253,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
 
 export default function DiscordPage() {
   const { toast } = useToast();
+  const [tab, setTab] = useState("webhook");
   const [botToken, setBotToken] = useState("");
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
@@ -264,13 +266,13 @@ export default function DiscordPage() {
   
   const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
     queryKey: ['/api/discord/bot/status'],
-    refetchInterval: 10000, // Refresh bot status every 10 seconds
+    refetchInterval: () => tab === "bot" ? 10000 : 0, // Only refresh status when on bot tab
   });
   
   const { data: serverData, refetch: refetchServers } = useQuery<{guilds: GuildInfo[], webhooks: WebhookInfo[]}>({
     queryKey: ['/api/discord/bot/servers'],
-    enabled: botStatus?.connected === true,
-    refetchInterval: 30000, // Refresh bot servers every 30 seconds
+    enabled: tab === "bot" && botStatus?.connected === true,
+    refetchInterval: () => tab === "bot" ? 30000 : 0, // Refresh every 30 seconds when on bot tab
   });
   
   // Query to get all available Discord webhooks from settings
@@ -577,13 +579,25 @@ export default function DiscordPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="w-full">
-                  <div className="bg-muted py-2 px-4 rounded-md mb-4 flex items-center">
-                    <Bot className="h-5 w-5 mr-2 text-primary" />
-                    <h2 className="text-lg font-semibold">Discord Bot</h2>
-                  </div>
+                <Tabs 
+                  defaultValue="webhook" 
+                  value={tab} 
+                  onValueChange={setTab}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="webhook" className="flex items-center">
+                      <Webhook className="h-4 w-4 mr-2" />
+                      Webhook Integration
+                    </TabsTrigger>
+                    <TabsTrigger value="bot" className="flex items-center">
+                      <Bot className="h-4 w-4 mr-2" />
+                      Discord Bot
+                    </TabsTrigger>
+                  </TabsList>
                   
-                  <div className="space-y-6 mt-6">
+                  {/* Webhook Tab */}
+                  <TabsContent value="webhook" className="space-y-6 mt-6">
                     {/* Discord Webhook Configuration */}
                     <Card>
                       <CardHeader>
@@ -792,10 +806,10 @@ export default function DiscordPage() {
                         </Button>
                       </CardContent>
                     </Card>
-                  </div>
+                  </TabsContent>
                   
-                  {/* Bot Section */}
-                  <div className="space-y-6 mt-6">
+                  {/* Bot Tab */}
+                  <TabsContent value="bot" className="space-y-6 mt-6">
                     {/* Discord Bot Configuration */}
                     <Card>
                       <CardHeader>
@@ -1007,8 +1021,8 @@ export default function DiscordPage() {
                         )}
                       </CardContent>
                     </Card>
-                  </div>
-                </div>
+                  </TabsContent>
+                </Tabs>
                 
                 {/* Integration Guide */}
                 <Card>
