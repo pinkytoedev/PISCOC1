@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Removed Tabs imports as we're using a simplified layout
 import { useToast } from "@/hooks/use-toast";
 import { 
   Dialog, 
@@ -35,7 +35,6 @@ import {
   Loader2, 
   Copy, 
   RefreshCw, 
-  Webhook, 
   Bot, 
   Shield, 
   PowerOff, 
@@ -253,7 +252,6 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
 
 export default function DiscordPage() {
   const { toast } = useToast();
-  const [tab, setTab] = useState("webhook");
   const [botToken, setBotToken] = useState("");
   const [clientId, setClientId] = useState("");
   const [discordMessage, setDiscordMessage] = useState("");
@@ -266,13 +264,13 @@ export default function DiscordPage() {
   
   const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
     queryKey: ['/api/discord/bot/status'],
-    refetchInterval: () => tab === "bot" ? 10000 : 0, // Only refresh status when on bot tab
+    refetchInterval: 10000, // Refresh bot status every 10 seconds
   });
   
   const { data: serverData, refetch: refetchServers } = useQuery<{guilds: GuildInfo[], webhooks: WebhookInfo[]}>({
     queryKey: ['/api/discord/bot/servers'],
-    enabled: tab === "bot" && botStatus?.connected === true,
-    refetchInterval: () => tab === "bot" ? 30000 : 0, // Refresh every 30 seconds when on bot tab
+    enabled: botStatus?.connected === true,
+    refetchInterval: 30000, // Refresh bot servers every 30 seconds
   });
   
   // Query to get all available Discord webhooks from settings
