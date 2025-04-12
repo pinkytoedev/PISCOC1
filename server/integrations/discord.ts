@@ -333,10 +333,20 @@ export function setupDiscordRoutes(app: Express) {
       // Check if we're using a specific webhook from a setting
       if (webhookId) {
         try {
-          // Look for a specific webhook URL in settings
-          const webhookSetting = await storage.getIntegrationSettingByKey("discord", `webhook_${webhookId}`);
-          if (webhookSetting && webhookSetting.value) {
-            webhookUrl = webhookSetting.value;
+          // Special case for the default webhook
+          if (webhookId === 'default') {
+            const defaultWebhookSetting = await storage.getIntegrationSettingByKey("discord", "webhook_url");
+            if (defaultWebhookSetting && defaultWebhookSetting.value && defaultWebhookSetting.enabled) {
+              webhookUrl = defaultWebhookSetting.value;
+              console.log("Using default webhook:", webhookUrl);
+            }
+          } else {
+            // Look for a specific webhook URL in settings
+            const webhookSetting = await storage.getIntegrationSettingByKey("discord", `webhook_${webhookId}`);
+            if (webhookSetting && webhookSetting.value && webhookSetting.enabled) {
+              webhookUrl = webhookSetting.value;
+              console.log("Using specific webhook:", webhookId, webhookUrl);
+            }
           }
         } catch (error) {
           console.error("Error fetching webhook setting:", error);
