@@ -247,155 +247,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
   );
 }
 
-// CreateWebhookDialog component
-function CreateWebhookDialog({ serverId, serverName }: { serverId: string, serverName: string }) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [webhookName, setWebhookName] = useState("");
-  const [selectedChannelId, setSelectedChannelId] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-  
-  // Query for getting available channels in the server
-  const { data: channelsData, isLoading: isLoadingChannels } = useQuery<{
-    success: boolean;
-    serverId: string;
-    serverName: string;
-    channels: ChannelInfo[];
-  }>({
-    queryKey: ['/api/discord/bot/server', serverId, 'channels'],
-    queryFn: async () => {
-      const res = await fetch(`/api/discord/bot/server/${serverId}/channels`);
-      if (!res.ok) {
-        throw new Error('Failed to fetch channels');
-      }
-      return res.json();
-    },
-    enabled: open, // Only fetch when the dialog is open
-  });
-  
-  // Mutation for creating a webhook
-  const createWebhookMutation = useMutation({
-    mutationFn: async () => {
-      if (!webhookName || !selectedChannelId) {
-        throw new Error('Webhook name and channel are required');
-      }
-      
-      setIsCreating(true);
-      const res = await apiRequest("POST", "/api/discord/bot/webhook", {
-        serverId,
-        channelId: selectedChannelId,
-        name: webhookName
-      });
-      
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.message || 'Failed to create webhook');
-      }
-      return data;
-    },
-    onSuccess: (data) => {
-      setIsCreating(false);
-      toast({
-        title: "Webhook created",
-        description: `Webhook "${data.webhook.name}" was created in channel #${data.webhook.channelName}`,
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/discord/bot/servers'] });
-      setOpen(false);
-      setWebhookName("");
-      setSelectedChannelId("");
-    },
-    onError: (error) => {
-      setIsCreating(false);
-      toast({
-        title: "Failed to create webhook",
-        description: error instanceof Error ? error.message : 'An unknown error occurred',
-        variant: "destructive",
-      });
-    }
-  });
-  
-  const handleCreateWebhook = () => {
-    createWebhookMutation.mutate();
-  };
-  
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-2">
-          <Webhook className="h-4 w-4 mr-2" />
-          Add Webhook
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Create Webhook in {serverName}</DialogTitle>
-          <DialogDescription>
-            Create a new webhook in a channel on this Discord server. The webhook will be used to send content from your platform to Discord.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="webhook-name">Webhook Name</Label>
-            <Input
-              id="webhook-name"
-              placeholder="Content Publisher"
-              value={webhookName}
-              onChange={(e) => setWebhookName(e.target.value)}
-            />
-            <p className="text-xs text-gray-500">
-              This name will be displayed as the sender of messages in Discord.
-            </p>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="channel">Channel</Label>
-            {isLoadingChannels ? (
-              <div className="flex items-center justify-center h-10 bg-gray-100 rounded">
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Loading channels...
-              </div>
-            ) : channelsData?.channels && channelsData.channels.length > 0 ? (
-              <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a channel" />
-                </SelectTrigger>
-                <SelectContent>
-                  {channelsData.channels.map((channel) => (
-                    <SelectItem key={channel.id} value={channel.id}>
-                      #{channel.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <div className="text-sm text-gray-500 p-2 border rounded bg-gray-50">
-                No suitable channels found. Make sure the bot has the necessary permissions.
-              </div>
-            )}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button 
-            type="submit" 
-            onClick={handleCreateWebhook}
-            disabled={!webhookName || !selectedChannelId || isCreating}
-          >
-            {isCreating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              <>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Webhook
-              </>
-            )}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+
 
 export default function DiscordPage() {
   const { toast } = useToast();
@@ -1147,7 +999,6 @@ export default function DiscordPage() {
                                           <td className="px-4 py-3 whitespace-nowrap text-right">
                                             <div className="flex justify-end space-x-2">
                                               <SendChannelMessageDialog serverId={guild.id} serverName={guild.name} />
-                                              <CreateWebhookDialog serverId={guild.id} serverName={guild.name} />
                                             </div>
                                           </td>
                                         </tr>
@@ -1158,39 +1009,7 @@ export default function DiscordPage() {
                               </div>
                             )}
                             
-                            {botStatus?.connected && ((serverData?.webhooks && serverData.webhooks.length > 0) || (botStatus.webhooks && botStatus.webhooks.length > 0)) && (
-                              <div className="mt-6">
-                                <h3 className="text-sm font-medium mb-2">Webhook Connections</h3>
-                                <div className="border rounded-md overflow-hidden">
-                                  <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                      <tr>
-                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Server</th>
-                                        <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                      {(serverData?.webhooks || botStatus.webhooks || []).map((webhook) => (
-                                        <tr key={webhook.id}>
-                                          <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                              <span className="text-sm font-medium text-gray-900">{webhook.name}</span>
-                                            </div>
-                                          </td>
-                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            {webhook.guildName}
-                                          </td>
-                                          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                                            #{webhook.channelName}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            )}
+
                             
                             <div className="mt-6">
                               <h3 className="text-sm font-medium mb-2">Add Bot to Server</h3>
@@ -1224,10 +1043,10 @@ export default function DiscordPage() {
                       <Separator />
                       
                       <div>
-                        <h3 className="text-sm font-medium">Step 2: Set Up Webhook</h3>
+                        <h3 className="text-sm font-medium">Step 2: Send Direct Messages</h3>
                         <p className="text-sm text-gray-500 mt-1">
-                          In your Discord server, go to Server Settings → Integrations → Webhooks → Create Webhook.
-                          Copy the webhook URL and paste it in the webhook configuration tab.
+                          You can now send messages directly to any channel in your Discord server where the bot has access.
+                          Simply select a server and channel, then type your message and send.
                         </p>
                       </div>
                       
@@ -1255,22 +1074,22 @@ export default function DiscordPage() {
                   <CardFooter className="bg-gray-50 border-t">
                     <div className="flex space-x-4">
                       <a 
-                        href="https://discord.com/developers/docs/resources/webhook" 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline text-sm flex items-center"
-                      >
-                        <Webhook className="h-4 w-4 mr-1" />
-                        Webhook Docs
-                      </a>
-                      <a 
                         href="https://discord.com/developers/docs/intro" 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="text-primary hover:underline text-sm flex items-center"
                       >
                         <Bot className="h-4 w-4 mr-1" />
-                        Bot Docs
+                        Bot Documentation
+                      </a>
+                      <a 
+                        href="https://discord.com/developers/docs/topics/gateway" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline text-sm flex items-center"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        Messaging API Docs
                       </a>
                     </div>
                   </CardFooter>
