@@ -49,13 +49,18 @@ export function setupDiscordRoutes(app: Express) {
   app.get("/api/discord/webhooks", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
+        console.log("Webhook API - Unauthorized request:", req.user);
         return res.status(401).json({ message: "Unauthorized" });
       }
       
+      console.log("Webhook API - Authenticated user:", req.user?.username);
       const allSettings = await storage.getIntegrationSettings("discord");
+      console.log("Webhook API - All settings count:", allSettings.length);
+      
       const webhookSettings = allSettings.filter(setting => 
-        setting.key === 'webhook_url' || setting.key.startsWith('webhook_')
+        setting.key === 'webhook_url' || (setting.key.startsWith('webhook_') && !setting.key.startsWith('webhook_label_'))
       );
+      console.log("Webhook API - Webhook settings count:", webhookSettings.length);
       
       // Transform into a more usable format for the frontend
       const webhooks = webhookSettings.map(setting => {
