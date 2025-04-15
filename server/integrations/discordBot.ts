@@ -775,6 +775,56 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         components: [buttonRow]
       });
     }
+    // Handle article selection for content upload
+    else if (interaction.customId === 'select_article_for_content_upload') {
+      // Get the selected article ID
+      const articleId = parseInt(interaction.values[0], 10);
+      
+      if (isNaN(articleId) || articleId === 0) {
+        await interaction.deferUpdate();
+        await interaction.followUp({
+          content: 'No valid article was selected.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      await interaction.deferUpdate();
+      
+      // Get the article details to confirm
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.followUp({
+          content: `No article found with ID ${articleId}. It may have been deleted.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Create buttons for different options
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_content_${articleId}`)
+        .setLabel('Upload via Bot')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📄');
+      
+      const dashboardButton = new ButtonBuilder()
+        .setLabel('Open in Dashboard')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`)
+        .setEmoji('🔗');
+      
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(dashboardButton, uploadButton);
+      
+      // Confirm selection and provide options
+      await interaction.editReply({
+        content: `Selected article: **${article.title}**\n\nOptions for uploading HTML/RTF content:\n\n1. Use the "Upload via Bot" button to attach an HTML or RTF file directly through Discord\n2. Use the dashboard link to edit through the website`,
+        components: [buttonRow]
+      });
+    }
+    
     // Handle author selection dropdown
     else if (interaction.customId === 'author_select') {
       await interaction.deferUpdate();
@@ -1355,7 +1405,11 @@ const commands = [
     
   new SlashCommandBuilder()
     .setName('web')
-    .setDescription('Upload a web (main) image to an unpublished article')
+    .setDescription('Upload a web (main) image to an unpublished article'),
+    
+  new SlashCommandBuilder()
+    .setName('upload_content')
+    .setDescription('Upload an HTML/RTF file as article content')
 ];
 
 /**
@@ -1444,6 +1498,11 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
           // Web (Main) image upload command
           else if (interaction.commandName === 'web') {
             await handleWebImageCommand(interaction);
+          }
+          
+          // Upload HTML/RTF content command
+          else if (interaction.commandName === 'upload_content') {
+            await handleContentUploadCommand(interaction);
           }
         }
       } catch (error) {
@@ -2117,6 +2176,99 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
  * @param fieldName The field in Airtable to attach the image to ('MainImage' or 'instaPhoto')
  * @returns Object with success status and result information
  */
+/**
+ * Process content file upload from Discord
+ * @param attachment Discord attachment containing HTML/RTF content
+ * @param articleId The ID of the article to update
+ * @returns Status of the operation with a message
+ */
+async function processContentFile(
+  attachment: any,
+  articleId: number
+): Promise<{ success: boolean; message: string; content?: string }> {
+  try {
+    // Validate the attachment is an HTML or RTF file
+    const validContentTypes = ['text/html', 'text/rtf', 'application/rtf', 'text/plain'];
+    
+    if (!attachment.contentType || 
+        (!validContentTypes.includes(attachment.contentType) && 
+         !attachment.name.endsWith('.html') && 
+         !attachment.name.endsWith('.rtf') &&
+         !attachment.name.endsWith('.txt'))) {
+      return {
+        success: false,
+        message: `Invalid file type. Please upload an HTML, RTF, or TXT file. Received: ${attachment.contentType || 'unknown'}`
+      };
+    }
+    
+    // Get the article from storage
+    const article = await storage.getArticle(articleId);
+    
+    if (!article) {
+      return {
+        success: false,
+        message: `Article with ID ${articleId} not found.`
+      };
+    }
+    
+    console.log(`Processing content file for article ID ${articleId}, title "${article.title}", file: ${attachment.name}`);
+    
+    // Download the file content from Discord's CDN
+    const response = await fetch(attachment.url);
+    if (!response.ok) {
+      return {
+        success: false,
+        message: `Failed to download file from Discord. Status: ${response.status}`
+      };
+    }
+    
+    // Get file content as text
+    const fileContent = await response.text();
+    
+    // Process based on file type
+    let processedContent = fileContent;
+    let contentFormat = 'plaintext';
+    
+    if (attachment.name.endsWith('.html') || attachment.contentType === 'text/html') {
+      // For HTML, we can store it directly
+      contentFormat = 'html';
+    } else if (attachment.name.endsWith('.rtf') || 
+               attachment.contentType === 'text/rtf' || 
+               attachment.contentType === 'application/rtf') {
+      // For RTF, we need to convert it or at least mark it as RTF
+      contentFormat = 'rtf';
+    }
+    
+    // Update the article with the new content
+    const updatedArticle = await storage.updateArticle(articleId, {
+      content: processedContent,
+      contentFormat: contentFormat
+    });
+    
+    if (!updatedArticle) {
+      return {
+        success: false,
+        message: 'Failed to update article with the new content.'
+      };
+    }
+    
+    // For Airtable articles, we would need to sync to Airtable
+    // This could be implemented later if needed
+    
+    return {
+      success: true,
+      message: `Content from ${attachment.name} successfully uploaded and set as the article content.`,
+      content: processedContent
+    };
+  } catch (error) {
+    console.error('Error processing content file:', error);
+    return {
+      success: false,
+      message: `Error processing content file: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
 async function processDiscordAttachment(
   attachment: any,
   articleId: number,
@@ -2308,6 +2460,55 @@ async function handleWebImageCommand(interaction: any) {
   } catch (error) {
     console.error('Error handling web image command:', error);
     await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
+  }
+}
+
+/**
+ * Handler for the /upload_content command
+ * Allows users to select an unpublished article and upload an HTML or RTF file
+ * to be used as the article content
+ */
+async function handleContentUploadCommand(interaction: any) {
+  await interaction.deferReply({ ephemeral: true });
+  
+  try {
+    // Create a select menu for article selection
+    const articles = await storage.getArticles();
+    const unpublishedArticles = articles.filter(article => 
+      article.status !== 'published'
+    );
+    
+    if (unpublishedArticles.length === 0) {
+      await interaction.editReply('No unpublished articles found to upload content to. Create a new article using `/create_article` or use the website to create draft articles first.');
+      return;
+    }
+    
+    // Create a select menu for article selection
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId('select_article_for_content_upload')
+      .setPlaceholder('Select an article to upload content')
+      .addOptions(
+        unpublishedArticles.slice(0, 25).map(article => ({
+          label: article.title.substring(0, 100), // Max 100 chars for option label
+          description: `Status: ${article.status} | ID: ${article.id}`,
+          value: article.id.toString()
+        }))
+      );
+    
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+      .addComponents(selectMenu);
+    
+    // Show the selection menu to the user
+    await interaction.editReply({
+      content: 'Please select an article to upload HTML/RTF content to. After selecting, you will be prompted to upload the file.',
+      components: [row]
+    });
+    
+    // We'll handle the selection in the handleStringSelectMenuInteraction function
+    // which will check for the 'select_article_for_content_upload' custom ID
+  } catch (error) {
+    console.error('Error handling content upload command:', error);
+    await interaction.editReply('Sorry, there was an error preparing the content upload. Please try again later.');
   }
 }
 
