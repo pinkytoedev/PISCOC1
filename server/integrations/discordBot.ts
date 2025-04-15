@@ -1304,7 +1304,198 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         });
       }
     }
-    // Handle Web image upload button
+    // Handle content file upload button
+    else if (interaction.customId.startsWith('upload_content_')) {
+      // Extract article ID from the custom ID
+      const fullId = interaction.customId;
+      const idPart = fullId.substring('upload_content_'.length);
+      console.log('Content upload - full ID:', fullId);
+      console.log('Content upload - extracted ID part:', idPart);
+      const articleId = parseInt(idPart, 10);
+      
+      if (isNaN(articleId)) {
+        await interaction.reply({
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      console.log('Processing content upload for article ID:', articleId);
+      
+      // Get the article to make sure it exists and is not published
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.reply({
+          content: 'Article not found. It may have been deleted.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      if (article.status === 'published') {
+        await interaction.reply({
+          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Defer the reply since file processing may take time
+      await interaction.deferReply({ ephemeral: true });
+      
+      try {
+        // Create a button that will take the user to the article in the dashboard
+        const viewInDashboardButton = new ButtonBuilder()
+          .setLabel('View in Dashboard')
+          .setStyle(ButtonStyle.Link)
+          .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
+        
+        // Create an "Upload Content" button for immediate attachment
+        const uploadNowButton = new ButtonBuilder()
+          .setCustomId(`upload_content_now_${articleId}`)
+          .setLabel('Upload Content Now')
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji('📄');
+          
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+          .addComponents(viewInDashboardButton, uploadNowButton);
+        
+        await interaction.editReply({
+          content: `Ready to upload HTML/RTF content for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Content Now" and attach an HTML or RTF file in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded content will be stored and linked to your article.`,
+          components: [buttonRow]
+        });
+        
+      } catch (error) {
+        console.error('Error processing content upload:', error);
+        await interaction.editReply({
+          content: `Error preparing content upload: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload content.`
+        });
+      }
+    }
+    // Handle immediate content file upload
+    else if (interaction.customId.startsWith('upload_content_now_')) {
+      // Extract article ID from the custom ID
+      const fullId = interaction.customId;
+      const idPart = fullId.substring('upload_content_now_'.length);
+      console.log('Content upload NOW - full ID:', fullId);
+      console.log('Content upload NOW - extracted ID part:', idPart);
+      const articleId = parseInt(idPart, 10);
+      
+      if (isNaN(articleId)) {
+        await interaction.reply({
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      console.log('Processing content upload NOW for article ID:', articleId);
+      
+      // Get the article to make sure it exists and is not published
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.reply({
+          content: 'Article not found. It may have been deleted.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      if (article.status === 'published') {
+        await interaction.reply({
+          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Create a unique identifier for this upload request
+      const uploadId = `content_${articleId}_${Date.now()}`;
+      
+      // Tell the user to upload a file
+      await interaction.reply({
+        content: `Please upload an HTML or RTF file for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no file is received.`,
+        ephemeral: true
+      });
+      
+      // Listen for messages from this user that contain attachments
+      try {
+        // Set up a collector to watch for the next message from this user with an attachment
+        const filter = (m: Message) => 
+          m.author.id === interaction.user.id && 
+          m.attachments.size > 0;
+          
+        // Get the channel
+        const channel = interaction.channel;
+        
+        // Wait for a message with an attachment
+        const message = await collectImageMessage(channel, filter, 300000); // 5 minute timeout
+        
+        if (!message) {
+          await interaction.followUp({
+            content: 'File upload timed out. Please try again when you have a file ready.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Get the first attachment
+        const attachment = message.attachments.first();
+        
+        if (!attachment) {
+          await interaction.followUp({
+            content: 'No valid attachment found. Please try again with a valid HTML or RTF file.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Process the attachment
+        const result = await processContentFile(attachment, articleId);
+        
+        // Delete the uploaded message to keep the channel clean
+        try {
+          await message.delete();
+          console.log('Deleted content file message to keep channel clean');
+        } catch (deleteError) {
+          console.error('Could not delete upload message:', deleteError);
+        }
+        
+        // Confirm the upload with the result message
+        if (result.success) {
+          // Create a view in dashboard button
+          const viewInDashboardButton = new ButtonBuilder()
+            .setLabel('View in Dashboard')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
+          
+          const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(viewInDashboardButton);
+          
+          // Send confirmation message
+          await interaction.followUp({
+            content: `✅ **Success!** ${result.message}\n\nThe article content has been updated. You can view or further edit the article in the dashboard.`,
+            components: [buttonRow],
+            ephemeral: true
+          });
+        } else {
+          // Send error message
+          await interaction.followUp({
+            content: `❌ **Error:** ${result.message}\n\nPlease try again with a valid HTML or RTF file.`,
+            ephemeral: true
+          });
+        }
+      } catch (error) {
+        console.error('Error processing content file upload:', error);
+        await interaction.followUp({
+          content: `Error processing file: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload content.`,
+          ephemeral: true
+        });
+      }
+    }
     else if (interaction.customId.startsWith('upload_web_image_')) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
