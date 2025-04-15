@@ -33,6 +33,7 @@ import fs from 'fs';
 import path from 'path';
 import { uploadImageToImgur, uploadImageUrlToImgur } from '../utils/imgurUploader';
 import { uploadImageToAirtable, uploadImageUrlToAirtable } from '../utils/imageUploader';
+import { marked } from 'marked';
 
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
