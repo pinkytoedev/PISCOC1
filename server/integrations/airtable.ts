@@ -23,7 +23,7 @@ interface AirtableResponse<T> {
 }
 
 // Interface for attachment objects from Airtable (response format)
-interface Attachment {
+export interface Attachment {
   id: string;
   url: string;
   filename: string;
