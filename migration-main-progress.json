@@ -1,0 +1,13 @@
+{
+  "totalRecords": 140,
+  "processedRecords": 3,
+  "successfulRecords": 3,
+  "failedRecords": 0,
+  "lastProcessedIndex": 2,
+  "recordsProcessed": {
+    "rec0dBv2iMdSt2YS8": true,
+    "rec2Bg74HMqTCCBNx": true,
+    "rec2kbiCZuowebSjG": true
+  },
+  "errors": []
+}
