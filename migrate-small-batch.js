@@ -1,6 +1,6 @@
 /**
  * Migration Script for Airtable MainImage Attachments to MainImageLink Field
- * Optimized for faster processing with batch updates
+ * Optimized for handling small batches within rate limits
  */
 
 import 'dotenv/config';
@@ -14,12 +14,8 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appg1YMt6gzbLVf2a';
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_ARTICLES_TABLE || 'tbljWcl67xzH6zAno';
 const IMGUR_CLIENT_ID = process.env.IMGUR_CLIENT_ID;
-const PROGRESS_FILE = './migration-main-progress-faster.json';
-const DELAY_BETWEEN_RECORDS = 2000; // 2 seconds delay between processing records
-const BATCH_SIZE = 1; // Process one record at a time to avoid rate limits
-const BATCH_DELAY = 10000; // 10 seconds delay between batches
-const MAX_RETRIES = 3; // Maximum number of retries for rate-limited requests
-const RATE_LIMIT_DELAY = 90000; // 1.5 minute delay when rate limited
+const PROGRESS_FILE = './migration-small-batch.json';
+const BATCH_SIZE = 5; // Number of records to process per run
 
 // Validation
 if (!AIRTABLE_API_KEY) {
@@ -36,13 +32,9 @@ if (!IMGUR_CLIENT_ID) {
  * Progress tracking structure
  */
 let progress = {
-  totalRecords: 0,
-  processedRecords: 0,
-  successfulRecords: 0,
-  failedRecords: 0,
+  processedRecords: [], // Array of recordIds that have been processed
   lastProcessedIndex: -1,
-  recordsProcessed: {}, // Map of recordId -> boolean
-  errors: [] // Array of {recordId, error} objects
+  totalRecords: 0
 };
 
 /**
@@ -53,7 +45,7 @@ async function loadProgress() {
     if (existsSync(PROGRESS_FILE)) {
       const data = await fs.readFile(PROGRESS_FILE, 'utf8');
       progress = JSON.parse(data);
-      console.log(`Loaded existing progress: ${progress.processedRecords}/${progress.totalRecords} records processed`);
+      console.log(`Loaded existing progress: ${progress.processedRecords.length}/${progress.totalRecords} records processed`);
       return true;
     }
   } catch (error) {
@@ -113,16 +105,9 @@ async function fetchAirtableRecords() {
 }
 
 /**
- * Sleep for a given number of milliseconds
+ * Upload an image URL to Imgur
  */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/**
- * Upload an image URL to Imgur with retries for rate limiting
- */
-async function uploadImageToImgur(imageUrl, retryCount = 0) {
+async function uploadImageToImgur(imageUrl) {
   try {
     console.log(`Uploading to Imgur: ${imageUrl}`);
     
@@ -139,18 +124,6 @@ async function uploadImageToImgur(imageUrl, retryCount = 0) {
     
     const data = await response.json();
     
-    // Check for rate limiting (429 Too Many Requests)
-    if (response.status === 429) {
-      if (retryCount < MAX_RETRIES) {
-        console.log(`Rate limited by Imgur. Waiting ${RATE_LIMIT_DELAY/1000} seconds before retry ${retryCount + 1}/${MAX_RETRIES}...`);
-        await sleep(RATE_LIMIT_DELAY);
-        console.log('Retrying upload...');
-        return uploadImageToImgur(imageUrl, retryCount + 1);
-      } else {
-        throw new Error(`Imgur rate limit exceeded after ${MAX_RETRIES} retries`);
-      }
-    }
-    
     if (!response.ok || !data.success) {
       throw new Error(`Imgur API error: ${JSON.stringify(data)}`);
     }
@@ -158,14 +131,6 @@ async function uploadImageToImgur(imageUrl, retryCount = 0) {
     console.log(`Imgur upload successful: ${data.data.link}`);
     return data.data.link;
   } catch (error) {
-    // If the error message contains rate limit info but isn't a direct 429 response
-    if (error.message && error.message.includes('429') && retryCount < MAX_RETRIES) {
-      console.log(`Possible rate limit detected. Waiting ${RATE_LIMIT_DELAY/1000} seconds before retry ${retryCount + 1}/${MAX_RETRIES}...`);
-      await sleep(RATE_LIMIT_DELAY);
-      console.log('Retrying upload...');
-      return uploadImageToImgur(imageUrl, retryCount + 1);
-    }
-    
     console.error('Error uploading to Imgur:', error);
     throw error;
   }
@@ -213,9 +178,9 @@ async function processRecord(record, index) {
   const recordId = record.id;
   
   // Skip if we've already processed this record
-  if (progress.recordsProcessed[recordId]) {
+  if (progress.processedRecords.includes(recordId)) {
     console.log(`Skipping record ${recordId} (already processed)`);
-    return null; // Return null to indicate no processing was needed
+    return false;
   }
   
   try {
@@ -235,112 +200,85 @@ async function processRecord(record, index) {
       // Update Airtable record with new link
       await updateAirtableRecord(recordId, imgurLink);
       
-      progress.successfulRecords++;
-      
       // Mark record as processed
-      progress.recordsProcessed[recordId] = true;
-      progress.processedRecords++;
+      progress.processedRecords.push(recordId);
+      progress.lastProcessedIndex = index;
+      await saveProgress();
       
-      return { recordId, success: true };
+      return true;
     } else {
       console.log(`No MainImage attachment for record ${recordId}`);
       
       // Mark record as processed even though there was no image
-      progress.recordsProcessed[recordId] = true;
-      progress.processedRecords++;
+      progress.processedRecords.push(recordId);
+      progress.lastProcessedIndex = index;
+      await saveProgress();
       
-      return { recordId, success: false, reason: 'no-image' };
+      return true;
     }
   } catch (error) {
     console.error(`Error processing record ${recordId}:`, error);
-    
-    // Track the error
-    progress.errors.push({
-      recordId,
-      error: error.message
-    });
-    
-    progress.failedRecords++;
-    progress.processedRecords++;
-    
-    return { recordId, success: false, error: error.message };
+    return false;
   }
 }
 
 /**
- * Process a batch of records in parallel
+ * Process a small batch of records
  */
-async function processBatch(records, startIndex) {
-  const promises = [];
+async function processSmallBatch(records) {
+  let startIndex = progress.lastProcessedIndex + 1;
+  let processed = 0;
   
+  // Process up to BATCH_SIZE records
   for (let i = 0; i < BATCH_SIZE && startIndex + i < records.length; i++) {
     const recordIndex = startIndex + i;
-    // Use a small delay between starting each record processing
-    await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_RECORDS));
-    promises.push(processRecord(records[recordIndex], recordIndex));
+    const success = await processRecord(records[recordIndex], recordIndex);
+    
+    if (success) {
+      processed++;
+    }
+    
+    // Add delay between records to avoid rate limiting
+    if (i < BATCH_SIZE - 1 && startIndex + i + 1 < records.length) {
+      console.log('Waiting 3 seconds before next record...');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
   }
   
-  const results = await Promise.all(promises);
-  
-  // Update the last processed index
-  progress.lastProcessedIndex = startIndex + BATCH_SIZE - 1;
-  if (progress.lastProcessedIndex >= records.length) {
-    progress.lastProcessedIndex = records.length - 1;
-  }
-  
-  await saveProgress();
-  
-  return results.filter(r => r !== null); // Filter out null results (skipped records)
+  return processed;
 }
 
 /**
  * Main migration function
  */
-async function migrateAttachmentsToLinks() {
-  console.log('Starting migration of Airtable MainImage attachments to MainImageLink field');
+async function migrateSmallBatch() {
+  console.log('Starting small batch migration of Airtable MainImage attachments to MainImageLink fields');
   
   // Load existing progress if available
-  const hasExistingProgress = await loadProgress();
+  await loadProgress();
   
   // Fetch all records from Airtable
   const records = await fetchAirtableRecords();
   
-  // Update progress with total count
-  progress.totalRecords = records.length;
-  console.log(`Found ${records.length} records to process`);
-  await saveProgress();
-  
-  // Process records in batches, starting from where we left off
-  const startIndex = hasExistingProgress ? progress.lastProcessedIndex + 1 : 0;
-  
-  for (let i = startIndex; i < records.length; i += BATCH_SIZE) {
-    console.log(`\nProcessing batch starting at index ${i}`);
-    const batchResults = await processBatch(records, i);
-    
-    console.log(`Batch completed. Results: ${batchResults.length} records processed`);
-    console.log(`Waiting ${BATCH_DELAY/1000} seconds before next batch...`);
-    
-    // Add a delay between batches to avoid rate limiting
-    if (i + BATCH_SIZE < records.length) {
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-    }
+  // Update progress with total count if not already set
+  if (!progress.totalRecords) {
+    progress.totalRecords = records.length;
+    await saveProgress();
   }
   
-  console.log('\nMigration completed!');
-  console.log(`Total records: ${progress.totalRecords}`);
-  console.log(`Processed records: ${progress.processedRecords}`);
-  console.log(`Successful updates: ${progress.successfulRecords}`);
-  console.log(`Failed updates: ${progress.failedRecords}`);
+  console.log(`Found ${records.length} records, processing up to ${BATCH_SIZE} records in this batch`);
   
-  if (progress.errors.length > 0) {
-    console.log('\nErrors encountered:');
-    progress.errors.forEach(error => {
-      console.log(`Record ${error.recordId}: ${error.error}`);
-    });
-  }
+  // Process small batch
+  const processed = await processSmallBatch(records);
+  
+  console.log(`\nSmall batch completed!`);
+  console.log(`Total records: ${records.length}`);
+  console.log(`Records processed in this batch: ${processed}`);
+  console.log(`Total records processed so far: ${progress.processedRecords.length}`);
+  console.log(`Completion percentage: ${Math.round(progress.processedRecords.length / records.length * 100)}%`);
 }
 
 // Run the migration
-migrateAttachmentsToLinks().catch(error => {
+migrateSmallBatch().catch(error => {
   console.error('Migration failed:', error);
 });
