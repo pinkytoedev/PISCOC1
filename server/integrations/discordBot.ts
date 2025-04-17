@@ -839,7 +839,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       
       // Confirm selection and provide options
       await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading HTML/RTF content:\n\n1. Use the "Upload via Bot" button to attach an HTML or RTF file directly through Discord\n2. Use the dashboard link to edit through the website`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading content:\n\n1. Use the "Upload via Bot" button to attach an HTML, RTF, or plain text (.txt) file directly through Discord\n2. Use the dashboard link to edit through the website`,
         components: [buttonRow]
       });
     }
@@ -1436,9 +1436,9 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       // Create a unique identifier for this upload request
       const uploadId = `content_${articleId}_${Date.now()}`;
       
-      // Tell the user to upload a file
+      // Tell the user to upload a file with clear instructions for plaintext
       await interaction.reply({
-        content: `Please upload an HTML, RTF, or plain text (.txt) file for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no file is received.`,
+        content: `Please upload an HTML, RTF, or plain text (.txt) file for the article **${article.title}**.\n\n**Instructions:**\n• Upload the file as an attachment to your next message in this channel\n• For plain text (.txt) files, the content will be displayed with proper formatting\n• The upload will time out after 5 minutes if no file is received`,
         ephemeral: true
       });
       
@@ -2390,7 +2390,7 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
  */
 /**
  * Process content file upload from Discord
- * @param attachment Discord attachment containing HTML/RTF content
+ * @param attachment Discord attachment containing HTML, RTF, or plaintext (.txt) content
  * @param articleId The ID of the article to update
  * @returns Status of the operation with a message
  */
@@ -2718,7 +2718,7 @@ async function handleContentUploadCommand(interaction: any) {
     
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to upload HTML/RTF content to. After selecting, you will be prompted to upload the file.',
+      content: 'Please select an article to upload HTML, RTF, or plain text (.txt) content to. After selecting, you will be prompted to upload the file.',
       components: [row]
     });
     
