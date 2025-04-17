@@ -355,6 +355,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                       <div className="prose prose-sm max-w-none">
                         {truncateText(article.content.replace(/<[^>]*>/g, ' '), 300)}
                       </div>
+                    ) : article.contentFormat === 'plaintext' || article.contentFormat === 'txt' ? (
+                      <div className="font-mono">
+                        {truncateText(article.content, 300)}
+                      </div>
+                    ) : article.contentFormat === 'rtf' ? (
+                      <div>
+                        <span className="text-yellow-600 text-xs mb-1 block">RTF format</span>
+                        {truncateText(article.content, 300)}
+                      </div>
                     ) : (
                       truncateText(article.content, 300)
                     )

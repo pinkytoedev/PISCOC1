@@ -52,7 +52,25 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
     
     if (format === 'html') {
       return <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: content }} />;
+    } else if (format === 'plaintext' || format === 'txt') {
+      // For plain text, preserve line breaks and spacing
+      return (
+        <div className="font-mono text-sm bg-gray-50 p-4 rounded-md shadow-inner whitespace-pre-wrap">
+          {content}
+        </div>
+      );
+    } else if (format === 'rtf') {
+      // For RTF, we can't render it directly, so we show it as plain text with a note
+      return (
+        <>
+          <div className="bg-yellow-50 text-yellow-800 p-2 mb-2 rounded-md text-sm">
+            RTF content preview (formatting may differ from original)
+          </div>
+          <div className="whitespace-pre-wrap">{content}</div>
+        </>
+      );
     } else {
+      // Default fallback for any other format
       return <div className="whitespace-pre-wrap">{content}</div>;
     }
   };
