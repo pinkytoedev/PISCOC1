@@ -1474,8 +1474,16 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
           return;
         }
         
+        console.log('File attachment received:', {
+          name: attachment.name,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          url: attachment.url
+        });
+        
         // Process the attachment
         const result = await processContentFile(attachment, articleId);
+        console.log('processContentFile result:', result);
         
         // Delete the uploaded message to keep the channel clean
         try {
@@ -2399,6 +2407,14 @@ async function processContentFile(
   articleId: number
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
+    console.log('processContentFile called with attachment:', {
+      name: attachment.name,
+      contentType: attachment.contentType,
+      url: attachment.url,
+      size: attachment.size
+    });
+    console.log('Processing for article ID:', articleId);
+    
     // Validate the attachment is an HTML, RTF, or TXT file
     const validContentTypes = ['text/html', 'text/rtf', 'application/rtf', 'text/plain'];
     const validExtensions = ['.html', '.rtf', '.txt'];
@@ -2407,7 +2423,14 @@ async function processContentFile(
     const hasValidContentType = attachment.contentType && validContentTypes.includes(attachment.contentType);
     const hasValidExtension = validExtensions.some(ext => attachment.name.toLowerCase().endsWith(ext));
     
+    console.log('Validation results:', {
+      hasValidContentType,
+      hasValidExtension,
+      contentType: attachment.contentType || 'unknown'
+    });
+    
     if (!hasValidContentType && !hasValidExtension) {
+      console.log('Invalid file type rejected');
       return {
         success: false,
         message: `Invalid file type. Please upload an HTML, RTF, or TXT file. Received: ${attachment.contentType || 'unknown'} with filename ${attachment.name}`
