@@ -1402,6 +1402,12 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       const idPart = fullId.split('_').pop() || '';
       console.log('Content upload NOW - full ID:', fullId);
       console.log('Content upload NOW - extracted ID part:', idPart);
+      console.log('Content upload NOW - all parts:', fullId.split('_'));
+      
+      // Make sure we're extracting the ID correctly
+      const lastPart = fullId.substring(fullId.lastIndexOf('_') + 1);
+      console.log('Content upload NOW - last part using substring:', lastPart);
+      
       const articleId = parseInt(idPart, 10);
       
       if (isNaN(articleId)) {
@@ -2367,6 +2373,8 @@ export function setupArticleReceiveEndpoint(app: Express) {
  * Used by both /insta and /web commands to collect image messages
  */
 async function collectImageMessage(channel: any, filter: (m: any) => boolean, timeoutMs: number = 300000): Promise<any | null> {
+  console.log('Started collectImageMessage with timeout:', timeoutMs);
+  
   // Create a collector that will listen for messages meeting the filter criteria
   const collector = channel.createMessageCollector({
     filter,
@@ -2377,12 +2385,26 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
   // Return a promise that resolves when a message is collected or timeout occurs
   return new Promise<any | null>(resolve => {
     collector.on('collect', (message: any) => {
+      console.log('Message collected with attachments:', message.attachments.size);
+      
+      if (message.attachments.size > 0) {
+        const attachment = message.attachments.first();
+        console.log('Attachment details:', {
+          name: attachment.name,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          url: attachment.url
+        });
+      }
+      
       resolve(message);
       collector.stop();
     });
     
     collector.on('end', (collected: any) => {
+      console.log('Message collector ended. Collected messages:', collected.size);
       if (collected.size === 0) {
+        console.log('No messages collected, returning null');
         resolve(null);
       }
     });
