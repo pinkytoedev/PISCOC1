@@ -1,0 +1,29 @@
+{
+  "processedRecords": [
+    "rec0dBv2iMdSt2YS8",
+    "rec2Bg74HMqTCCBNx",
+    "rec2kbiCZuowebSjG",
+    "rec2yg5XpiKie4CCL",
+    "rec4SnBYuCJ30zX7D",
+    "rec4eLXUGPBl3jldZ",
+    "rec5EXyPrJTabMlYY",
+    "rec5MB6mB1c7u7vE9",
+    "rec5qvTL1nMoz6iKW"
+  ],
+  "totalRecords": 140,
+  "uploadTimestamps": [
+    1744931426454,
+    1744931448133,
+    1744931470086,
+    1744931491856,
+    1744931539189,
+    1744931560558,
+    1744931582117,
+    1744931604072,
+    1744931626143
+  ],
+  "errors": [],
+  "isRunning": true,
+  "lastRunTime": 1744931626143,
+  "paused": false
+}
