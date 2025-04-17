@@ -2,9 +2,9 @@ import { storage } from '../storage';
 import fetch from 'node-fetch';
 
 /**
- * Test function that uploads an Imgur link to Airtable using a "Test" field
- * This is specifically designed to test if Airtable accepts the link field approach
- * rather than using the attachment field
+ * Utilities for migrating from Airtable attachment fields to link fields
+ * These functions help solve the issue where Airtable no longer accepts Imgur links
+ * in attachment fields by using simple text/link fields instead.
  */
 export async function uploadLinkToAirtableTestField(
   imageUrl: string,

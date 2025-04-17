@@ -1,6 +1,7 @@
 import { Express, Request, Response } from 'express';
 import { storage } from '../storage';
 import { uploadLinkToAirtableTestField, migrateArticleImagesToLinks } from '../utils/airtableTestField';
+import { uploadImageUrlAsLinkField } from '../utils/imageUploader';
 
 /**
  * Register the Airtable test routes
@@ -190,6 +191,103 @@ export function registerAirtableTestRoutes(app: Express): void {
       console.error('Error in Airtable Test Migration endpoint:', error);
       return res.status(500).json({ 
         message: 'Failed to process test migration',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // Endpoint to migrate a specific article from attachment fields to link fields
+  app.post('/api/airtable/migrate-to-link-fields/:articleId', async (req: Request, res: Response) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      
+      const articleId = parseInt(req.params.articleId);
+      if (isNaN(articleId)) {
+        return res.status(400).json({ message: 'Invalid article ID' });
+      }
+      
+      // Get the article from the database
+      const article = await storage.getArticle(articleId);
+      if (!article) {
+        return res.status(404).json({ message: 'Article not found' });
+      }
+      
+      // Check if this is an Airtable article
+      if (article.source !== 'airtable' || !article.externalId) {
+        return res.status(400).json({ message: 'This article is not from Airtable' });
+      }
+      
+      const results = {
+        mainImage: false,
+        instaPhoto: false
+      };
+      
+      // Process main image if it exists
+      if (article.imageUrl) {
+        // Map the field names to their link field equivalents
+        const mainImageResult = await uploadImageUrlAsLinkField(
+          article.imageUrl,
+          article.externalId,
+          'MainImageLink'  // Using the link field
+        );
+        
+        results.mainImage = mainImageResult;
+        
+        if (mainImageResult) {
+          console.log(`Successfully migrated MainImage to MainImageLink for article ${article.id}`);
+        } else {
+          console.error(`Failed to migrate MainImage to MainImageLink for article ${article.id}`);
+        }
+      }
+      
+      // Process Instagram image if it exists
+      if (article.instagramImageUrl) {
+        const instaImageResult = await uploadImageUrlAsLinkField(
+          article.instagramImageUrl,
+          article.externalId,
+          'InstaPhotoLink'  // Using the link field
+        );
+        
+        results.instaPhoto = instaImageResult;
+        
+        if (instaImageResult) {
+          console.log(`Successfully migrated instaPhoto to InstaPhotoLink for article ${article.id}`);
+        } else {
+          console.error(`Failed to migrate instaPhoto to InstaPhotoLink for article ${article.id}`);
+        }
+      }
+      
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: 'migration',
+        resourceType: 'article',
+        resourceId: articleId.toString(),
+        details: {
+          results,
+          title: article.title,
+          externalId: article.externalId
+        }
+      });
+      
+      return res.json({
+        message: 'Article migration to link fields complete',
+        success: results.mainImage || results.instaPhoto,
+        results,
+        article: {
+          id: article.id,
+          title: article.title,
+          externalId: article.externalId,
+          hasMainImage: !!article.imageUrl,
+          hasInstaImage: !!article.instagramImageUrl
+        }
+      });
+    } catch (error) {
+      console.error('Error in Airtable link field migration endpoint:', error);
+      return res.status(500).json({ 
+        message: 'Failed to process link field migration',
         error: error instanceof Error ? error.message : String(error)
       });
     }
