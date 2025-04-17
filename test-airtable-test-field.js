@@ -2,13 +2,14 @@
  * Test script for the new Airtable Test field functionality
  * This will find an article and update its Test field with a link
  */
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 async function testAirtableTestField() {
   console.log('Starting Airtable Test field test...');
   
   try {
     // Step 1: Login to get session
+    // Use the same credentials that the frontend uses
     const loginResponse = await fetch('http://localhost:5000/api/login', {
       method: 'POST',
       headers: {
@@ -16,7 +17,7 @@ async function testAirtableTestField() {
       },
       body: JSON.stringify({
         username: 'dev',
-        password: 'password'
+        password: 'devpassword123'
       }),
       credentials: 'include'
     });

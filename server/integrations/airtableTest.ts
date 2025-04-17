@@ -6,6 +6,67 @@ import { uploadLinkToAirtableTestField, migrateArticleImagesToLinks } from '../u
  * Register the Airtable test routes
  */
 export function registerAirtableTestRoutes(app: Express): void {
+  // Direct test endpoint that doesn't require authentication (for development only)
+  app.get('/api/airtable/direct-test', async (req: Request, res: Response) => {
+    try {
+      // Get all articles
+      const articles = await storage.getArticles();
+      
+      // Find the first Airtable article with an image URL
+      const testArticle = articles.find(article => 
+        article.source === 'airtable' && 
+        article.externalId && 
+        article.imageUrl
+      );
+      
+      if (!testArticle) {
+        return res.status(404).json({ message: 'No suitable Airtable article found for testing' });
+      }
+      
+      // Test uploading the link to the "Test" field in Airtable
+      console.log(`Testing article: ${testArticle.id} - ${testArticle.title}`);
+      console.log(`ExternalId: ${testArticle.externalId}`);
+      console.log(`Image URL: ${testArticle.imageUrl}`);
+      
+      if (!testArticle.imageUrl) {
+        return res.status(400).json({ message: 'Selected article has no image URL' });
+      }
+      
+      const success = await uploadLinkToAirtableTestField(
+        testArticle.imageUrl,
+        testArticle.externalId,
+        `test-image-${testArticle.id}.jpg`
+      );
+      
+      if (!success) {
+        return res.status(500).json({ 
+          message: 'Failed to update Airtable Test field',
+          article: {
+            id: testArticle.id,
+            title: testArticle.title,
+            externalId: testArticle.externalId,
+            imageUrl: testArticle.imageUrl
+          }
+        });
+      }
+      
+      return res.json({
+        message: 'Successfully updated Airtable Test field with image URL',
+        article: {
+          id: testArticle.id,
+          title: testArticle.title,
+          externalId: testArticle.externalId,
+          imageUrl: testArticle.imageUrl
+        }
+      });
+    } catch (error) {
+      console.error('Error in direct Airtable test:', error);
+      return res.status(500).json({ 
+        message: 'Failed to process direct test',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
   // Test endpoint to upload an image link to the Airtable "Test" field
   app.post('/api/airtable/test-link/:articleId', async (req: Request, res: Response) => {
     try {
