@@ -8,6 +8,7 @@ import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtab
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgurRoutes } from "./integrations/imgur";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
+import { getMigrationProgress } from "./utils/migrationProgress";
 import * as path from "path";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
 import { ZodError } from "zod";
@@ -612,7 +613,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Metrics endpoints for dashboard
+
+
+// Metrics endpoints for dashboard
   app.get("/api/metrics", isAuthenticated, async (req, res) => {
     try {
       const allArticles = await storage.getArticles();
@@ -641,16 +644,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? Math.round((publishedToday.length / articlesLastMonth.length) * 100)
         : 0;
       
+      // Get migration progress data
+      const migrationProgress = getMigrationProgress();
+      
       const metrics = {
         totalArticles,
         pendingArticles: pendingArticles.length,
         publishedToday: publishedToday.length,
-        articleGrowth: `${articleGrowth}%`
+        articleGrowth: `${articleGrowth}%`,
+        migration: migrationProgress
       };
       
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch metrics" });
+    }
+  });
+  
+  // Endpoint to get just migration progress
+  app.get("/api/migration-progress", isAuthenticated, (req, res) => {
+    try {
+      const progress = getMigrationProgress();
+      res.json(progress);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch migration progress" });
     }
   });
 
