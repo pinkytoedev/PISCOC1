@@ -2441,7 +2441,6 @@ async function processContentFile(
     // Process based on file type
     let processedContent = fileContent;
     let contentFormat = 'plaintext'; // Default format
-    let originalContent = fileContent; // Save the original content for plaintext files
     
     // Determine content format based on file extension or content type
     if (attachment.name.toLowerCase().endsWith('.html') || attachment.contentType === 'text/html') {
@@ -2454,17 +2453,10 @@ async function processContentFile(
       contentFormat = 'rtf';
     } else if (attachment.name.toLowerCase().endsWith('.txt') || 
                attachment.contentType === 'text/plain') {
-      // Convert plaintext to HTML using marked
-      try {
-        processedContent = marked.parse(fileContent);
-        contentFormat = 'html'; // Set format to HTML since we've converted it
-        console.log('Converted plaintext to HTML for better display');
-      } catch (error) {
-        console.error('Error converting plaintext to HTML:', error);
-        // Fall back to plaintext if conversion fails
-        processedContent = fileContent;
-        contentFormat = 'plaintext';
-      }
+      // For TXT files, we keep them as plaintext for now
+      // The frontend will handle converting them to HTML when displayed
+      contentFormat = 'plaintext';
+      console.log('Processing plain text file with contentFormat:', contentFormat);
     }
     
     // Update the article with the new content
