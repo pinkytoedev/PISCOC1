@@ -110,11 +110,12 @@ export default function MigrationProgressBar() {
           </div>
 
           <div className="relative">
-            <Progress
-              value={percentage}
-              className="h-4"
-              indicatorClassName={progressColor}
-            />
+            <div className="h-4 w-full bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full ${progressColor} transition-all duration-500 ease-in-out`}
+                style={{ width: `${percentage}%` }}
+              ></div>
+            </div>
             <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white">
               {percentage}%
             </span>

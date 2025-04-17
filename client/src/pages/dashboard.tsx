@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { StatusCard } from "@/components/dashboard/status-card";
 import { ArticleTable } from "@/components/dashboard/article-table";
+import MigrationProgressBar from "@/components/dashboard/MigrationProgressBar";
 import { Button } from "@/components/ui/button";
 import { Newspaper, Clock, CheckCircle, ChevronRight } from "lucide-react";
 import { Article } from "@shared/schema";
@@ -117,6 +118,11 @@ export default function Dashboard() {
                 </>
               )}
             </div>
+            
+            {/* Migration Progress */}
+            <div className="mb-6">
+              <MigrationProgressBar />
+            </div>
 
             {/* Recent Articles Section */}
             <div className="mb-8">
@@ -156,7 +162,11 @@ export default function Dashboard() {
                             <div>
                               <h3 className="text-sm font-medium text-gray-900">{article.title}</h3>
                               <p className="text-xs text-gray-500 mt-1">
-                                By {article.author} - Published {new Date(article.publishedAt || article.createdAt).toLocaleDateString()}
+                                By {article.author} - Published {article.publishedAt 
+                                  ? new Date(article.publishedAt).toLocaleDateString() 
+                                  : article.createdAt 
+                                    ? new Date(article.createdAt).toLocaleDateString() 
+                                    : new Date().toLocaleDateString()}
                               </p>
                               <p className="text-xs text-gray-600 mt-1 line-clamp-2">
                                 {article.description}
@@ -218,7 +228,9 @@ export default function Dashboard() {
                             <div className="flex-1">
                               <h3 className="text-sm font-medium text-gray-900">{article.title}</h3>
                               <p className="text-xs text-gray-500 mt-1">
-                                By {article.author} - Submitted {new Date(article.createdAt).toLocaleDateString()}
+                                By {article.author} - Submitted {article.createdAt 
+                                  ? new Date(article.createdAt).toLocaleDateString() 
+                                  : new Date().toLocaleDateString()}
                               </p>
                               <p className="text-xs text-gray-600 mt-1 line-clamp-2">
                                 {article.description}
