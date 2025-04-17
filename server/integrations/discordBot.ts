@@ -1419,7 +1419,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       // Tell the user to upload a file
       await interaction.reply({
-        content: `Please upload an HTML or RTF file for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no file is received.`,
+        content: `Please upload an HTML, RTF, or plain text (.txt) file for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no file is received.`,
         ephemeral: true
       });
       
@@ -1449,7 +1449,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         
         if (!attachment) {
           await interaction.followUp({
-            content: 'No valid attachment found. Please try again with a valid HTML or RTF file.',
+            content: 'No valid attachment found. Please try again with a valid HTML, RTF, or plain text (.txt) file.',
             ephemeral: true
           });
           return;
@@ -1486,7 +1486,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         } else {
           // Send error message
           await interaction.followUp({
-            content: `❌ **Error:** ${result.message}\n\nPlease try again with a valid HTML or RTF file.`,
+            content: `❌ **Error:** ${result.message}\n\nPlease try again with a valid HTML, RTF, or plain text (.txt) file.`,
             ephemeral: true
           });
         }
@@ -1602,7 +1602,7 @@ const commands = [
     
   new SlashCommandBuilder()
     .setName('upload_content')
-    .setDescription('Upload an HTML/RTF file as article content')
+    .setDescription('Upload an HTML, RTF, or plain text (.txt) file as article content')
 ];
 
 /**
