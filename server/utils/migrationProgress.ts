@@ -42,6 +42,7 @@ export function getMigrationProgress(): {
     error: string;
   }>;
 } {
+  const NO_CACHE = Date.now(); // Add timestamp to avoid caching {
   // Default return if no files exist
   const defaultResult = {
     totalRecords: 0,
@@ -58,43 +59,76 @@ export function getMigrationProgress(): {
     return defaultResult;
   }
   
-  // Find the most recently modified file
-  const fileStats = existingFiles.map(file => ({
-    path: file,
-    stats: fs.statSync(file)
-  }));
+  // Collect data from all progress files to get a complete picture
+  let combinedProgress: MigrationProgress = {
+    processedRecords: [],
+    totalRecords: 0,
+    uploadTimestamps: [],
+    errors: []
+  };
   
-  fileStats.sort((a, b) => b.stats.mtimeMs - a.stats.mtimeMs);
-  const latestFile = fileStats[0].path;
+  // Read all progress files and combine their data
+  for (const file of existingFiles) {
+    try {
+      const fileData = JSON.parse(fs.readFileSync(file, 'utf8'));
+      
+      // Merge processed records (avoiding duplicates)
+      combinedProgress.processedRecords = [
+        ...new Set([...combinedProgress.processedRecords, ...fileData.processedRecords])
+      ];
+      
+      // Use the largest total value
+      combinedProgress.totalRecords = Math.max(combinedProgress.totalRecords, fileData.totalRecords);
+      
+      // Merge timestamps if available
+      if (fileData.uploadTimestamps) {
+        combinedProgress.uploadTimestamps = [
+          ...combinedProgress.uploadTimestamps,
+          ...fileData.uploadTimestamps
+        ];
+      }
+      
+      // Merge errors if available
+      if (fileData.errors) {
+        combinedProgress.errors = [
+          ...combinedProgress.errors,
+          ...fileData.errors
+        ];
+      }
+    } catch (error) {
+      console.error(`Error reading migration file ${file}:`, error);
+    }
+  }
+  
+  // Sort timestamps
+  if (combinedProgress.uploadTimestamps.length > 0) {
+    combinedProgress.uploadTimestamps.sort((a, b) => b - a);
+  }
   
   try {
-    // Read the latest progress file
-    const data = fs.readFileSync(latestFile, 'utf8');
-    const progress: MigrationProgress = JSON.parse(data);
-    
-    // Calculate percentage
-    const percentage = progress.totalRecords > 0 
-      ? Math.round((progress.processedRecords.length / progress.totalRecords) * 100) 
+    // Calculate percentage based on combined progress
+    const percentage = combinedProgress.totalRecords > 0 
+      ? Math.round((combinedProgress.processedRecords.length / combinedProgress.totalRecords) * 100) 
       : 0;
     
     // Get recent uploads (in the last 24 hours)
     const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const recentUploads = progress.uploadTimestamps
-      ? progress.uploadTimestamps.filter(timestamp => timestamp > oneDayAgo).length
+    const recentUploads = combinedProgress.uploadTimestamps
+      ? combinedProgress.uploadTimestamps.filter(timestamp => timestamp > oneDayAgo).length
       : 0;
     
     // Get last upload time
-    const lastUploadTime = progress.uploadTimestamps && progress.uploadTimestamps.length > 0
-      ? new Date(Math.max(...progress.uploadTimestamps)).toISOString()
+    const lastUploadTime = combinedProgress.uploadTimestamps && combinedProgress.uploadTimestamps.length > 0
+      ? new Date(Math.max(...combinedProgress.uploadTimestamps)).toISOString()
       : null;
     
     return {
-      totalRecords: progress.totalRecords,
-      processedRecords: progress.processedRecords.length,
+      totalRecords: combinedProgress.totalRecords,
+      processedRecords: combinedProgress.processedRecords.length,
       percentage,
       recentUploads,
       lastUploadTime,
-      errors: progress.errors || []
+      errors: combinedProgress.errors || []
     };
   } catch (error) {
     console.error('Error reading migration progress file:', error);

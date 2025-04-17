@@ -662,12 +662,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // Endpoint to get just migration progress
-  app.get("/api/migration-progress", isAuthenticated, (req, res) => {
+  app.get("/api/migration-progress", (req, res) => {
     try {
+      // Add cache control headers to prevent caching
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
       const progress = getMigrationProgress();
       res.json(progress);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch migration progress" });
+      console.error('Error getting migration progress:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch migration progress',
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 

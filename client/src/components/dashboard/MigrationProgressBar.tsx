@@ -20,8 +20,10 @@ interface MigrationProgressProps {
 
 export default function MigrationProgressBar() {
   const { data: migrationProgress, isLoading } = useQuery<MigrationProgressProps>({
-    queryKey: ['/api/migration-progress'],
-    refetchInterval: 30000, // Refresh every 30 seconds
+    queryKey: ['/api/migration-progress', Date.now()], // Add timestamp to force fresh data
+    refetchInterval: 10000, // Refresh every 10 seconds for more timely updates
+    refetchOnWindowFocus: true,
+    staleTime: 5000, // Consider data stale after 5 seconds
   });
 
   if (isLoading) {
