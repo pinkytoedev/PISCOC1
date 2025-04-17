@@ -5,10 +5,11 @@ import fs from 'fs';
 import path from 'path';
 
 // Progress files for different migration types
+// Temporarily exclude problematic migration-main-progress.json file
 const PROGRESS_FILES = [
   './migration-with-progress-bar.json',
   './migration-with-improved-rate-limits.json',
-  './migration-main-progress.json',
+  // './migration-main-progress.json', // Temporarily excluded due to format incompatibility
   './migration-small-batch.json',
   './migration-single-image.json'
 ];
@@ -72,10 +73,40 @@ export function getMigrationProgress(): {
     try {
       const fileData = JSON.parse(fs.readFileSync(file, 'utf8'));
       
-      // Merge processed records (avoiding duplicates)
-      combinedProgress.processedRecords = [
-        ...new Set([...combinedProgress.processedRecords, ...fileData.processedRecords])
-      ];
+      // Skip files that don't match our expected format
+      if (!fileData || typeof fileData !== 'object') {
+        console.warn(`Skipping invalid progress file ${file}: Not a valid JSON object`);
+        continue;
+      }
+      
+      // Handle different formats of processed records
+      try {
+        // Format 1: Array of record IDs
+        if (fileData.processedRecords && Array.isArray(fileData.processedRecords)) {
+          const uniqueRecords = new Set<string>();
+          // Add existing records
+          combinedProgress.processedRecords.forEach(id => uniqueRecords.add(id));
+          // Add new records
+          fileData.processedRecords.forEach((id: string) => uniqueRecords.add(id)); 
+          combinedProgress.processedRecords = Array.from(uniqueRecords);
+        } 
+        // Format 2: Object with record IDs as keys
+        else if (fileData.recordsProcessed && typeof fileData.recordsProcessed === 'object') {
+          const uniqueRecords = new Set<string>();
+          // Add existing records
+          combinedProgress.processedRecords.forEach(id => uniqueRecords.add(id));
+          // Add new records
+          Object.keys(fileData.recordsProcessed).forEach(id => uniqueRecords.add(id));
+          combinedProgress.processedRecords = Array.from(uniqueRecords);
+        }
+        // Format 3: Just a count (we can't merge specific IDs in this case)
+        else if (fileData.processedRecords && typeof fileData.processedRecords === 'number') {
+          // Just keep track that we found records, but can't merge specific IDs
+          console.log(`File ${file} has ${fileData.processedRecords} processed records (numeric format)`);
+        }
+      } catch (innerError) {
+        console.error(`Error processing records from file ${file}:`, innerError);
+      }
       
       // Use the largest total value
       combinedProgress.totalRecords = Math.max(combinedProgress.totalRecords, fileData.totalRecords);
