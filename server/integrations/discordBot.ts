@@ -1192,7 +1192,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     else if (interaction.customId.startsWith('upload_web_image_now_')) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.replace('upload_web_image_now_', '');
+      const idPart = fullId.split('_').pop() || '';
       console.log('Web image upload NOW - full ID:', fullId);
       console.log('Web image upload NOW - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
@@ -1308,7 +1308,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     else if (interaction.customId.startsWith('upload_content_')) {
       // Extract article ID from the custom ID
       const fullId = interaction.customId;
-      const idPart = fullId.replace('upload_content_', '');
+      const idPart = fullId.split('_').pop() || '';
       console.log('Content upload - full ID:', fullId);
       console.log('Content upload - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
@@ -1379,7 +1379,8 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       // Extract article ID from the custom ID
       const fullId = interaction.customId;
       // Extract just the numeric part (articleId) - content IDs are formatted as upload_content_now_142
-      const idPart = fullId.replace('upload_content_now_', '');
+      // Need to handle potential issue where the prefix isn't properly removed
+      const idPart = fullId.split('_').pop() || '';
       console.log('Content upload NOW - full ID:', fullId);
       console.log('Content upload NOW - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
@@ -1500,7 +1501,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
     else if (interaction.customId.startsWith('upload_web_image_')) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.replace('upload_web_image_', '');
+      const idPart = fullId.split('_').pop() || '';
       console.log('Web image upload - full ID:', fullId);
       console.log('Web image upload - extracted ID part:', idPart);
       const articleId = parseInt(idPart, 10);
