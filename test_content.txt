@@ -1,0 +1,10 @@
+This is a test plain text file. 
+
+It contains multiple lines.
+
+- This is a bullet point
+- This is another bullet point
+
+## This should be a heading
+
+Some more text for testing.
