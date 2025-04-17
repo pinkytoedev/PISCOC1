@@ -3,7 +3,21 @@
  * Specifically focused on handling both old attachment fields and new link fields
  */
 
-import { Attachment } from "../integrations/airtable";
+// Interface for attachment objects from Airtable (response format)
+interface Attachment {
+  id: string;
+  url: string;
+  filename: string;
+  size: number;
+  type: string;
+  width?: number;
+  height?: number;
+  thumbnails?: {
+    small: { url: string; width: number; height: number };
+    large: { url: string; width: number; height: number };
+    full: { url: string; width: number; height: number };
+  };
+}
 
 /**
  * Get the best image URL from an Airtable record, checking both attachment and link fields

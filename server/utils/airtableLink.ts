@@ -27,7 +27,7 @@ export async function uploadImageToImgur(imageUrl: string, imgurClientId: string
       body: formData
     });
     
-    const data = await response.json();
+    const data = await response.json() as { success: boolean; data: { link: string; error?: string } };
     
     if (!response.ok || !data.success) {
       console.error('Imgur API error:', data);
