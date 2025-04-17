@@ -1444,16 +1444,20 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       // Tell the user to upload a file with clear instructions for plaintext
       await interaction.reply({
-        content: `Please upload an HTML, RTF, or plain text (.txt) file for the article **${article.title}**.\n\n**Instructions:**\n• Upload the file as an attachment to your next message in this channel\n• For plain text (.txt) files, the content will be displayed with proper formatting\n• The upload will time out after 5 minutes if no file is received`,
+        content: `Please upload an HTML, RTF, or plain text (.txt) file for the article **${article.title}**.\n\n**Instructions:**\n• Upload the file as an attachment to your next message in this channel\n• For plain text (.txt) files, make sure they have the .txt extension\n• Text files will be formatted properly when displayed on the website\n• The upload will time out after 5 minutes if no file is received`,
         ephemeral: true
       });
       
       // Listen for messages from this user that contain attachments
       try {
+        console.log(`Waiting for content file upload for article ID ${articleId}`);
+        
         // Set up a collector to watch for the next message from this user with an attachment
-        const filter = (m: Message) => 
-          m.author.id === interaction.user.id && 
-          m.attachments.size > 0;
+        const filter = (m: Message) => {
+          const hasAttachment = m.author.id === interaction.user.id && m.attachments.size > 0;
+          console.log(`Message received, user: ${m.author.tag}, has attachments: ${m.attachments.size > 0}`);
+          return hasAttachment;
+        };
           
         // Get the channel
         const channel = interaction.channel;
@@ -1462,6 +1466,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         const message = await collectImageMessage(channel, filter, 300000); // 5 minute timeout
         
         if (!message) {
+          console.log('File upload timed out');
           await interaction.followUp({
             content: 'File upload timed out. Please try again when you have a file ready.',
             ephemeral: true
@@ -1473,6 +1478,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         const attachment = message.attachments.first();
         
         if (!attachment) {
+          console.error('No attachment found despite collector saying there was one');
           await interaction.followUp({
             content: 'No valid attachment found. Please try again with a valid HTML, RTF, or plain text (.txt) file.',
             ephemeral: true
@@ -1480,12 +1486,18 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
           return;
         }
         
-        console.log('File attachment received:', {
-          name: attachment.name,
-          contentType: attachment.contentType,
+        console.log('File attachment received for article:', {
+          articleId,
+          fileName: attachment.name,
+          contentType: attachment.contentType || 'unknown',
           size: attachment.size,
           url: attachment.url
         });
+        
+        // Specifically check for .txt files to add extra logging
+        if (attachment.name?.toLowerCase().endsWith('.txt')) {
+          console.log('TXT FILE DETECTED! Will process as plaintext and convert to HTML for display.');
+        }
         
         // Process the attachment
         const result = await processContentFile(attachment, articleId);
@@ -2373,7 +2385,8 @@ export function setupArticleReceiveEndpoint(app: Express) {
  * Used by both /insta and /web commands to collect image messages
  */
 async function collectImageMessage(channel: any, filter: (m: any) => boolean, timeoutMs: number = 300000): Promise<any | null> {
-  console.log('Started collectImageMessage with timeout:', timeoutMs);
+  console.log('==== collectImageMessage STARTED ====');
+  console.log('Waiting for message with attachment, timeout:', timeoutMs, 'ms');
   
   // Create a collector that will listen for messages meeting the filter criteria
   const collector = channel.createMessageCollector({
@@ -2385,16 +2398,29 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
   // Return a promise that resolves when a message is collected or timeout occurs
   return new Promise<any | null>(resolve => {
     collector.on('collect', (message: any) => {
-      console.log('Message collected with attachments:', message.attachments.size);
+      console.log('Message collected from user:', message.author.tag);
+      console.log('Message has attachments:', message.attachments.size);
       
       if (message.attachments.size > 0) {
         const attachment = message.attachments.first();
         console.log('Attachment details:', {
           name: attachment.name,
-          contentType: attachment.contentType,
+          contentType: attachment.contentType || 'unknown',
           size: attachment.size,
           url: attachment.url
         });
+        
+        // Special logging for text files to help debug issues
+        if (attachment.name && attachment.name.toLowerCase().endsWith('.txt')) {
+          console.log('TXT FILE DETECTED - will use special handling during processing');
+          
+          // Extra validation to ensure the attachment URL is accessible
+          if (!attachment.url) {
+            console.error('ERROR: Missing attachment URL for text file!');
+          }
+        }
+      } else {
+        console.warn('Warning: Message has no attachments but passed the filter');
       }
       
       resolve(message);
@@ -2404,9 +2430,10 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
     collector.on('end', (collected: any) => {
       console.log('Message collector ended. Collected messages:', collected.size);
       if (collected.size === 0) {
-        console.log('No messages collected, returning null');
+        console.log('No messages collected within timeout period, returning null');
         resolve(null);
       }
+      console.log('==== collectImageMessage ENDED ====');
     });
   });
 }
