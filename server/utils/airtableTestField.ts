@@ -90,7 +90,7 @@ export async function uploadLinkToAirtableTestField(
       throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
     }
     
-    const result = await response.json();
+    const result = await response.json() as { fields?: { Test?: string } };
     console.log("Airtable Test Link Update Result:", JSON.stringify(result.fields?.Test || 'No Test field in response'));
     
     // If we get here, we successfully updated the record
@@ -112,15 +112,23 @@ export async function migrateArticleImagesToLinks(
   try {
     // Get all articles, or just the specific article if an ID is provided
     const articles = articleId 
-      ? [await storage.getArticle(articleId)].filter(Boolean) 
+      ? [await storage.getArticle(articleId)].filter(Boolean) as any[]
       : await storage.getArticles();
     
     // Filter to only include Airtable articles with images
     const airtableArticles = articles.filter(article => 
+      article && 
       article.source === 'airtable' && 
       article.externalId && 
       (article.imageUrl || article.instagramImageUrl)
-    );
+    ) as {
+      id: number;
+      title: string;
+      externalId: string;
+      imageUrl?: string;
+      instagramImageUrl?: string;
+      source: string;
+    }[];
     
     console.log(`Found ${airtableArticles.length} Airtable articles with images to process`);
     
@@ -133,7 +141,7 @@ export async function migrateArticleImagesToLinks(
         console.log(`Processing article: ${article.id} - ${article.title}`);
         
         // Check for main image
-        if (article.imageUrl) {
+        if (article.imageUrl && article.externalId) {
           const mainImageSuccess = await uploadLinkToAirtableTestField(
             article.imageUrl,
             article.externalId,
@@ -148,14 +156,14 @@ export async function migrateArticleImagesToLinks(
             failed++;
           }
           
-          // If not testing, only process one article to avoid overloading
+          // If testing only, just process one article to avoid overloading
           if (testOnly) {
             break;
           }
         }
         
         // Check for Instagram image
-        if (!testOnly && article.instagramImageUrl) {
+        if (!testOnly && article.instagramImageUrl && article.externalId) {
           const instaImageSuccess = await uploadLinkToAirtableTestField(
             article.instagramImageUrl,
             article.externalId,

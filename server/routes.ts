@@ -7,6 +7,7 @@ import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgurRoutes } from "./integrations/imgur";
+import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import * as path from "path";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
 import { ZodError } from "zod";
@@ -679,6 +680,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAirtableRoutes(app);
   setupInstagramRoutes(app);
   setupImgurRoutes(app);
+  registerAirtableTestRoutes(app);
   
   // Auto-start Discord bot if settings are available
   autoStartDiscordBot();
