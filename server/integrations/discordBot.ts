@@ -2473,26 +2473,52 @@ async function processContentFile(
     
     // Download the file content from Discord's CDN
     console.log('Fetching file from Discord CDN URL:', attachment.url);
-    const response = await fetch(attachment.url);
     
-    if (!response.ok) {
-      console.error('Failed to download file from Discord CDN, status:', response.status);
+    let fileContent: string;
+    
+    try {
+      // Use node-fetch with proper options for binary content
+      const response = await fetch(attachment.url, {
+        method: 'GET',
+        headers: {
+          'Accept': '*/*'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Failed to download file from Discord CDN, status:', response.status);
+        return {
+          success: false,
+          message: `Failed to download file from Discord. Status: ${response.status}`
+        };
+      }
+      
+      console.log('File downloaded successfully, content-type:', response.headers.get('content-type'));
+      
+      // Ensure we get the full content, especially for text files
+      const buffer = await response.arrayBuffer();
+      console.log('Downloaded file as buffer, size in bytes:', buffer.byteLength);
+      
+      // Convert buffer to text - this handles encoding better than direct text()
+      const decoder = new TextDecoder('utf-8');
+      fileContent = decoder.decode(buffer);
+      
+      if (!fileContent || fileContent.length === 0) {
+        console.error('Downloaded file content is empty!');
+        return {
+          success: false,
+          message: 'Downloaded file content is empty. Please try again with a different file.'
+        };
+      }
+      
+      console.log('Successfully decoded content to string, length:', fileContent.length);
+      console.log('Content sample (first 50 chars):', fileContent.substring(0, 50));
+    
+    } catch (fetchError) {
+      console.error('Error fetching file from Discord:', fetchError);
       return {
         success: false,
-        message: `Failed to download file from Discord. Status: ${response.status}`
-      };
-    }
-    
-    console.log('File downloaded successfully, content-type:', response.headers.get('content-type'));
-    
-    // Get file content as text - buffer it for large files
-    const fileContent = await response.text();
-    
-    if (!fileContent || fileContent.length === 0) {
-      console.error('Downloaded file content is empty!');
-      return {
-        success: false,
-        message: 'Downloaded file content is empty. Please try again with a different file.'
+        message: `Error fetching file: ${fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'}`
       };
     }
     
