@@ -3,7 +3,7 @@
  * This test will find an article and update its image link fields
  */
 
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
 async function testAirtableLinkField() {
   try {
@@ -25,7 +25,8 @@ async function testAirtableLinkField() {
     console.log(`Using article for test: ${testArticle.id} - ${testArticle.title}`);
     
     // First try to connect to the direct test endpoint (no auth required)
-    const testEndpointResponse = await fetch(`http://localhost:5000/api/airtable/direct-test?url=${encodeURIComponent(imageUrl)}&field=MainImageLink`);
+    // This endpoint will find a suitable article and update its Test field with an image URL
+    const testEndpointResponse = await fetch('http://localhost:5000/api/airtable/direct-test');
     const testResult = await testEndpointResponse.json();
     
     console.log('Test endpoint response:', testResult);
