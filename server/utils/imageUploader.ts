@@ -385,6 +385,118 @@ export async function uploadImageUrlToAirtable(
 }
 
 /**
+ * Directly uploads an image URL to Airtable as a link field (not an attachment)
+ * This is the new approach that should avoid Airtable's attachment field limitations
+ */
+export async function uploadImageUrlAsLinkField(
+  imageUrl: string,
+  recordId: string,
+  fieldName: string
+): Promise<boolean> {
+  try {
+    // Get Airtable API settings
+    const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+    const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+    const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+    
+    if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+      throw new Error("Airtable settings are not fully configured");
+    }
+    
+    if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+      throw new Error("Some Airtable settings are disabled");
+    }
+    
+    const apiKey = apiKeySetting.value;
+    const baseId = baseIdSetting.value;
+    const tableName = tableNameSetting.value;
+    
+    // Debug log to help identify configuration issues
+    console.log("Airtable Link Field Upload Config:", {
+      baseId,
+      tableName,
+      recordId,
+      fieldName
+    });
+    
+    // Make sure table name is URL encoded for special characters
+    const encodedTableName = encodeURIComponent(tableName);
+    
+    // Create the URL for the API request
+    const url = `https://api.airtable.com/v0/${baseId}/${encodedTableName}/${recordId}`;
+    
+    // Create a simpler payload - just set the field directly to the URL
+    // This treats the field as a regular text field containing a URL
+    // No attachment object structure needed
+    const payload = {
+      fields: {
+        [fieldName]: imageUrl
+      }
+    };
+    
+    console.log(`Setting ${fieldName} URL:`, JSON.stringify(payload));
+    
+    // Send PATCH request to update the record with the URL
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorDetails = {};
+      
+      try {
+        // Try to parse the error response as JSON for more structured info
+        errorDetails = JSON.parse(errorText);
+      } catch (e) {
+        // If it's not JSON, use the raw text
+        errorDetails = { error: errorText };
+      }
+      
+      console.error("Airtable API Error Response:", {
+        status: response.status, 
+        statusText: response.statusText,
+        response: errorText,
+        url,
+        encodedTableName,
+        originalTableName: tableName,
+        recordId,
+        fieldName,
+        method: 'PATCH',
+        payloadSize: JSON.stringify(payload).length,
+        errorDetails
+      });
+      
+      // Specific handling for 403 errors
+      if (response.status === 403) {
+        throw new Error(`Airtable API permission error (403): This could be due to invalid API key, incorrect permissions, or an invalid table name/record ID. Check your Airtable configuration and record IDs. Full error: ${errorText}`);
+      }
+      
+      throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
+    }
+    
+    const result = await response.json() as { fields?: Record<string, string> };
+    
+    // Check if the field was successfully updated
+    if (result.fields && result.fields[fieldName] === imageUrl) {
+      console.log(`Successfully updated ${fieldName} with link: ${imageUrl}`);
+      return true;
+    } else {
+      console.log(`Field ${fieldName} does not match expected value:`, result.fields?.[fieldName]);
+      return false;
+    }
+  } catch (error) {
+    console.error('Error uploading image URL as link field to Airtable:', error);
+    return false;
+  }
+}
+
+/**
  * Cleanup uploaded files after processing
  */
 export function cleanupUploadedFile(filePath: string): void {

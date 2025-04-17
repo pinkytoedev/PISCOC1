@@ -32,6 +32,10 @@ export function registerAirtableTestRoutes(app: Express): void {
         return res.status(400).json({ message: 'Selected article has no image URL' });
       }
       
+      if (!testArticle.externalId) {
+        return res.status(400).json({ message: 'Selected article has no external ID' });
+      }
+      
       const success = await uploadLinkToAirtableTestField(
         testArticle.imageUrl,
         testArticle.externalId,

@@ -2,7 +2,12 @@ import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
 import { upload } from "../utils/fileUpload";
-import { uploadImageToAirtable, uploadImageUrlToAirtable, cleanupUploadedFile } from "../utils/imageUploader";
+import { 
+  uploadImageToAirtable, 
+  uploadImageUrlToAirtable, 
+  uploadImageUrlAsLinkField,
+  cleanupUploadedFile 
+} from "../utils/imageUploader";
 import { uploadImageToImgur, uploadImageUrlToImgur } from "../utils/imgurUploader";
 
 // Type definitions for Airtable responses
