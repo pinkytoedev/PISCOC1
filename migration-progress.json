@@ -1,0 +1,27 @@
+{
+  "totalRecords": 140,
+  "processedRecords": 3,
+  "successfulRecords": 2,
+  "failedRecords": 1,
+  "lastProcessedIndex": 2,
+  "recordsProcessed": {
+    "rec0dBv2iMdSt2YS8": {
+      "mainImage": true,
+      "instaPhoto": false
+    },
+    "rec2Bg74HMqTCCBNx": {
+      "mainImage": true,
+      "instaPhoto": false
+    },
+    "rec2kbiCZuowebSjG": {
+      "mainImage": true,
+      "instaPhoto": true
+    }
+  },
+  "errors": [
+    {
+      "recordId": "rec2kbiCZuowebSjG",
+      "error": "Airtable API error: 422 - {\"error\":{\"type\":\"UNKNOWN_FIELD_NAME\",\"message\":\"Unknown field name: \\\"InstaPhotoLink\\\"\"}}"
+    }
+  ]
+}
