@@ -1789,12 +1789,21 @@ export function setupAirtableRoutes(app: Express) {
           return res.status(500).json({ message: 'Failed to upload image URL to Imgur' });
         }
         
-        // Step 2: Upload Imgur URL to Airtable
-        const airtableResult = await uploadImageUrlToAirtable(
+        // Step 2: Upload Imgur URL to Airtable using the new link field approach
+        // Map the field names to their link field equivalents
+        const fieldMappings = {
+          'MainImage': 'MainImageLink',
+          'instaPhoto': 'InstaPhotoLink'
+        };
+        
+        // Use the mapped field name or fallback to original
+        const targetFieldName = fieldMappings[fieldName] || fieldName;
+        
+        // Upload using the new link field function
+        const airtableResult = await uploadImageUrlAsLinkField(
           imgurResult.link,
           article.externalId,
-          fieldName,
-          filename
+          targetFieldName
         );
         
         if (!airtableResult) {
@@ -1852,25 +1861,36 @@ export function setupAirtableRoutes(app: Express) {
         filename
       });
       
-      // Upload the image URL to Airtable
-      const result = await uploadImageUrlToAirtable(
+      // Map the field names to their link field equivalents
+      const fieldMappings = {
+        'MainImage': 'MainImageLink',
+        'instaPhoto': 'InstaPhotoLink'
+      };
+      
+      // Use the mapped field name or fallback to original
+      const targetFieldName = fieldMappings[fieldName] || fieldName;
+      
+      console.log(`Using link field approach: ${fieldName} → ${targetFieldName}`);
+      
+      // Upload the image URL to Airtable using the new link field approach
+      const result = await uploadImageUrlAsLinkField(
         imageUrl,
         article.externalId,
-        fieldName,
-        filename
+        targetFieldName
       );
       
-      // Log result or error
+      // Log result or error (note: using link fields returns boolean, not attachment object)
       if (result) {
-        console.log("Airtable Image URL Upload Success:", {
-          url: result.url,
-          id: result.id,
-          filename: result.filename
+        console.log("Airtable Image URL Upload Success (link field):", {
+          url: imageUrl,
+          fieldName: targetFieldName,
+          originalField: fieldName
         });
       } else {
         console.error("Airtable Image URL Upload Failed for article:", {
           articleId,
-          externalId: article.externalId
+          externalId: article.externalId,
+          fieldName: targetFieldName
         });
       }
       
