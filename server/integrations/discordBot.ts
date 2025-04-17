@@ -2461,12 +2461,32 @@ async function processContentFile(
     
     // Log the content being saved for debugging
     console.log(`Saving file content with format ${contentFormat}. Content length: ${processedContent.length} characters`);
+    console.log(`Content snippet (first 100 chars): ${processedContent.substring(0, 100)}`);
     
-    // Update the article with the new content
-    const updatedArticle = await storage.updateArticle(articleId, {
-      content: processedContent,
-      contentFormat: contentFormat
-    });
+    // For plaintext files, make sure we're storing the raw text
+    let updatedArticle;
+    
+    if (attachment.name.toLowerCase().endsWith('.txt') || attachment.contentType === 'text/plain') {
+      console.log('Processing TXT file, ensuring correct format is used');
+      
+      // Update the article with the new content, ensuring contentFormat is set to plaintext
+      updatedArticle = await storage.updateArticle(articleId, {
+        content: processedContent,
+        contentFormat: 'plaintext'
+      });
+      
+      // Double-check the update worked
+      console.log(`Article ${articleId} update successful: ${!!updatedArticle}`);
+      if (updatedArticle) {
+        console.log(`Updated article contentFormat: ${updatedArticle.contentFormat}`);
+      }
+    } else {
+      // For other file types, proceed as normal
+      updatedArticle = await storage.updateArticle(articleId, {
+        content: processedContent,
+        contentFormat: contentFormat
+      });
+    }
     
     if (!updatedArticle) {
       return {
