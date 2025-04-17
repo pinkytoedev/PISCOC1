@@ -2380,17 +2380,18 @@ async function processContentFile(
   articleId: number
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
-    // Validate the attachment is an HTML or RTF file
+    // Validate the attachment is an HTML, RTF, or TXT file
     const validContentTypes = ['text/html', 'text/rtf', 'application/rtf', 'text/plain'];
+    const validExtensions = ['.html', '.rtf', '.txt'];
     
-    if (!attachment.contentType || 
-        (!validContentTypes.includes(attachment.contentType) && 
-         !attachment.name.endsWith('.html') && 
-         !attachment.name.endsWith('.rtf') &&
-         !attachment.name.endsWith('.txt'))) {
+    // Check if content type is valid or filename has valid extension
+    const hasValidContentType = attachment.contentType && validContentTypes.includes(attachment.contentType);
+    const hasValidExtension = validExtensions.some(ext => attachment.name.toLowerCase().endsWith(ext));
+    
+    if (!hasValidContentType && !hasValidExtension) {
       return {
         success: false,
-        message: `Invalid file type. Please upload an HTML, RTF, or TXT file. Received: ${attachment.contentType || 'unknown'}`
+        message: `Invalid file type. Please upload an HTML, RTF, or TXT file. Received: ${attachment.contentType || 'unknown'} with filename ${attachment.name}`
       };
     }
     
@@ -2420,16 +2421,21 @@ async function processContentFile(
     
     // Process based on file type
     let processedContent = fileContent;
-    let contentFormat = 'plaintext';
+    let contentFormat = 'plaintext'; // Default format
     
-    if (attachment.name.endsWith('.html') || attachment.contentType === 'text/html') {
+    // Determine content format based on file extension or content type
+    if (attachment.name.toLowerCase().endsWith('.html') || attachment.contentType === 'text/html') {
       // For HTML, we can store it directly
       contentFormat = 'html';
-    } else if (attachment.name.endsWith('.rtf') || 
+    } else if (attachment.name.toLowerCase().endsWith('.rtf') || 
                attachment.contentType === 'text/rtf' || 
                attachment.contentType === 'application/rtf') {
       // For RTF, we need to convert it or at least mark it as RTF
       contentFormat = 'rtf';
+    } else if (attachment.name.toLowerCase().endsWith('.txt') || 
+               attachment.contentType === 'text/plain') {
+      // Explicitly handle txt files
+      contentFormat = 'txt';
     }
     
     // Update the article with the new content
