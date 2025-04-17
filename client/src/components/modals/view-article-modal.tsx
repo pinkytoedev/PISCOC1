@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Calendar, User, Tag, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { marked } from 'marked';
 
 interface ViewArticleModalProps {
   isOpen: boolean;
@@ -53,11 +54,26 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
     if (format === 'html') {
       return <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: content }} />;
     } else if (format === 'plaintext' || format === 'txt') {
-      // For plain text, preserve line breaks and spacing
+      // For plain text, we offer two display options:
+      // 1. Convert to HTML using marked library (for better display)
+      // 2. Preserve original formatting (for viewing raw content)
+      
+      // Convert plaintext to HTML using marked
+      const htmlContent = marked.parse(content);
+      
       return (
-        <div className="font-mono text-sm bg-gray-50 p-4 rounded-md shadow-inner whitespace-pre-wrap">
-          {content}
-        </div>
+        <>
+          <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+          
+          <details className="mt-4 border rounded-md">
+            <summary className="text-sm p-2 bg-gray-50 cursor-pointer">
+              View original plain text
+            </summary>
+            <div className="font-mono text-sm bg-gray-50 p-4 rounded-b-md shadow-inner whitespace-pre-wrap">
+              {content}
+            </div>
+          </details>
+        </>
       );
     } else if (format === 'rtf') {
       // For RTF, we can't render it directly, so we show it as plain text with a note
