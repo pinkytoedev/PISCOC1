@@ -2434,8 +2434,8 @@ async function processContentFile(
       contentFormat = 'rtf';
     } else if (attachment.name.toLowerCase().endsWith('.txt') || 
                attachment.contentType === 'text/plain') {
-      // Explicitly handle txt files
-      contentFormat = 'txt';
+      // Explicitly handle txt files - use 'plaintext' for compatibility with frontend display
+      contentFormat = 'plaintext'; 
     }
     
     // Update the article with the new content
