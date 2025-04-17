@@ -72,10 +72,19 @@ export function getMigrationProgress(): {
     try {
       const fileData = JSON.parse(fs.readFileSync(file, 'utf8'));
       
-      // Merge processed records (avoiding duplicates)
-      combinedProgress.processedRecords = [
-        ...new Set([...combinedProgress.processedRecords, ...fileData.processedRecords])
-      ];
+      // Handle different formats of processed records
+      if (fileData.processedRecords && Array.isArray(fileData.processedRecords)) {
+        // Array format
+        combinedProgress.processedRecords = [
+          ...new Set([...combinedProgress.processedRecords, ...fileData.processedRecords])
+        ];
+      } else if (fileData.recordsProcessed && typeof fileData.recordsProcessed === 'object') {
+        // Object format (keys are record IDs)
+        const recordIds = Object.keys(fileData.recordsProcessed);
+        combinedProgress.processedRecords = [
+          ...new Set([...combinedProgress.processedRecords, ...recordIds])
+        ];
+      }
       
       // Use the largest total value
       combinedProgress.totalRecords = Math.max(combinedProgress.totalRecords, fileData.totalRecords);
