@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { CalendarClock, Image, Loader2 } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistance } from "date-fns";
 
@@ -96,17 +96,19 @@ export default function MigrationProgressBar() {
             <span className="text-sm text-gray-500">
               {processedRecords} of {totalRecords} images ({percentage}%)
             </span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 cursor-help text-sm text-gray-500">
-                  <CalendarClock className="h-3 w-3" />
-                  Last upload: {lastUploadTimeFormatted}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Recent uploads (24h): {recentUploads}</p>
-              </TooltipContent>
-            </Tooltip>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 cursor-help text-sm text-gray-500">
+                    <CalendarClock className="h-3 w-3" />
+                    Last upload: {lastUploadTimeFormatted}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Recent uploads (24h): {recentUploads}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           <div className="relative">
