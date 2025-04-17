@@ -2459,6 +2459,9 @@ async function processContentFile(
       console.log('Processing plain text file with contentFormat:', contentFormat);
     }
     
+    // Log the content being saved for debugging
+    console.log(`Saving file content with format ${contentFormat}. Content length: ${processedContent.length} characters`);
+    
     // Update the article with the new content
     const updatedArticle = await storage.updateArticle(articleId, {
       content: processedContent,
