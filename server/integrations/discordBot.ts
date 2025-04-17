@@ -532,7 +532,26 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         )
         .setFooter({ text: 'The article will be synced to Airtable through the website' });
       
-      await interaction.editReply({ embeds: [embed] });
+      // Create buttons for next actions
+      const uploadContentButton = new ButtonBuilder()
+        .setCustomId(`upload_content_now_${article.id}`)
+        .setLabel('Upload Text File Now')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📄');
+        
+      const viewInDashboardButton = new ButtonBuilder()
+        .setLabel('View in Dashboard')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${article.id}`)
+        .setEmoji('🔗');
+        
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(viewInDashboardButton, uploadContentButton);
+      
+      await interaction.editReply({ 
+        embeds: [embed],
+        components: [buttonRow]
+      });
       
       // Add author selection menu after successful article creation
       try {
@@ -541,7 +560,7 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         const authorRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(authorSelect);
         
         await interaction.followUp({
-          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.",
+          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.\n\nAlso, you can now upload a text file directly by clicking the 'Upload Text File Now' button above.",
           components: [authorRow],
           ephemeral: true
         });
