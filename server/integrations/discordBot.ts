@@ -2470,8 +2470,43 @@ async function processContentFile(
       };
     }
     
-    // For Airtable articles, we would need to sync to Airtable
-    // This could be implemented later if needed
+    // For Airtable articles, sync content to Airtable
+    if (article.source === 'airtable' && article.externalId) {
+      try {
+        // Get Airtable settings
+        const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+        const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+        const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+        
+        if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value && 
+            apiKeySetting.enabled && baseIdSetting.enabled && tableNameSetting.enabled) {
+          
+          const apiKey = apiKeySetting.value;
+          const baseId = baseIdSetting.value;
+          const tableName = tableNameSetting.value;
+          
+          // Update just the Body field in Airtable
+          await fetch(`https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`, {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fields: {
+                Body: processedContent,
+                _updatedTime: new Date().toISOString()
+              }
+            })
+          });
+          
+          console.log(`Content synced to Airtable for article ID ${articleId} (${article.externalId})`);
+        }
+      } catch (error) {
+        console.error('Error syncing content to Airtable:', error);
+        // Don't fail the whole operation if Airtable sync fails
+      }
+    }
     
     return {
       success: true,
