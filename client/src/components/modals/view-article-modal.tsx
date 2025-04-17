@@ -51,6 +51,8 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
   const renderContent = (content: string | null, format: string | null) => {
     if (!content) return <p className="text-gray-500 italic">No content available</p>;
     
+    console.log('Rendering content with format:', format, 'content length:', content?.length || 0);
+    
     if (format === 'html') {
       return <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: content }} />;
     } else if (format === 'plaintext' || format === 'txt') {
@@ -58,23 +60,36 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
       // 1. Convert to HTML using marked library (for better display)
       // 2. Preserve original formatting (for viewing raw content)
       
-      // Convert plaintext to HTML using marked
-      const htmlContent = marked.parse(content || '');
+      console.log('Converting plaintext to HTML using marked');
       
-      return (
-        <>
-          <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
-          
-          <details className="mt-4 border rounded-md">
-            <summary className="text-sm p-2 bg-gray-50 cursor-pointer">
-              View original plain text
-            </summary>
-            <pre className="font-mono text-sm bg-gray-50 p-4 rounded-b-md shadow-inner overflow-x-auto">
-              {content}
-            </pre>
-          </details>
-        </>
-      );
+      try {
+        // Convert plaintext to HTML using marked
+        const htmlContent = marked.parse(content || '');
+        console.log('HTML conversion successful, length:', htmlContent.length);
+        
+        return (
+          <>
+            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+            
+            <details className="mt-4 border rounded-md">
+              <summary className="text-sm p-2 bg-gray-50 cursor-pointer">
+                View original plain text
+              </summary>
+              <pre className="font-mono text-sm bg-gray-50 p-4 rounded-b-md shadow-inner overflow-x-auto">
+                {content}
+              </pre>
+            </details>
+          </>
+        );
+      } catch (error) {
+        console.error('Error converting plaintext to HTML:', error);
+        // Fallback to plain display if markdown parsing fails
+        return (
+          <div className="whitespace-pre-wrap border-l-4 border-gray-200 pl-4 font-mono text-sm">
+            {content}
+          </div>
+        );
+      }
     } else if (format === 'rtf') {
       // For RTF, we can't render it directly, so we show it as plain text with a note
       return (
