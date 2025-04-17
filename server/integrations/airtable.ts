@@ -91,6 +91,8 @@ interface AirtableArticleRequest {
   Hashtags?: string;               // Long text
   instaPhoto?: UploadAttachment[]; // Attachment
   MainImage?: UploadAttachment[];  // Attachment
+  MainImageLink?: string;          // URL field (replacement for MainImage attachment)
+  InstaPhotoLink?: string;         // URL field (replacement for instaPhoto attachment)
   message_sent?: boolean;          // Checkbox
   "Name (from Author)"?: string[]; // Lookup
   "Name (from Photo)"?: string[];  // Lookup
@@ -288,16 +290,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         // Extract filename or create a default one with proper extension
         const filename = article.imageUrl.split('/').pop() || `main_image.${fileExt}`;
         
-        // Create the Airtable Attachment structure for MainImage
-        // For upload, Airtable API only needs url and filename
-        const mainImageAttachment = {
-          url: article.imageUrl,
-          filename: filename
-        };
+        // Using Link field for MainImage instead of attachment field
+        // Use the MainImageLink field which accepts a URL string
+        airtableData.MainImageLink = article.imageUrl;
         
-        airtableData.MainImage = [mainImageAttachment];
-        
-        console.log("Setting MainImage attachment:", JSON.stringify(mainImageAttachment));
+        console.log("Setting MainImageLink:", article.imageUrl);
       } catch (error) {
         console.error("Error creating MainImage attachment:", error);
       }
@@ -327,16 +324,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       // Extract filename or create a default one with proper extension
       const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
       
-      // Create the Airtable Attachment structure for instaPhoto
-      // For upload, Airtable API only needs url and filename
-      const instaPhotoAttachment = {
-        url: article.instagramImageUrl,
-        filename: filename
-      };
+      // Using Link field for instaPhoto instead of attachment field
+      // Use the InstaPhotoLink field which accepts a URL string
+      airtableData.InstaPhotoLink = article.instagramImageUrl;
       
-      airtableData.instaPhoto = [instaPhotoAttachment];
-      
-      console.log("Setting instaPhoto attachment:", JSON.stringify(instaPhotoAttachment));
+      console.log("Setting InstaPhotoLink:", article.instagramImageUrl);
     } catch (error) {
       console.error("Error creating instaPhoto attachment:", error);
     }
@@ -365,16 +357,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       // Extract filename or create a default one with proper extension
       const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
       
-      // Create the Airtable Attachment structure for instaPhoto (fallback from main image)
-      // For upload, Airtable API only needs url and filename
-      const instaPhotoAttachment = {
-        url: article.imageUrl,
-        filename: filename
-      };
+      // Using Link field for instaPhoto fallback instead of attachment field
+      // Use the InstaPhotoLink field which accepts a URL string
+      airtableData.InstaPhotoLink = article.imageUrl;
       
-      airtableData.instaPhoto = [instaPhotoAttachment];
-      
-      console.log("Using main image for instaPhoto:", JSON.stringify(instaPhotoAttachment));
+      console.log("Using main image for InstaPhotoLink:", article.imageUrl);
     } catch (error) {
       console.error("Error creating fallback instaPhoto attachment:", error);
     }
