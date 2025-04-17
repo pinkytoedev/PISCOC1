@@ -2472,36 +2472,62 @@ async function processContentFile(
     console.log(`Processing content file for article ID ${articleId}, title "${article.title}", file: ${attachment.name}`);
     
     // Download the file content from Discord's CDN
+    console.log('Fetching file from Discord CDN URL:', attachment.url);
     const response = await fetch(attachment.url);
+    
     if (!response.ok) {
+      console.error('Failed to download file from Discord CDN, status:', response.status);
       return {
         success: false,
         message: `Failed to download file from Discord. Status: ${response.status}`
       };
     }
     
-    // Get file content as text
+    console.log('File downloaded successfully, content-type:', response.headers.get('content-type'));
+    
+    // Get file content as text - buffer it for large files
     const fileContent = await response.text();
+    
+    if (!fileContent || fileContent.length === 0) {
+      console.error('Downloaded file content is empty!');
+      return {
+        success: false,
+        message: 'Downloaded file content is empty. Please try again with a different file.'
+      };
+    }
     
     // Process based on file type
     let processedContent = fileContent;
     let contentFormat = 'plaintext'; // Default format
     
+    console.log('Raw file content length:', fileContent.length);
+    console.log('First 200 characters of raw content:', fileContent.substring(0, 200));
+    
     // Determine content format based on file extension or content type
     if (attachment.name.toLowerCase().endsWith('.html') || attachment.contentType === 'text/html') {
       // For HTML, we can store it directly
       contentFormat = 'html';
+      console.log('Processing HTML file with contentFormat:', contentFormat);
     } else if (attachment.name.toLowerCase().endsWith('.rtf') || 
                attachment.contentType === 'text/rtf' || 
                attachment.contentType === 'application/rtf') {
       // For RTF, we need to convert it or at least mark it as RTF
       contentFormat = 'rtf';
+      console.log('Processing RTF file with contentFormat:', contentFormat);
     } else if (attachment.name.toLowerCase().endsWith('.txt') || 
                attachment.contentType === 'text/plain') {
       // For TXT files, we keep them as plaintext for now
       // The frontend will handle converting them to HTML when displayed
       contentFormat = 'plaintext';
       console.log('Processing plain text file with contentFormat:', contentFormat);
+      
+      // Make sure we're not accidentally truncating content
+      console.log('Plain text content length:', processedContent.length);
+      
+      // Check if content appears truncated or empty
+      if (processedContent.length < 10 && attachment.size > 10) {
+        console.warn('Warning: Content appears truncated. Attachment size vs content length mismatch.');
+      }
     }
     
     // Log the content being saved for debugging
