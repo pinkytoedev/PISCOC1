@@ -2,8 +2,7 @@ import { Express, Request, Response } from 'express';
 import { storage } from '../storage';
 import { upload } from '../utils/fileUpload';
 import { uploadImageToImgur, uploadImageUrlToImgur } from '../utils/imgurUploader';
-import { cleanupUploadedFile } from '../utils/imageUploader';
-import { uploadImageUrlToAirtable } from '../utils/imageUploader';
+import { cleanupUploadedFile, uploadImageUrlToAirtable, uploadImageUrlAsLinkField } from '../utils/imageUploader';
 import fetch from 'node-fetch';
 import crypto from 'crypto';
 
@@ -274,14 +273,25 @@ export function setupImgurRoutes(app: Express) {
         return res.status(500).json({ message: 'Failed to upload image to Imgur' });
       }
       
-      // Step 2: For Airtable articles, upload to Airtable
+      // Step 2: For Airtable articles, upload to Airtable using link fields
       let airtableResult = null;
       if (article.source === 'airtable' && article.externalId) {
-        airtableResult = await uploadImageUrlToAirtable(
+        // Map the field names to their link field equivalents
+        const fieldMappings = {
+          'MainImage': 'MainImageLink',
+          'instaPhoto': 'InstaPhotoLink'
+        };
+        
+        // Use the mapped field name for the link field
+        const targetFieldName = fieldMappings[fieldName] || fieldName;
+        
+        console.log(`Using link field approach for Imgur upload: ${fieldName} → ${targetFieldName}`);
+        
+        // Use the new link field function instead of the attachment field function
+        airtableResult = await uploadImageUrlAsLinkField(
           imgurResult.link,
           article.externalId,
-          fieldName,
-          file.filename
+          targetFieldName
         );
         
         if (!airtableResult) {
@@ -373,14 +383,25 @@ export function setupImgurRoutes(app: Express) {
         return res.status(500).json({ message: 'Failed to upload image URL to Imgur' });
       }
       
-      // Step 2: For Airtable articles, upload to Airtable
+      // Step 2: For Airtable articles, upload to Airtable using link fields
       let airtableResult = null;
       if (article.source === 'airtable' && article.externalId) {
-        airtableResult = await uploadImageUrlToAirtable(
+        // Map the field names to their link field equivalents
+        const fieldMappings = {
+          'MainImage': 'MainImageLink',
+          'instaPhoto': 'InstaPhotoLink'
+        };
+        
+        // Use the mapped field name for the link field
+        const targetFieldName = fieldMappings[fieldName] || fieldName;
+        
+        console.log(`Using link field approach for Imgur URL upload: ${fieldName} → ${targetFieldName}`);
+        
+        // Use the new link field function instead of the attachment function
+        airtableResult = await uploadImageUrlAsLinkField(
           imgurResult.link,
           article.externalId,
-          fieldName,
-          filename
+          targetFieldName
         );
         
         if (!airtableResult) {
