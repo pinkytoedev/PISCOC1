@@ -2429,7 +2429,8 @@ async function processContentFile(
   articleId: number
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
-    console.log('processContentFile called with attachment:', {
+    console.log('==== processContentFile STARTED ====');
+    console.log('Attachment details:', {
       name: attachment.name,
       contentType: attachment.contentType,
       url: attachment.url,
@@ -2463,137 +2464,137 @@ async function processContentFile(
     const article = await storage.getArticle(articleId);
     
     if (!article) {
+      console.error(`Article ID ${articleId} not found in database.`);
       return {
         success: false,
         message: `Article with ID ${articleId} not found.`
       };
     }
     
-    console.log(`Processing content file for article ID ${articleId}, title "${article.title}", file: ${attachment.name}`);
+    console.log(`Processing content file for article: "${article.title}" (ID: ${articleId}), file: ${attachment.name}`);
     
-    // Download the file content from Discord's CDN
-    console.log('Fetching file from Discord CDN URL:', attachment.url);
+    // STEP 1: Download the file content from Discord's CDN
+    console.log('STEP 1: Downloading file from Discord CDN:', attachment.url);
     
-    let fileContent: string;
+    let fileContent = "";
     
     try {
-      // Use node-fetch with proper options for binary content
-      const response = await fetch(attachment.url, {
-        method: 'GET',
-        headers: {
-          'Accept': '*/*'
-        }
-      });
+      const response = await fetch(attachment.url);
       
       if (!response.ok) {
-        console.error('Failed to download file from Discord CDN, status:', response.status);
+        console.error('Failed to download file from Discord, status:', response.status);
         return {
           success: false,
           message: `Failed to download file from Discord. Status: ${response.status}`
         };
       }
       
-      console.log('File downloaded successfully, content-type:', response.headers.get('content-type'));
+      console.log('Response headers:', {
+        contentType: response.headers.get('content-type'),
+        contentLength: response.headers.get('content-length')
+      });
       
-      // Ensure we get the full content, especially for text files
+      // Get raw file content as ArrayBuffer for better handling of binary data
       const buffer = await response.arrayBuffer();
-      console.log('Downloaded file as buffer, size in bytes:', buffer.byteLength);
       
-      // Convert buffer to text - this handles encoding better than direct text()
+      if (!buffer || buffer.byteLength === 0) {
+        console.error('Downloaded buffer is empty!');
+        return {
+          success: false,
+          message: 'Downloaded file appears to be empty. Please check the file and try again.'
+        };
+      }
+      
+      console.log('Downloaded file as buffer, size:', buffer.byteLength, 'bytes');
+      
+      // Convert buffer to text
       const decoder = new TextDecoder('utf-8');
       fileContent = decoder.decode(buffer);
       
       if (!fileContent || fileContent.length === 0) {
-        console.error('Downloaded file content is empty!');
+        console.error('Decoded text content is empty!');
         return {
           success: false,
-          message: 'Downloaded file content is empty. Please try again with a different file.'
+          message: 'File content is empty after decoding. Please try a different file.'
         };
       }
       
-      console.log('Successfully decoded content to string, length:', fileContent.length);
-      console.log('Content sample (first 50 chars):', fileContent.substring(0, 50));
-    
-    } catch (fetchError) {
-      console.error('Error fetching file from Discord:', fetchError);
+      console.log('Successfully decoded to text, content length:', fileContent.length, 'characters');
+      console.log('Content preview:', fileContent.substring(0, 100).replace(/\n/g, '\\n'));
+      
+    } catch (error) {
+      console.error('Error downloading file from Discord:', error);
       return {
         success: false,
-        message: `Error fetching file: ${fetchError instanceof Error ? fetchError.message : 'Unknown fetch error'}`
+        message: `Error fetching file: ${error instanceof Error ? error.message : 'Unknown download error'}`
       };
     }
     
-    // Process based on file type
-    let processedContent = fileContent;
+    // STEP 2: Determine the content format based on file extension
+    console.log('STEP 2: Determining content format');
+    
     let contentFormat = 'plaintext'; // Default format
     
-    console.log('Raw file content length:', fileContent.length);
-    console.log('First 200 characters of raw content:', fileContent.substring(0, 200));
-    
-    // Determine content format based on file extension or content type
+    // Set content format based on file extension
     if (attachment.name.toLowerCase().endsWith('.html') || attachment.contentType === 'text/html') {
-      // For HTML, we can store it directly
       contentFormat = 'html';
-      console.log('Processing HTML file with contentFormat:', contentFormat);
+      console.log('Detected HTML format');
     } else if (attachment.name.toLowerCase().endsWith('.rtf') || 
                attachment.contentType === 'text/rtf' || 
                attachment.contentType === 'application/rtf') {
-      // For RTF, we need to convert it or at least mark it as RTF
       contentFormat = 'rtf';
-      console.log('Processing RTF file with contentFormat:', contentFormat);
+      console.log('Detected RTF format');
     } else if (attachment.name.toLowerCase().endsWith('.txt') || 
                attachment.contentType === 'text/plain') {
-      // For TXT files, we keep them as plaintext for now
-      // The frontend will handle converting them to HTML when displayed
       contentFormat = 'plaintext';
-      console.log('Processing plain text file with contentFormat:', contentFormat);
+      console.log('Detected plaintext format');
       
-      // Make sure we're not accidentally truncating content
-      console.log('Plain text content length:', processedContent.length);
-      
-      // Check if content appears truncated or empty
-      if (processedContent.length < 10 && attachment.size > 10) {
-        console.warn('Warning: Content appears truncated. Attachment size vs content length mismatch.');
+      // Check for potential truncation issues
+      if (fileContent.length < 10 && attachment.size > 100) {
+        console.warn('WARNING: Content appears truncated! Attachment size vs. content length mismatch.');
       }
     }
     
-    // Log the content being saved for debugging
-    console.log(`Saving file content with format ${contentFormat}. Content length: ${processedContent.length} characters`);
-    console.log(`Content snippet (first 100 chars): ${processedContent.substring(0, 100)}`);
+    console.log(`Content will be saved with format '${contentFormat}'`);
     
-    // For plaintext files, make sure we're storing the raw text
-    let updatedArticle;
+    // STEP 3: Update the article content in database
+    console.log('STEP 3: Updating article in database');
     
-    if (attachment.name.toLowerCase().endsWith('.txt') || attachment.contentType === 'text/plain') {
-      console.log('Processing TXT file, ensuring correct format is used');
-      
-      // Update the article with the new content, ensuring contentFormat is set to plaintext
-      updatedArticle = await storage.updateArticle(articleId, {
-        content: processedContent,
-        contentFormat: 'plaintext'
-      });
-      
-      // Double-check the update worked
-      console.log(`Article ${articleId} update successful: ${!!updatedArticle}`);
-      if (updatedArticle) {
-        console.log(`Updated article contentFormat: ${updatedArticle.contentFormat}`);
-      }
-    } else {
-      // For other file types, proceed as normal
-      updatedArticle = await storage.updateArticle(articleId, {
-        content: processedContent,
-        contentFormat: contentFormat
-      });
+    // Create the update data object
+    const updateData: Partial<Article> = {
+      content: fileContent,
+      contentFormat: contentFormat
+    };
+    
+    // Special handling for .txt files to ensure they're always marked as plaintext
+    if (attachment.name.toLowerCase().endsWith('.txt')) {
+      console.log('TXT file detected - forcing contentFormat to "plaintext"');
+      updateData.contentFormat = 'plaintext';
     }
+    
+    // Update the article
+    console.log('Updating article with new content...');
+    const updatedArticle = await storage.updateArticle(articleId, updateData);
     
     if (!updatedArticle) {
+      console.error('Failed to update article content in database');
       return {
         success: false,
-        message: 'Failed to update article with the new content.'
+        message: 'Failed to update article with the new content. Database error.'
       };
     }
     
-    // For Airtable articles, sync content to Airtable
+    console.log('Article successfully updated:',  {
+      id: updatedArticle.id,
+      title: updatedArticle.title,
+      contentFormat: updatedArticle.contentFormat,
+      contentLength: updatedArticle.content?.length || 0
+    });
+    
+    // STEP 4: For Airtable articles, sync content to Airtable
     if (article.source === 'airtable' && article.externalId) {
+      console.log('STEP 4: Syncing content to Airtable');
+      
       try {
         // Get Airtable settings
         const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
@@ -2607,8 +2608,10 @@ async function processContentFile(
           const baseId = baseIdSetting.value;
           const tableName = tableNameSetting.value;
           
+          console.log(`Syncing content to Airtable record: ${article.externalId}`);
+          
           // Update just the Body field in Airtable
-          await fetch(`https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`, {
+          const airtableResponse = await fetch(`https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`, {
             method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${apiKey}`,
@@ -2616,13 +2619,20 @@ async function processContentFile(
             },
             body: JSON.stringify({
               fields: {
-                Body: processedContent,
+                Body: fileContent,
                 _updatedTime: new Date().toISOString()
               }
             })
           });
           
-          console.log(`Content synced to Airtable for article ID ${articleId} (${article.externalId})`);
+          if (!airtableResponse.ok) {
+            const errorText = await airtableResponse.text();
+            console.error('Error syncing to Airtable:', errorText);
+          } else {
+            console.log('Successfully synced content to Airtable');
+          }
+        } else {
+          console.log('Airtable settings unavailable or disabled, skipping sync');
         }
       } catch (error) {
         console.error('Error syncing content to Airtable:', error);
@@ -2630,13 +2640,15 @@ async function processContentFile(
       }
     }
     
+    console.log('==== processContentFile COMPLETED SUCCESSFULLY ====');
+    
     return {
       success: true,
       message: `Content from ${attachment.name} successfully uploaded and set as the article content.`,
-      content: processedContent
+      content: fileContent
     };
   } catch (error) {
-    console.error('Error processing content file:', error);
+    console.error('==== processContentFile ERROR ====', error);
     return {
       success: false,
       message: `Error processing content file: ${error instanceof Error ? error.message : 'Unknown error'}`
