@@ -59,7 +59,7 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
       // 2. Preserve original formatting (for viewing raw content)
       
       // Convert plaintext to HTML using marked
-      const htmlContent = marked.parse(content);
+      const htmlContent = marked.parse(content || '');
       
       return (
         <>
@@ -69,9 +69,9 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
             <summary className="text-sm p-2 bg-gray-50 cursor-pointer">
               View original plain text
             </summary>
-            <div className="font-mono text-sm bg-gray-50 p-4 rounded-b-md shadow-inner whitespace-pre-wrap">
+            <pre className="font-mono text-sm bg-gray-50 p-4 rounded-b-md shadow-inner overflow-x-auto">
               {content}
-            </div>
+            </pre>
           </details>
         </>
       );
