@@ -5,13 +5,13 @@ import fs from 'fs';
 import path from 'path';
 
 // Progress files for different migration types
-// Temporarily exclude problematic migration-main-progress.json file
 const PROGRESS_FILES = [
   './migration-with-progress-bar.json',
   './migration-with-improved-rate-limits.json',
   // './migration-main-progress.json', // Temporarily excluded due to format incompatibility
   './migration-small-batch.json',
-  './migration-single-image.json'
+  './migration-single-image.json',
+  './migration-continuous.json' // New continuous migration process
 ];
 
 /**
@@ -112,17 +112,17 @@ export function getMigrationProgress(): {
       combinedProgress.totalRecords = Math.max(combinedProgress.totalRecords, fileData.totalRecords);
       
       // Merge timestamps if available
-      if (fileData.uploadTimestamps) {
+      if (fileData.uploadTimestamps && Array.isArray(fileData.uploadTimestamps)) {
         combinedProgress.uploadTimestamps = [
-          ...combinedProgress.uploadTimestamps,
+          ...(combinedProgress.uploadTimestamps || []),
           ...fileData.uploadTimestamps
         ];
       }
       
       // Merge errors if available
-      if (fileData.errors) {
+      if (fileData.errors && Array.isArray(fileData.errors)) {
         combinedProgress.errors = [
-          ...combinedProgress.errors,
+          ...(combinedProgress.errors || []),
           ...fileData.errors
         ];
       }
@@ -132,7 +132,7 @@ export function getMigrationProgress(): {
   }
   
   // Sort timestamps
-  if (combinedProgress.uploadTimestamps.length > 0) {
+  if (combinedProgress.uploadTimestamps && combinedProgress.uploadTimestamps.length > 0) {
     combinedProgress.uploadTimestamps.sort((a, b) => b - a);
   }
   

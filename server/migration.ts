@@ -5,13 +5,13 @@ import fs from 'fs';
 import express from 'express';
 
 // Progress files for different migration types
-// Temporarily exclude problematic migration-main-progress.json file
 const PROGRESS_FILES = [
   './migration-with-progress-bar.json',
   './migration-with-improved-rate-limits.json',
   // './migration-main-progress.json', // Temporarily excluded due to format incompatibility
   './migration-small-batch.json',
-  './migration-single-image.json'
+  './migration-single-image.json',
+  './migration-continuous.json' // New continuous migration process
 ];
 
 interface MigrationProgress {
