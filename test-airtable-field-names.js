@@ -3,8 +3,8 @@
  * This helps identify the exact field names we can use for image links
  */
 
-require('dotenv').config();
-const fetch = require('node-fetch');
+import 'dotenv/config';
+import fetch from 'node-fetch';
 
 async function checkAirtableFields() {
   try {
