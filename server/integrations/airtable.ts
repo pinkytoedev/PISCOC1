@@ -1898,14 +1898,15 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(500).json({ message: "Failed to upload image URL to Airtable" });
       }
       
-      // Update the article in the database with the new image URL
+      // Update the article in the database with the image URL
+      // For link fields, result is a boolean, so we use the original imageUrl
       const updateData: Partial<InsertArticle> = {};
       
       if (fieldName === 'MainImage') {
-        updateData.imageUrl = result.url;
+        updateData.imageUrl = imageUrl;
         updateData.imageType = 'url';
       } else if (fieldName === 'instaPhoto') {
-        updateData.instagramImageUrl = result.url;
+        updateData.instagramImageUrl = imageUrl;
       }
       
       await storage.updateArticle(articleId, updateData);
@@ -1924,8 +1925,11 @@ export function setupAirtableRoutes(app: Express) {
       });
       
       res.json({
-        message: `Image URL uploaded successfully to ${fieldName}`,
-        attachment: result
+        message: `Image URL uploaded successfully to ${targetFieldName}`,
+        success: true,
+        fieldName: targetFieldName,
+        originalField: fieldName,
+        imageUrl: imageUrl
       });
     } catch (error) {
       console.error("Error uploading image URL to Airtable:", error);
