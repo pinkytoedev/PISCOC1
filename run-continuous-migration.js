@@ -1,10 +1,11 @@
+
 /**
  * Helper script to start the continuous migration process
  * Run with: node run-continuous-migration.js
  */
 
 // Import the migration script and execute it
-require('./migrate-continuous.js');
+import './migrate-continuous.js';
 
 console.log(`
 =================================================================
