@@ -15,7 +15,7 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appg1YMt6gzbLVf2a';
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_ARTICLES_TABLE || 'tbljWcl67xzH6zAno';
 const IMGUR_CLIENT_ID = process.env.IMGUR_CLIENT_ID;
 const PROGRESS_FILE = './migration-small-batch.json';
-const BATCH_SIZE = 5; // Number of records to process per run
+const BATCH_SIZE = 2; // Number of records to process per run
 
 // Validation
 if (!AIRTABLE_API_KEY) {
@@ -105,9 +105,19 @@ async function fetchAirtableRecords() {
 }
 
 /**
- * Upload an image URL to Imgur
+ * Sleep for a specified duration
  */
-async function uploadImageToImgur(imageUrl) {
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Upload an image URL to Imgur with exponential backoff for rate limits
+ */
+async function uploadImageToImgur(imageUrl, retryCount = 0) {
+  const MAX_RETRIES = 5;
+  const BASE_DELAY = 60000; // Start with 1 minute delay
+  
   try {
     console.log(`Uploading to Imgur: ${imageUrl}`);
     
@@ -124,13 +134,44 @@ async function uploadImageToImgur(imageUrl) {
     
     const data = await response.json();
     
+    // Handle rate limiting
+    if (response.status === 429) {
+      if (retryCount < MAX_RETRIES) {
+        const delay = BASE_DELAY * Math.pow(2, retryCount);
+        console.log(`Rate limited by Imgur. Waiting ${delay/1000} seconds before retry ${retryCount + 1}/${MAX_RETRIES}...`);
+        await sleep(delay);
+        console.log(`Retrying upload (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+        return uploadImageToImgur(imageUrl, retryCount + 1);
+      } else {
+        throw new Error(`Imgur rate limit exceeded after ${MAX_RETRIES} retries`);
+      }
+    }
+    
     if (!response.ok || !data.success) {
-      throw new Error(`Imgur API error: ${JSON.stringify(data)}`);
+      // If we get an error that looks like rate limiting but doesn't have 429 status
+      if (JSON.stringify(data).includes('Too Many Requests') && retryCount < MAX_RETRIES) {
+        const delay = BASE_DELAY * Math.pow(2, retryCount);
+        console.log(`Rate limited by Imgur (from error). Waiting ${delay/1000} seconds before retry ${retryCount + 1}/${MAX_RETRIES}...`);
+        await sleep(delay);
+        console.log(`Retrying upload (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+        return uploadImageToImgur(imageUrl, retryCount + 1);
+      } else {
+        throw new Error(`Imgur API error: ${JSON.stringify(data)}`);
+      }
     }
     
     console.log(`Imgur upload successful: ${data.data.link}`);
     return data.data.link;
   } catch (error) {
+    // Check if the error message contains rate limit indicators
+    if (error.message.includes('Too Many Requests') && retryCount < MAX_RETRIES) {
+      const delay = BASE_DELAY * Math.pow(2, retryCount);
+      console.log(`Rate limited by Imgur (from exception). Waiting ${delay/1000} seconds before retry ${retryCount + 1}/${MAX_RETRIES}...`);
+      await sleep(delay);
+      console.log(`Retrying upload (attempt ${retryCount + 1}/${MAX_RETRIES})...`);
+      return uploadImageToImgur(imageUrl, retryCount + 1);
+    }
+    
     console.error('Error uploading to Imgur:', error);
     throw error;
   }
@@ -240,8 +281,8 @@ async function processSmallBatch(records) {
     
     // Add delay between records to avoid rate limiting
     if (i < BATCH_SIZE - 1 && startIndex + i + 1 < records.length) {
-      console.log('Waiting 3 seconds before next record...');
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      console.log('Waiting 10 seconds before next record...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
     }
   }
   
