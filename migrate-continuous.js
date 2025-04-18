@@ -24,7 +24,7 @@ const PROGRESS_FILE = './migration-continuous.json';
 // Imgur rate limit settings
 // API limit is 1250 uploads per day or about 50 per hour
 // We'll be more conservative with 30 per hour (1 every 2 minutes)
-const IMGUR_UPLOADS_PER_HOUR = 30; 
+const IMGUR_UPLOADS_PER_HOUR = 50; 
 const MILLISECONDS_PER_HOUR = 60 * 60 * 1000;
 const UPLOAD_DELAY = Math.ceil(MILLISECONDS_PER_HOUR / IMGUR_UPLOADS_PER_HOUR);
 const MAX_RETRIES = 5;

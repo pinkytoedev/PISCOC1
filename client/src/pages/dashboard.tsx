@@ -5,7 +5,6 @@ import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { StatusCard } from "@/components/dashboard/status-card";
 import { ArticleTable } from "@/components/dashboard/article-table";
-import MigrationProgressBar from "@/components/dashboard/MigrationProgressBar";
 import { Button } from "@/components/ui/button";
 import { Newspaper, Clock, CheckCircle, ChevronRight } from "lucide-react";
 import { Article } from "@shared/schema";
@@ -119,10 +118,7 @@ export default function Dashboard() {
               )}
             </div>
             
-            {/* Migration Progress */}
-            <div className="mb-6">
-              <MigrationProgressBar />
-            </div>
+  
 
             {/* Recent Articles Section */}
             <div className="mb-8">
