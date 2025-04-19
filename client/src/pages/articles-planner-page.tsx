@@ -44,6 +44,26 @@ export default function ArticlesPlannerPage() {
       // Use the scheduled date if available, fallback to publishedAt
       const dateStr = article.scheduled || (article.publishedAt ? new Date(article.publishedAt).toISOString() : '');
       
+      // Extract date and time for proper display in calendar
+      let startDate, endDate;
+      if (dateStr) {
+        // Create proper Date objects for the event
+        const date = new Date(dateStr);
+        
+        // Default to 9 AM if no specific time was provided (most articles)
+        if (article.scheduled && !article.scheduled.includes('T')) {
+          // If only date is provided (no time), set it to 9:00 AM
+          startDate = new Date(date.setHours(9, 0, 0));
+          endDate = new Date(date.setHours(10, 0, 0)); // 1 hour duration
+        } else {
+          // Use the actual time from the date
+          startDate = date;
+          // End time is 1 hour after start time
+          endDate = new Date(date);
+          endDate.setHours(endDate.getHours() + 1);
+        }
+      }
+      
       // Determine event color based on article status
       let color;
       switch (article.status) {
@@ -63,9 +83,9 @@ export default function ArticlesPlannerPage() {
       return {
         id: article.id.toString(),
         title: article.title,
-        start: dateStr,
-        end: dateStr,
-        allDay: true, // Set to true since articles don't have a specific time range
+        start: startDate || dateStr,
+        end: endDate || dateStr,
+        allDay: viewType === 'dayGridMonth', // Set to false for time views
         backgroundColor: color,
         borderColor: color,
         extendedProps: {
@@ -158,7 +178,10 @@ export default function ArticlesPlannerPage() {
             </div>
 
             {/* Calendar View */}
-            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 h-[calc(100vh-240px)]">
+            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 overflow-hidden" 
+                 style={{ 
+                   height: viewType === 'timeGridDay' ? 'calc(100vh-180px)' : 'calc(100vh-240px)',
+                 }}>
               {isLoading ? (
                 <div className="flex justify-center items-center h-full">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -191,8 +214,24 @@ export default function ArticlesPlannerPage() {
                   dayHeaderClassNames="text-gray-600 font-semibold"
                   titleFormat={{ 
                     year: 'numeric', 
-                    month: 'long' 
+                    month: 'long',
+                    day: 'numeric'
                   }}
+                  // Time display format
+                  slotLabelFormat={{
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  }}
+                  eventTimeFormat={{
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  }}
+                  // Better scrolling in time grid
+                  scrollTime="08:00:00"
+                  slotMinTime="07:00:00"
+                  slotMaxTime="20:00:00"
                   eventContent={(eventInfo) => {
                     // Use type assertion to get the article from extendedProps
                     const article = eventInfo.event.extendedProps?.article as Article | undefined;
@@ -228,7 +267,15 @@ export default function ArticlesPlannerPage() {
                                 {article.author && <span>By {article.author}</span>}
                               </div>
                               <div>
-                                {article.publishedAt && new Date(article.publishedAt).toLocaleDateString()}
+                                {article.publishedAt && 
+                                  new Date(article.publishedAt).toLocaleString(undefined, {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
+                                }
                               </div>
                             </div>
                             <Button 
