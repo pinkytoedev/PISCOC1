@@ -24,7 +24,7 @@ const imgbbSettingSchema = z.object({
   enabled: z.boolean().default(true)
 });
 
-// Types for form values
+// Type for form values
 type ImgBBSettingFormValues = z.infer<typeof imgbbSettingSchema>;
 
 export default function ImgBBPage() {
@@ -59,23 +59,27 @@ export default function ImgBBPage() {
     }
   });
   
-  // Watch form values for changes
+  // Reset form when settings change
   React.useEffect(() => {
-    if (settings && !form.formState.isDirty) {
+    if (settings) {
       form.reset({
         api_key: apiKeySetting?.value || '',
         enabled: apiKeySetting?.enabled === false ? false : true
       });
     }
-  }, [settings, form, apiKeySetting]);
+  }, [settings]);
   
   // Update setting mutation
   const updateSettingMutation = useMutation({
-    mutationFn: async ({ key, value, enabled }: { key: string; value: string; enabled?: boolean }) => {
-      return apiRequest(`/api/imgbb/settings/${key}`, 'POST', {
-        value, 
-        enabled
-      });
+    mutationFn: async (data: {key: string; value: string; enabled?: boolean}) => {
+      const response = await apiRequest("POST", `/api/imgbb/settings/${data.key}`, data);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update setting');
+      }
+      
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/imgbb/settings'] });
@@ -95,139 +99,185 @@ export default function ImgBBPage() {
       });
       
       toast({
-        title: "Settings saved",
-        description: "ImgBB integration settings have been updated successfully.",
+        title: 'ImgBB settings updated',
+        description: 'Your ImgBB integration settings have been saved successfully'
       });
       
       setIsSubmitting(false);
+      
     } catch (error) {
-      console.error('Failed to save settings:', error);
-      toast({
-        title: "Failed to save settings",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
-        variant: "destructive",
-      });
       setIsSubmitting(false);
+      
+      toast({
+        title: 'Error updating ImgBB settings',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive'
+      });
     }
   };
   
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-gray-50">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <Header />
-        <main className="flex-1 p-6">
-          <div className="mx-auto max-w-5xl space-y-6">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight">ImgBB Integration</h1>
-              <p className="text-muted-foreground">
-                Configure your ImgBB API settings for image uploads
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header title="ImgBB Integration" />
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="container py-4">
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold">ImgBB Integration</h1>
+              <p className="text-muted-foreground mt-1">
+                Configure ImgBB integration settings to enable image hosting before uploading to Airtable
               </p>
             </div>
             
-            <Separator />
-            
-            <div className="grid gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Image className="h-5 w-5" /> 
-                    ImgBB Configuration
-                  </CardTitle>
-                  <CardDescription>
-                    Configure your ImgBB API key for image uploads
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <div className="flex items-center justify-center p-6">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            {/* Status Banner */}
+            <div className={`mb-8 p-4 rounded-lg ${apiKeySetting?.value ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+              <div className="flex items-center gap-3">
+                {apiKeySetting?.value ? (
+                  <>
+                    <div className="bg-green-100 p-2 rounded-full">
+                      <Image className="h-6 w-6 text-green-600" />
                     </div>
-                  ) : (
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                        <Alert>
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertTitle>Important!</AlertTitle>
-                          <AlertDescription>
-                            You'll need an ImgBB API key to enable image uploads. You can get one for free at{" "}
-                            <a href="https://api.imgbb.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                              ImgBB API
-                            </a>
-                          </AlertDescription>
-                        </Alert>
-                        
-                        <FormField
-                          control={form.control}
-                          name="api_key"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>ImgBB API Key</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="Enter your ImgBB API key" 
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormDescription>
-                                You can get an API key from the{" "}
-                                <a href="https://api.imgbb.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">
-                                  ImgBB API page
-                                </a>
-                              </FormDescription>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="enabled"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                              <div className="space-y-0.5">
-                                <FormLabel className="text-base">Enable ImgBB Integration</FormLabel>
-                                <FormDescription>
-                                  When enabled, images will be uploaded to ImgBB before being linked to Airtable.
-                                </FormDescription>
-                              </div>
-                              <FormControl>
-                                <Switch
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <div className="flex justify-end">
-                          <Button type="submit" disabled={isSubmitting}>
-                            {isSubmitting ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Save className="mr-2 h-4 w-4" />
-                                Save Settings
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                      </form>
-                    </Form>
-                  )}
-                </CardContent>
-                <CardFooter className="flex justify-between bg-muted/50 text-xs text-muted-foreground">
-                  <div>Last updated: {apiKeySetting ? 'Updated' : 'Never'}</div>
-                  <div>{apiKeySetting?.enabled === false ? 'Disabled' : 'Enabled'}</div>
-                </CardFooter>
-              </Card>
+                    <div>
+                      <h2 className="text-lg font-medium text-green-800">ImgBB Integration Status: {apiKeySetting.enabled ? 'Enabled' : 'Configured but Disabled'}</h2>
+                      <p className="text-green-700 text-sm mt-1">
+                        {apiKeySetting.enabled 
+                          ? 'Images will be uploaded through ImgBB before being sent to Airtable.' 
+                          : 'Integration is configured but currently disabled. Enable it below to use ImgBB for image uploads.'}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-amber-100 p-2 rounded-full">
+                      <AlertCircle className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-medium text-amber-800">ImgBB Integration Status: Not Configured</h2>
+                      <p className="text-amber-700 text-sm mt-1">
+                        Enter your ImgBB API key below to enable seamless image hosting for Airtable.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
+            
+            {/* API Key Configuration */}
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle>ImgBB API Configuration</CardTitle>
+                <CardDescription>
+                  Configure your ImgBB API key to enable image hosting
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <FormField
+                      control={form.control}
+                      name="api_key"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>ImgBB API Key</FormLabel>
+                          <FormControl>
+                            <div className="flex items-center gap-2">
+                              <Input placeholder="Enter your ImgBB API key" {...field} />
+                            </div>
+                          </FormControl>
+                          <FormDescription>
+                            You can get your API key from the ImgBB website after signing up
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="enabled"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 bg-gray-50">
+                          <div className="space-y-0.5">
+                            <FormLabel className="text-base">
+                              Enable ImgBB Integration
+                            </FormLabel>
+                            <FormDescription>
+                              When enabled, all uploads will go through ImgBB first before being sent to Airtable
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <Button 
+                      type="submit" 
+                      size="lg" 
+                      className="w-full md:w-auto"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          Save ImgBB Settings
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+              <CardFooter className="bg-secondary/20 text-sm text-muted-foreground">
+                <p>
+                  Note: Your ImgBB API key is securely stored and never shared with third parties.
+                </p>
+              </CardFooter>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>How It Works</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p>
+                  The ImgBB integration provides a permanent hosting solution for your images:
+                </p>
+                <ol className="list-decimal ml-6 space-y-2">
+                  <li>Images are first uploaded to ImgBB using their API</li>
+                  <li>ImgBB provides a permanent, reliable URL for your image</li>
+                  <li>This URL is then stored in your Airtable records</li>
+                  <li>Images are accessible and fully optimized for performance</li>
+                </ol>
+                
+                <Separator className="my-4" />
+                
+                <p className="text-muted-foreground">
+                  <strong>Benefits:</strong> Using ImgBB as an intermediary for image storage provides faster loading times, better reliability, 
+                  and protection against image link breakage from direct Airtable attachments.
+                </p>
+                
+                <Alert className="bg-blue-50 border-blue-200">
+                  <AlertCircle className="h-4 w-4 text-blue-600" />
+                  <AlertTitle className="text-blue-800">Get Your ImgBB API Key</AlertTitle>
+                  <AlertDescription className="text-blue-700">
+                    Visit <a href="https://api.imgbb.com/" target="_blank" rel="noopener noreferrer" className="font-medium underline">api.imgbb.com</a> to 
+                    create an account and get your API key. You'll need this to enable the integration.
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );
