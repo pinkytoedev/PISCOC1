@@ -11,7 +11,8 @@ import {
   ChevronRight,
   BookOpen,
   Shield,
-  X
+  X,
+  CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -38,6 +39,11 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           name: "Articles",
           path: "/articles",
           icon: <Newspaper className="w-5 h-5" />
+        },
+        {
+          name: "Article Planner",
+          path: "/articles/planner",
+          icon: <CalendarDays className="w-5 h-5" />
         },
         {
           name: "Team Members",

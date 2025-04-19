@@ -10,6 +10,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import { EventSourceInput } from '@fullcalendar/core';
 import {
   Popover,
   PopoverContent,
@@ -74,7 +75,7 @@ export default function ArticlesPlannerPage() {
     }) : [];
   
   // Handle calendar event click
-  const handleEventClick = (clickInfo: any) => {
+  const handleEventClick = (clickInfo: { event: { extendedProps: { article: Article } } }) => {
     const article = clickInfo.event.extendedProps.article;
     const articleId = article.id;
     // Navigate to the article edit page or open a modal to view/edit
@@ -167,7 +168,7 @@ export default function ArticlesPlannerPage() {
                     center: 'title',
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                   }}
-                  events={calendarEvents}
+                  events={calendarEvents as EventSourceInput}
                   eventClick={handleEventClick}
                   eventContent={(eventInfo) => {
                     const article = eventInfo.event.extendedProps.article;
