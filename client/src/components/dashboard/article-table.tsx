@@ -230,8 +230,26 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     }
   };
   
+  // Track which articles we're already processing to prevent update loops
+  const [processedArticleIds, setProcessedArticleIds] = useState<Set<number>>(new Set());
+  
+  // Function to reset the processed articles list after a time period
+  // (useful when testing with the same articles repeatedly)
+  const resetProcessedArticles = useCallback(() => {
+    console.log("Resetting processed articles list");
+    setProcessedArticleIds(new Set());
+  }, []);
+  
+  // Periodically reset the processed articles list (every hour in production)
+  useEffect(() => {
+    // Reset every 10 minutes
+    const resetInterval = setInterval(resetProcessedArticles, 600000);
+    
+    return () => clearInterval(resetInterval);
+  }, [resetProcessedArticles]);
+
   // Function to check if an article should be published based on its scheduled date
-  const checkAndPublishScheduledArticles = () => {
+  const checkAndPublishScheduledArticles = useCallback(() => {
     if (!articles || articles.length === 0) return;
     
     const now = new Date();
@@ -244,8 +262,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         return false;
       }
       
-      // Skip if already published
-      if (article.status === 'published') {
+      // Skip if already published or if we're already processing this article
+      if (article.status === 'published' || processedArticleIds.has(article.id)) {
+        return false;
+      }
+      
+      // Skip if we're currently publishing this article
+      if (autoPublishingArticleId === article.id) {
         return false;
       }
       
@@ -261,21 +284,32 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         });
       }
       
-      // Check if the scheduled date has passed and publish regardless of current status
+      // Check if the scheduled date has passed
       return shouldPublish;
     });
     
     console.log(`Found ${articlesToPublish.length} articles to auto-publish`);
     
-    // Publish each article that needs to be published
-    articlesToPublish.forEach(article => {
+    // Only process if there are articles to publish
+    if (articlesToPublish.length > 0) {
+      // Add these articles to our processed set to prevent recursive updates
+      const newProcessedIds = new Set(processedArticleIds);
+      articlesToPublish.forEach(article => {
+        newProcessedIds.add(article.id);
+      });
+      setProcessedArticleIds(newProcessedIds);
+      
+      // Process one article at a time to avoid overwhelming the server
+      // We'll process the first article in the list
+      const article = articlesToPublish[0];
       console.log(`Auto-publishing article ${article.id}: "${article.title}"`);
+      
       updateArticleStatusMutation.mutate({
         id: article.id,
         status: 'published'
       });
-    });
-  };
+    }
+  }, [articles, processedArticleIds, updateArticleStatusMutation, autoPublishingArticleId]);
   
   // Set up periodic checking for articles that need to be published
   useEffect(() => {
@@ -284,9 +318,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       console.log("Articles data loaded, checking for scheduled articles...");
       checkAndPublishScheduledArticles();
       
-      // Set up interval to check every 15 seconds for testing
-      // (In production, this would be every minute)
-      const intervalId = setInterval(checkAndPublishScheduledArticles, 15000);
+      // Set up interval to check every 60 seconds (1 minute)
+      const intervalId = setInterval(checkAndPublishScheduledArticles, 60000);
       
       // Clean up interval on unmount
       return () => {
@@ -294,7 +327,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         clearInterval(intervalId);
       };
     }
-  }, [articles, updateArticleStatusMutation]);
+  }, [articles, checkAndPublishScheduledArticles]);
   
   // Filter articles first
   const filteredArticles = articles?.filter(article => {
