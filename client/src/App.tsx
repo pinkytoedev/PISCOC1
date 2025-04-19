@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import AuthPage from "@/pages/auth-page";
 import Dashboard from "@/pages/dashboard";
 import ArticlesPage from "@/pages/articles-page";
+import ArticlesPlannerPage from "@/pages/articles-planner-page";
 import TeamMembersPage from "@/pages/team-members-page";
 import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
