@@ -241,23 +241,48 @@ async function migrateImagesToImgBB() {
     
     console.log('Fetching articles from Airtable...');
     
-    // Fetch records from Airtable
-    const url = `https://api.airtable.com/v0/${settings.airtable.baseId}/${encodeURIComponent(settings.airtable.tableName)}`;
+    // Fetch records from Airtable with pagination support
+    let allRecords = [];
+    let offset = null;
     
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${settings.airtable.apiKey}`
+    do {
+      // Build URL with offset if we have one
+      let url = `https://api.airtable.com/v0/${settings.airtable.baseId}/${encodeURIComponent(settings.airtable.tableName)}`;
+      if (offset) {
+        url += `?offset=${offset}`;
       }
-    });
+      
+      console.log(`Fetching records from Airtable${offset ? ' with offset' : ''}...`);
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${settings.airtable.apiKey}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch records from Airtable: ${response.status} ${await response.text()}`);
+      }
+      
+      const data = await response.json();
+      
+      // Add records to our collection
+      allRecords = [...allRecords, ...data.records];
+      
+      // Get the offset for the next page (if any)
+      offset = data.offset || null;
+      
+      console.log(`Fetched ${data.records.length} records${offset ? ', more pages available' : ''}`);
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+    } while (offset);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch records from Airtable: ${response.status} ${await response.text()}`);
-    }
-    
-    const data = await response.json();
+    console.log(`Total records fetched: ${allRecords.length}`);
     
     // Filter records with MainImage attachments
-    const recordsWithAttachments = data.records.filter(record => 
+    const recordsWithAttachments = allRecords.filter(record => 
       record.fields.MainImage && 
       Array.isArray(record.fields.MainImage) && 
       record.fields.MainImage.length > 0
