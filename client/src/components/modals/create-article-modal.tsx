@@ -299,12 +299,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         let imageUrl: string | null = null;
         
         // Handle different response formats from various endpoints
-        if (data.imgur && data.imgur.link) {
-          imageUrl = data.imgur.link;
-        } else if (data.imgurUrl) {
-          imageUrl = data.imgurUrl;
-        } else if (data.imgurLink) {
-          imageUrl = data.imgurLink;
+        if (data.imgbb && data.imgbb.url) {
+          imageUrl = data.imgbb.url;
+        } else if (data.imgbbUrl) {
+          imageUrl = data.imgbbUrl;
+        } else if (data.imgbbLink) {
+          imageUrl = data.imgbbLink;
         } else if (data.airtable && data.airtable.url) {
           imageUrl = data.airtable.url;
         } else if (data.attachment && data.attachment.url) {
@@ -404,12 +404,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         let imageUrl: string | null = null;
         
         // Handle different response formats from various endpoints
-        if (data.imgur && data.imgur.link) {
-          imageUrl = data.imgur.link;
-        } else if (data.imgurUrl) {
-          imageUrl = data.imgurUrl;
-        } else if (data.imgurLink) {
-          imageUrl = data.imgurLink;
+        if (data.imgbb && data.imgbb.url) {
+          imageUrl = data.imgbb.url;
+        } else if (data.imgbbUrl) {
+          imageUrl = data.imgbbUrl;
+        } else if (data.imgbbLink) {
+          imageUrl = data.imgbbLink;
         } else if (data.airtable && data.airtable.url) {
           imageUrl = data.airtable.url;
         } else if (data.attachment && data.attachment.url) {

@@ -2768,9 +2768,9 @@ async function processDiscordAttachment(
     return {
       success: true,
       message: airtableResult 
-        ? `Image uploaded successfully to Imgur and Airtable for field ${fieldName}.` 
-        : `Image uploaded successfully to Imgur for field ${fieldName}.`,
-      url: imgurResult.link
+        ? `Image uploaded successfully to ImgBB and Airtable for field ${fieldName}.` 
+        : `Image uploaded successfully to ImgBB for field ${fieldName}.`,
+      url: imgurResult.url
     };
   } catch (error) {
     console.error('Error processing Discord attachment:', error);
