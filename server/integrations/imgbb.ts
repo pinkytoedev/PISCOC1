@@ -1,8 +1,22 @@
 import { Express, Request, Response } from 'express';
+import fetch from 'node-fetch';
+import FormData from 'form-data';
+import multer from 'multer';
+import fs from 'fs';
 import { storage } from '../storage';
-import { upload } from '../utils/fileUpload';
-import { uploadImageToImgBB, uploadImageUrlToImgBB } from '../utils/imgbbUploader';
-import { cleanupUploadedFile, uploadImageUrlToAirtable, uploadImageUrlAsLinkField } from '../utils/imageUploader';
+import { uploadImageToImgBB } from '../utils/imgbbUploader';
+
+// Configure multer for file uploads
+const upload = multer({ dest: 'uploads/' });
+
+// Helper function to get ImgBB settings
+async function getImgBBSettings() {
+  const settings = await storage.getIntegrationSettings('imgbb');
+  return {
+    apiKey: settings.find(s => s.key === 'api_key')?.value,
+    enabled: settings.find(s => s.key === 'api_key')?.enabled !== false,
+  };
+}
 
 export function setupImgBBRoutes(app: Express) {
   // Get ImgBB integration settings
@@ -105,81 +119,98 @@ export function setupImgBBRoutes(app: Express) {
       
       // Check if file was uploaded
       if (!req.file) {
-        return res.status(400).json({ message: 'No image file uploaded' });
+        return res.status(400).json({ message: 'No file uploaded' });
       }
       
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
+      // Get ImgBB settings
+      const settings = await getImgBBSettings();
+      
+      // Make sure ImgBB integration is enabled and has an API key
+      if (!settings.enabled || !settings.apiKey) {
+        return res.status(400).json({ message: 'ImgBB integration is not enabled or not configured properly' });
       }
       
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
-      // Step 1: Upload image to ImgBB
-      const file = {
+      // Upload to ImgBB
+      const imgbbResult = await uploadImageToImgBB({
         path: req.file.path,
         filename: req.file.originalname,
-        mimetype: req.file.mimetype,
-        size: req.file.size
-      };
-      
-      const imgbbResult = await uploadImageToImgBB(file);
-      
-      // Always cleanup the uploaded file after processing
-      cleanupUploadedFile(file.path);
-      
-      if (!imgbbResult) {
-        return res.status(500).json({ message: 'Failed to upload image to ImgBB' });
-      }
-      
-      // Map target field name for Airtable
-      const targetFieldName = fieldName === 'instaPhoto' ? 'InstaPhoto' : 'MainImage';
-      
-      // Step 2: Upload to Airtable using link field
-      const airtableResult = await uploadImageUrlAsLinkField(
-        imgbbResult.url,
-        article.externalId,
-        targetFieldName
-      );
-      
-      if (!airtableResult) {
-        return res.status(500).json({ 
-          message: 'Image uploaded to ImgBB but failed to update Airtable',
-          imgbbUrl: imgbbResult.url
-        });
-      }
-      
-      // Step 3: Update the article in the database with the new image URL
-      const updateData: any = {};
-      
-      if (fieldName === 'MainImage') {
-        updateData.imageUrl = imgbbResult.url;
-        updateData.imageType = 'url';
-      } else if (fieldName === 'instaPhoto') {
-        updateData.instagramImageUrl = imgbbResult.url;
-      }
-      
-      await storage.updateArticle(articleId, updateData);
-      
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'upload',
-        resourceType: 'image',
-        resourceId: articleId.toString(),
-        details: {
-          fieldName,
-          imgbbId: imgbbResult.id,
-          imgbbUrl: imgbbResult.url,
-          filename: file.filename
-        }
+        size: req.file.size,
+        mimetype: req.file.mimetype
       });
       
+      if (!imgbbResult) {
+        throw new Error('Failed to upload to ImgBB');
+      }
+      
+      // Update Airtable with the new ImgBB URL
+      const article = await storage.getArticleById(articleId);
+      if (!article) {
+        throw new Error(`Article with ID ${articleId} not found`);
+      }
+      
+      // Make sure article has an external ID (Airtable ID)
+      if (!article.externalId) {
+        throw new Error(`Article with ID ${articleId} does not have an external ID`);
+      }
+      
+      // Get Airtable settings
+      const airtableSettings = await storage.getIntegrationSettings('airtable');
+      const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
+      const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
+      const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
+      
+      if (!apiKey || !baseId || !tableName) {
+        throw new Error('Airtable integration is not configured properly');
+      }
+      
+      // Instead of updating the Airtable attachment field, we'll update the URL field for the image
+      // Use MainImageLink for MainImage and InstaPhotoLink for instaPhoto
+      const linkFieldName = fieldName === 'MainImage' ? 'MainImageLink' : 'InstaPhotoLink';
+      
+      const airtableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${article.externalId}`;
+      
+      const updates = {
+        fields: {
+          [linkFieldName]: imgbbResult.url
+        }
+      };
+      
+      const airtableResponse = await fetch(airtableUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!airtableResponse.ok) {
+        const errorText = await airtableResponse.text();
+        console.error('Airtable Error:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: 'Unknown error' };
+        }
+        
+        // Check if this is a field error (field doesn't exist)
+        if (airtableResponse.status === 422 && errorData.error?.type === 'UNKNOWN_FIELD_NAME') {
+          throw new Error(`The field "${linkFieldName}" does not exist in your Airtable table. You need to create a URL or Text field with this name in your Airtable table.`);
+        }
+        
+        throw new Error(`Failed to update Airtable: ${errorText}`);
+      }
+      
+      const airtableResult = await airtableResponse.json();
+      
+      // Clean up the temporary file
+      fs.unlinkSync(req.file.path);
+      
+      // Return success response
       res.json({
+        success: true,
         message: `Image uploaded successfully to ImgBB and then to ${fieldName}`,
         imgbb: {
           id: imgbbResult.id,
@@ -190,6 +221,12 @@ export function setupImgBBRoutes(app: Express) {
       });
     } catch (error) {
       console.error('Error in ImgBB to Airtable upload:', error);
+      
+      // Clean up the temporary file if it exists
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
       res.status(500).json({ 
         message: 'Failed to process image upload',
         error: error instanceof Error ? error.message : String(error)
@@ -214,84 +251,111 @@ export function setupImgBBRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'instaPhoto'" });
       }
       
-      const { imageUrl, filename } = req.body;
+      const { imageUrl } = req.body;
       
       if (!imageUrl) {
         return res.status(400).json({ message: 'Image URL is required' });
       }
       
-      if (!filename) {
-        return res.status(400).json({ message: 'Filename is required' });
+      // Get ImgBB settings
+      const settings = await getImgBBSettings();
+      
+      // Make sure ImgBB integration is enabled and has an API key
+      if (!settings.enabled || !settings.apiKey) {
+        return res.status(400).json({ message: 'ImgBB integration is not enabled or not configured properly' });
       }
       
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
+      // Upload to ImgBB
+      const formData = new FormData();
+      formData.append('key', settings.apiKey);
+      formData.append('image', imageUrl);
       
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
-      // Step 1: Upload URL to ImgBB
-      const imgbbResult = await uploadImageUrlToImgBB(imageUrl, filename);
-      
-      if (!imgbbResult) {
-        return res.status(500).json({ message: 'Failed to upload image URL to ImgBB' });
-      }
-      
-      // Map target field name for Airtable
-      const targetFieldName = fieldName === 'instaPhoto' ? 'InstaPhoto' : 'MainImage';
-      
-      // Step 2: Upload to Airtable using link field
-      const airtableResult = await uploadImageUrlAsLinkField(
-        imgbbResult.url,
-        article.externalId,
-        targetFieldName
-      );
-      
-      if (!airtableResult) {
-        return res.status(500).json({ 
-          message: 'Image uploaded to ImgBB but failed to update Airtable',
-          imgbbUrl: imgbbResult.url 
-        });
-      }
-      
-      // Step 3: Update the article in the database with the new image URL
-      const updateData: any = {};
-      
-      if (fieldName === 'MainImage') {
-        updateData.imageUrl = imgbbResult.url;
-        updateData.imageType = 'url';
-      } else if (fieldName === 'instaPhoto') {
-        updateData.instagramImageUrl = imgbbResult.url;
-      }
-      
-      await storage.updateArticle(articleId, updateData);
-      
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'upload',
-        resourceType: 'image_url',
-        resourceId: articleId.toString(),
-        details: {
-          fieldName,
-          originalUrl: imageUrl,
-          imgbbId: imgbbResult.id,
-          imgbbUrl: imgbbResult.url,
-          filename
-        }
+      const imgbbResponse = await fetch('https://api.imgbb.com/1/upload', {
+        method: 'POST',
+        body: formData
       });
       
+      if (!imgbbResponse.ok) {
+        const errorText = await imgbbResponse.text();
+        throw new Error(`Failed to upload to ImgBB: ${errorText}`);
+      }
+      
+      const imgbbResult = await imgbbResponse.json();
+      
+      if (!imgbbResult.success) {
+        throw new Error('ImgBB upload failed: ' + (imgbbResult.error?.message || 'Unknown error'));
+      }
+      
+      // Update Airtable with the new ImgBB URL
+      const article = await storage.getArticleById(articleId);
+      if (!article) {
+        throw new Error(`Article with ID ${articleId} not found`);
+      }
+      
+      // Make sure article has an external ID (Airtable ID)
+      if (!article.externalId) {
+        throw new Error(`Article with ID ${articleId} does not have an external ID`);
+      }
+      
+      // Get Airtable settings
+      const airtableSettings = await storage.getIntegrationSettings('airtable');
+      const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
+      const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
+      const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
+      
+      if (!apiKey || !baseId || !tableName) {
+        throw new Error('Airtable integration is not configured properly');
+      }
+      
+      // Instead of updating the Airtable attachment field, we'll update the URL field
+      const linkFieldName = fieldName === 'MainImage' ? 'MainImageLink' : 'InstaPhotoLink';
+      
+      const airtableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${article.externalId}`;
+      
+      const updates = {
+        fields: {
+          [linkFieldName]: imgbbResult.data.url
+        }
+      };
+      
+      const airtableResponse = await fetch(airtableUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!airtableResponse.ok) {
+        const errorText = await airtableResponse.text();
+        console.error('Airtable Error:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: 'Unknown error' };
+        }
+        
+        // Check if this is a field error (field doesn't exist)
+        if (airtableResponse.status === 422 && errorData.error?.type === 'UNKNOWN_FIELD_NAME') {
+          throw new Error(`The field "${linkFieldName}" does not exist in your Airtable table. You need to create a URL or Text field with this name in your Airtable table.`);
+        }
+        
+        throw new Error(`Failed to update Airtable: ${errorText}`);
+      }
+      
+      const airtableResult = await airtableResponse.json();
+      
+      // Return success response
       res.json({
+        success: true,
         message: `Image URL uploaded successfully to ImgBB and then to ${fieldName}`,
         imgbb: {
-          id: imgbbResult.id,
-          url: imgbbResult.url,
-          display_url: imgbbResult.display_url
+          id: imgbbResult.data.id,
+          url: imgbbResult.data.url,
+          display_url: imgbbResult.data.display_url
         },
         airtable: airtableResult
       });

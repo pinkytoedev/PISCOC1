@@ -555,21 +555,21 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           </div>
         )}
         
-        {/* Imgur Integration Status */}
+        {/* ImgBB Integration Status */}
         {isFromAirtable && (
-          <div className={`mb-4 p-4 border rounded-md ${imgurEnabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+          <div className={`mb-4 p-4 border rounded-md ${imgbbEnabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
             <div className="flex items-center">
-              <Image className={`h-4 w-4 mr-2 ${imgurEnabled ? 'text-green-500' : 'text-gray-500'}`} />
-              <h5 className={`text-sm font-medium ${imgurEnabled ? 'text-green-700' : 'text-gray-700'}`}>
-                Imgur Integration {imgurEnabled ? 'Enabled' : 'Disabled'}
+              <Image className={`h-4 w-4 mr-2 ${imgbbEnabled ? 'text-green-500' : 'text-gray-500'}`} />
+              <h5 className={`text-sm font-medium ${imgbbEnabled ? 'text-green-700' : 'text-gray-700'}`}>
+                ImgBB Integration {imgbbEnabled ? 'Enabled' : 'Disabled'}
               </h5>
             </div>
-            <p className={`text-sm mt-1 ${imgurEnabled ? 'text-green-600' : 'text-gray-600'}`}>
-              {imgurEnabled 
-                ? 'Images will be uploaded to Imgur first, then the URL will be sent to Airtable.' 
-                : 'Images will be uploaded directly to Airtable. To enable Imgur integration, visit the Imgur settings page.'}
+            <p className={`text-sm mt-1 ${imgbbEnabled ? 'text-green-600' : 'text-gray-600'}`}>
+              {imgbbEnabled 
+                ? 'Images will be uploaded to ImgBB first, then the URL will be sent to Airtable.' 
+                : 'Images will be uploaded directly to Airtable. To enable ImgBB integration, visit the ImgBB settings page.'}
             </p>
-            {imgurEnabled && (
+            {imgbbEnabled && (
               <div className="mt-2 text-xs text-green-600">
                 <p><span className="font-semibold">Benefits:</span></p>
                 <ul className="list-disc pl-5 mt-1 space-y-1">
@@ -721,11 +721,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                   )}
                   {mainImageUploading ? (
                     <span className="font-medium text-amber-600">
-                      Uploading image {imgurEnabled ? 'via Imgur to Airtable' : 'to Airtable'}...
+                      Uploading image {imgbbEnabled ? 'via ImgBB to Airtable' : 'to Airtable'}...
                     </span>
                   ) : (
                     <span>
-                      You can {imgurEnabled ? 'upload images via Imgur to the' : 'directly upload images to the'} MainImage field in Airtable using the Upload button
+                      You can {imgbbEnabled ? 'upload images via ImgBB to the' : 'directly upload images to the'} MainImage field in Airtable using the Upload button
                     </span>
                   )}
                 </p>
@@ -796,11 +796,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                   )}
                   {instagramImageUploading ? (
                     <span className="font-medium text-amber-600">
-                      Uploading image {imgurEnabled ? 'via Imgur to Airtable' : 'to Airtable'} instaPhoto field...
+                      Uploading image {imgbbEnabled ? 'via ImgBB to Airtable' : 'to Airtable'} instaPhoto field...
                     </span>
                   ) : (
                     <span>
-                      You can {imgurEnabled ? 'upload images via Imgur to the' : 'directly upload images to the'} instaPhoto field in Airtable using the Upload button
+                      You can {imgbbEnabled ? 'upload images via ImgBB to the' : 'directly upload images to the'} instaPhoto field in Airtable using the Upload button
                     </span>
                   )}
                 </p>
