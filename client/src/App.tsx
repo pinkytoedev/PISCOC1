@@ -18,6 +18,7 @@ import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
 import ImgurPage from "@/pages/integrations/imgur-page";
+import ImgBBPage from "@/pages/integrations/imgbb-page";
 import DocsPage from "@/pages/docs-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TestPage from "@/pages/test-page";
@@ -36,6 +37,7 @@ function Router() {
       <ProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <ProtectedRoute path="/integrations/instagram" component={InstagramPage} />
       <ProtectedRoute path="/integrations/imgur" component={ImgurPage} />
+      <ProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
       <ProtectedRoute path="/docs" component={DocsPage} />
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
