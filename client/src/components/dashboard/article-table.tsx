@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
 import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown } from "lucide-react";
@@ -39,9 +39,46 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   const [uploadingArticleId, setUploadingArticleId] = useState<number | null>(null);
   const [uploadingField, setUploadingField] = useState<'MainImage' | 'instaPhoto' | null>(null);
   const [pushingArticleId, setPushingArticleId] = useState<number | null>(null);
+  const [autoPublishingArticleId, setAutoPublishingArticleId] = useState<number | null>(null);
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
+  });
+  
+  // Add mutation for updating article status to published
+  const updateArticleStatusMutation = useMutation({
+    mutationFn: async (article: { id: number, status: string }) => {
+      setAutoPublishingArticleId(article.id);
+      const response = await apiRequest(
+        "PUT", 
+        `/api/articles/${article.id}`,
+        { status: article.status }
+      );
+      return await response.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      
+      // After updating to published, update in Airtable if it's an Airtable article
+      const article = articles?.find(a => a.id === variables.id);
+      if (article && article.source === 'airtable' && article.externalId) {
+        updateAirtableMutation.mutate(article.id);
+      }
+      
+      setAutoPublishingArticleId(null);
+      toast({
+        title: "Article status updated",
+        description: `Article status was set to "${variables.status}"`,
+      });
+    },
+    onError: (error) => {
+      setAutoPublishingArticleId(null);
+      toast({
+        title: "Status update failed",
+        description: error.message || "Failed to update article status.",
+        variant: "destructive",
+      });
+    },
   });
   
   const deleteArticleMutation = useMutation({
@@ -192,6 +229,44 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       }
     }
   };
+  
+  // Function to check if an article should be published based on its scheduled date
+  const checkAndPublishScheduledArticles = () => {
+    if (!articles || articles.length === 0) return;
+    
+    const now = new Date();
+    
+    // Find articles that are scheduled and their published date has passed
+    const articlesToPublish = articles.filter(article => {
+      // Only check articles that have a publish date, are not already published, and are in the "scheduled" status
+      if (!article.publishedAt || article.status === 'published') {
+        return false;
+      }
+      
+      const scheduledDate = new Date(article.publishedAt);
+      return scheduledDate <= now && article.status === 'scheduled';
+    });
+    
+    // Publish each article that needs to be published
+    articlesToPublish.forEach(article => {
+      updateArticleStatusMutation.mutate({
+        id: article.id,
+        status: 'published'
+      });
+    });
+  };
+  
+  // Set up periodic checking for articles that need to be published
+  useEffect(() => {
+    // Check immediately when component mounts or articles data changes
+    checkAndPublishScheduledArticles();
+    
+    // Set up interval to check every minute
+    const intervalId = setInterval(checkAndPublishScheduledArticles, 60000);
+    
+    // Clean up interval on unmount
+    return () => clearInterval(intervalId);
+  }, [articles]);
   
   // Filter articles first
   const filteredArticles = articles?.filter(article => {
@@ -538,7 +613,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <StatusBadge status={article.status || 'draft'} />
+                    <div className="flex items-center space-x-1">
+                      <StatusBadge status={article.status || 'draft'} />
+                      {autoPublishingArticleId === article.id && (
+                        <div className="ml-2 flex items-center text-xs text-amber-600">
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          <span>Publishing...</span>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {showCreationDate 
@@ -747,7 +830,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                       ID: {article.id} • {article.source || 'Local'}
                     </p>
                   </div>
-                  <StatusBadge status={article.status || 'draft'} />
+                  <div className="flex flex-col items-end">
+                    <StatusBadge status={article.status || 'draft'} />
+                    {autoPublishingArticleId === article.id && (
+                      <div className="flex items-center text-xs text-amber-600 mt-1">
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        <span>Publishing...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3">
