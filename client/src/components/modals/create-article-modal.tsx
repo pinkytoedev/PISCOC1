@@ -102,6 +102,21 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         };
       }
       
+      // Format date for datetime-local input if we have publishedAt
+      if (formDataToUse.publishedAt instanceof Date) {
+        const dateObj = formDataToUse.publishedAt;
+        
+        // Format the date as YYYY-MM-DDThh:mm (format required by datetime-local)
+        // This will convert to local time zone
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const hours = String(dateObj.getHours()).padStart(2, '0');
+        const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+        
+        formDataToUse.date = `${year}-${month}-${day}T${hours}:${minutes}`;
+      }
+      
       // Set photo to "none" if it's empty for select component
       if (!formDataToUse.photo) {
         formDataToUse.photo = "none";
@@ -476,35 +491,40 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     // Create a copy of the form data to modify
     const submissionData = { ...formData };
     
-    // Handle publishedAt field for validation
-    // Always ensure publishedAt is a proper Date object or null
-    if (submissionData.publishedAt) {
-      // If publishedAt is a string (from JSON or form input), convert it to a Date
-      if (typeof submissionData.publishedAt === 'string') {
-        try {
-          submissionData.publishedAt = new Date(submissionData.publishedAt);
-          // Check for invalid date
-          if (isNaN(submissionData.publishedAt.getTime())) {
-            // If date is invalid, set it to current date
+    // Handle date field from datetime-local input
+    if (submissionData.date) {
+      // Convert date string from datetime-local to Date object
+      try {
+        const dateTime = new Date(submissionData.date);
+        
+        // Check if valid date
+        if (!isNaN(dateTime.getTime())) {
+          // Use this date for publishedAt
+          submissionData.publishedAt = dateTime;
+          
+          // Keep the ISO string for Airtable (it already has the right format from datetime-local)
+          // submissionData.date is already correctly formatted from the input
+        } else {
+          console.warn("Invalid date format from datetime-local input");
+          // If date is invalid and status is published, default to current
+          if (submissionData.status === "published") {
             submissionData.publishedAt = new Date();
+            submissionData.date = submissionData.publishedAt.toISOString();
           }
-        } catch (error) {
-          // If date parsing fails completely, set to current date
+        }
+      } catch (error) {
+        console.error("Error parsing date:", error);
+        // If parsing fails and status is published, default to current
+        if (submissionData.status === "published") {
           submissionData.publishedAt = new Date();
+          submissionData.date = submissionData.publishedAt.toISOString();
         }
       }
-    } 
-    // For articles being published without a date, set to current date
+    }
+    // If no date is provided but status is published, set current date
     else if (submissionData.status === "published") {
       submissionData.publishedAt = new Date();
-    }
-    
-    // Always set the Airtable date field from publishedAt if it exists
-    // Use full ISO format with timezone for Airtable
-    if (submissionData.publishedAt instanceof Date) {
-      // Set the complete ISO string for Airtable which expects timestamps
       submissionData.date = submissionData.publishedAt.toISOString();
-      console.log("Preserving Airtable date format for article from Airtable source");
     }
     
     // Set the finished field based on status
@@ -880,14 +900,14 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             </div>
             
             <div>
-              <Label htmlFor="date">Publication Date</Label>
+              <Label htmlFor="date">Publication Date & Time</Label>
               <Input
                 id="date"
                 name="date"
-                type="date"
+                type="datetime-local"
                 value={formData.date || ''}
                 onChange={handleInputChange}
-                placeholder="YYYY-MM-DD"
+                placeholder="YYYY-MM-DD HH:MM"
               />
               <p className="text-xs text-gray-500 mt-1">
                 Used for Airtable chronological ordering
