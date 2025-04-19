@@ -146,13 +146,21 @@ export default function Dashboard() {
                       {recentArticles.map((article) => (
                         <div key={article.id} className="p-4 hover:bg-gray-50">
                           <div className="flex items-center">
-                            {article.imageUrl && (
+                            {article.imageUrl ? (
                               <div className="flex-shrink-0 mr-4">
                                 <img 
                                   src={article.imageUrl} 
                                   alt={article.title} 
                                   className="h-16 w-16 object-cover rounded"
                                 />
+                              </div>
+                            ) : (
+                              <div className="flex-shrink-0 mr-4">
+                                <div className="h-16 w-16 rounded bg-gray-200 flex items-center justify-center text-gray-500">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
                               </div>
                             )}
                             <div>
@@ -212,13 +220,21 @@ export default function Dashboard() {
                       {pendingArticles.map((article) => (
                         <div key={article.id} className="p-4 hover:bg-gray-50">
                           <div className="flex items-center">
-                            {article.imageUrl && (
+                            {article.imageUrl ? (
                               <div className="flex-shrink-0 mr-4">
                                 <img 
                                   src={article.imageUrl} 
                                   alt={article.title} 
                                   className="h-16 w-16 object-cover rounded"
                                 />
+                              </div>
+                            ) : (
+                              <div className="flex-shrink-0 mr-4">
+                                <div className="h-16 w-16 rounded bg-gray-200 flex items-center justify-center text-gray-500">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </div>
                               </div>
                             )}
                             <div className="flex-1">
