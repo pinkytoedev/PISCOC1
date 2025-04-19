@@ -143,7 +143,7 @@ export function setupImgBBRoutes(app: Express) {
       }
       
       // Update Airtable with the new ImgBB URL
-      const article = await storage.getArticleById(articleId);
+      const article = await storage.getArticle(articleId);
       if (!article) {
         throw new Error(`Article with ID ${articleId} not found`);
       }
@@ -287,7 +287,7 @@ export function setupImgBBRoutes(app: Express) {
       }
       
       // Update Airtable with the new ImgBB URL
-      const article = await storage.getArticleById(articleId);
+      const article = await storage.getArticle(articleId);
       if (!article) {
         throw new Error(`Article with ID ${articleId} not found`);
       }
