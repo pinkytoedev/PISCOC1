@@ -31,7 +31,7 @@ import fetch from 'node-fetch';
 import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
-import { uploadImageToImgur, uploadImageUrlToImgur } from '../utils/imgurUploader';
+import { uploadImageToImgBB, uploadImageUrlToImgBB } from '../utils/imgbbUploader';
 import { uploadImageToAirtable, uploadImageUrlToAirtable } from '../utils/imageUploader';
 import { marked } from 'marked';
 
@@ -2719,7 +2719,7 @@ async function processDiscordAttachment(
     console.log(`Processing Discord attachment for article ID ${articleId}, title "${article.title}", field ${fieldName}`);
     
     // Upload directly to Imgur using the URL from Discord
-    const imgurResult = await uploadImageUrlToImgur(
+    const imgurResult = await uploadImageUrlToImgBB(
       attachment.url,
       attachment.name || `discord_upload_${Date.now()}.jpg`
     );
@@ -2727,7 +2727,7 @@ async function processDiscordAttachment(
     if (!imgurResult) {
       return {
         success: false,
-        message: 'Failed to upload image to Imgur.'
+        message: 'Failed to upload image to ImgBB.'
       };
     }
     
@@ -2735,7 +2735,7 @@ async function processDiscordAttachment(
     let airtableResult = null;
     if (article.source === 'airtable' && article.externalId) {
       airtableResult = await uploadImageUrlToAirtable(
-        imgurResult.link,
+        imgurResult.url,
         article.externalId,
         fieldName,
         attachment.name || `discord_upload_${Date.now()}.jpg`
@@ -2744,8 +2744,8 @@ async function processDiscordAttachment(
       if (!airtableResult) {
         return {
           success: true,
-          message: `Image uploaded to Imgur (${imgurResult.link}) but failed to attach to Airtable record. The article will be updated with the Imgur URL.`,
-          url: imgurResult.link
+          message: `Image uploaded to ImgBB (${imgurResult.url}) but failed to attach to Airtable record. The article will be updated with the ImgBB URL.`,
+          url: imgurResult.url
         };
       }
     }
@@ -2754,11 +2754,11 @@ async function processDiscordAttachment(
     const updateData: Partial<Article> = {};
     
     if (fieldName === 'MainImage') {
-      updateData.imageUrl = imgurResult.link;
-      console.log(`Updating article ${articleId} with MainImage URL: ${imgurResult.link}`);
+      updateData.imageUrl = imgurResult.url;
+      console.log(`Updating article ${articleId} with MainImage URL: ${imgurResult.url}`);
     } else if (fieldName === 'instaPhoto') {
-      updateData.instagramImageUrl = imgurResult.link;
-      console.log(`Updating article ${articleId} with Instagram image URL: ${imgurResult.link}`);
+      updateData.instagramImageUrl = imgurResult.url;
+      console.log(`Updating article ${articleId} with Instagram image URL: ${imgurResult.url}`);
     }
     
     // Update the article
