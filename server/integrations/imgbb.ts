@@ -153,67 +153,57 @@ export function setupImgBBRoutes(app: Express) {
         throw new Error(`Article with ID ${articleId} does not have an external ID`);
       }
       
-      // Attempt to update Airtable if the article has an externalId (Airtable ID)
-      let airtableResult = null;
+      // Get Airtable settings
+      const airtableSettings = await storage.getIntegrationSettings('airtable');
+      const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
+      const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
+      const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
       
-      if (article.externalId && article.source === 'airtable') {
-        try {
-          // Get Airtable settings
-          const airtableSettings = await storage.getIntegrationSettings('airtable');
-          const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
-          const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
-          const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
-          
-          if (!apiKey || !baseId || !tableName) {
-            console.warn('Airtable integration is not configured properly. Skipping Airtable update.');
-          } else {
-            // Instead of updating the Airtable attachment field, we'll update the URL field for the image
-            // Use MainImageLink for MainImage and InstaPhotoLink for instaPhoto
-            const linkFieldName = fieldName === 'MainImage' ? 'MainImageLink' : 'InstaPhotoLink';
-            
-            const airtableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${article.externalId}`;
-            
-            const updates = {
-              fields: {
-                [linkFieldName]: imgbbResult.url
-              }
-            };
-            
-            const airtableResponse = await fetch(airtableUrl, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(updates)
-            });
-            
-            if (!airtableResponse.ok) {
-              const errorText = await airtableResponse.text();
-              console.error('Airtable Error:', errorText);
-              
-              let errorData;
-              try {
-                errorData = JSON.parse(errorText);
-              } catch (e) {
-                errorData = { error: 'Unknown error' };
-              }
-              
-              // Check if this is a field error (field doesn't exist)
-              if (airtableResponse.status === 422 && errorData.error?.type === 'UNKNOWN_FIELD_NAME') {
-                console.warn(`The field "${linkFieldName}" does not exist in your Airtable table. You need to create a URL or Text field with this name in your Airtable table.`);
-              } else {
-                console.warn(`Failed to update Airtable: ${errorText}`);
-              }
-            } else {
-              airtableResult = await airtableResponse.json();
-            }
-          }
-        } catch (airtableError) {
-          console.warn('Error updating Airtable:', airtableError);
-          // Don't throw the error, just log it and continue
-        }
+      if (!apiKey || !baseId || !tableName) {
+        throw new Error('Airtable integration is not configured properly');
       }
+      
+      // Instead of updating the Airtable attachment field, we'll update the URL field for the image
+      // Use MainImageLink for MainImage and InstaPhotoLink for instaPhoto
+      const linkFieldName = fieldName === 'MainImage' ? 'MainImageLink' : 'InstaPhotoLink';
+      
+      const airtableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${article.externalId}`;
+      
+      const updates = {
+        fields: {
+          [linkFieldName]: imgbbResult.url
+        }
+      };
+      
+      const airtableResponse = await fetch(airtableUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!airtableResponse.ok) {
+        const errorText = await airtableResponse.text();
+        console.error('Airtable Error:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: 'Unknown error' };
+        }
+        
+        // Check if this is a field error (field doesn't exist)
+        if (airtableResponse.status === 422 && errorData.error?.type === 'UNKNOWN_FIELD_NAME') {
+          throw new Error(`The field "${linkFieldName}" does not exist in your Airtable table. You need to create a URL or Text field with this name in your Airtable table.`);
+        }
+        
+        throw new Error(`Failed to update Airtable: ${errorText}`);
+      }
+      
+      const airtableResult = await airtableResponse.json();
       
       // Clean up the temporary file
       fs.unlinkSync(req.file.path);
@@ -307,66 +297,56 @@ export function setupImgBBRoutes(app: Express) {
         throw new Error(`Article with ID ${articleId} does not have an external ID`);
       }
       
-      // Attempt to update Airtable if the article has an externalId (Airtable ID)
-      let airtableResult = null;
+      // Get Airtable settings
+      const airtableSettings = await storage.getIntegrationSettings('airtable');
+      const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
+      const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
+      const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
       
-      if (article.externalId && article.source === 'airtable') {
-        try {
-          // Get Airtable settings
-          const airtableSettings = await storage.getIntegrationSettings('airtable');
-          const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
-          const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
-          const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
-          
-          if (!apiKey || !baseId || !tableName) {
-            console.warn('Airtable integration is not configured properly. Skipping Airtable update.');
-          } else {
-            // Instead of updating the Airtable attachment field, we'll update the URL field
-            const linkFieldName = fieldName === 'MainImage' ? 'MainImageLink' : 'InstaPhotoLink';
-            
-            const airtableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${article.externalId}`;
-            
-            const updates = {
-              fields: {
-                [linkFieldName]: imgbbResult.data.url
-              }
-            };
-            
-            const airtableResponse = await fetch(airtableUrl, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(updates)
-            });
-            
-            if (!airtableResponse.ok) {
-              const errorText = await airtableResponse.text();
-              console.error('Airtable Error:', errorText);
-              
-              let errorData;
-              try {
-                errorData = JSON.parse(errorText);
-              } catch (e) {
-                errorData = { error: 'Unknown error' };
-              }
-              
-              // Check if this is a field error (field doesn't exist)
-              if (airtableResponse.status === 422 && errorData.error?.type === 'UNKNOWN_FIELD_NAME') {
-                console.warn(`The field "${linkFieldName}" does not exist in your Airtable table. You need to create a URL or Text field with this name in your Airtable table.`);
-              } else {
-                console.warn(`Failed to update Airtable: ${errorText}`);
-              }
-            } else {
-              airtableResult = await airtableResponse.json();
-            }
-          }
-        } catch (airtableError) {
-          console.warn('Error updating Airtable:', airtableError);
-          // Don't throw the error, just log it and continue
-        }
+      if (!apiKey || !baseId || !tableName) {
+        throw new Error('Airtable integration is not configured properly');
       }
+      
+      // Instead of updating the Airtable attachment field, we'll update the URL field
+      const linkFieldName = fieldName === 'MainImage' ? 'MainImageLink' : 'InstaPhotoLink';
+      
+      const airtableUrl = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${article.externalId}`;
+      
+      const updates = {
+        fields: {
+          [linkFieldName]: imgbbResult.data.url
+        }
+      };
+      
+      const airtableResponse = await fetch(airtableUrl, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!airtableResponse.ok) {
+        const errorText = await airtableResponse.text();
+        console.error('Airtable Error:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: 'Unknown error' };
+        }
+        
+        // Check if this is a field error (field doesn't exist)
+        if (airtableResponse.status === 422 && errorData.error?.type === 'UNKNOWN_FIELD_NAME') {
+          throw new Error(`The field "${linkFieldName}" does not exist in your Airtable table. You need to create a URL or Text field with this name in your Airtable table.`);
+        }
+        
+        throw new Error(`Failed to update Airtable: ${errorText}`);
+      }
+      
+      const airtableResult = await airtableResponse.json();
       
       // Return success response
       res.json({
