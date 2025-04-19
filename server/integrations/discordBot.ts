@@ -1078,7 +1078,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
           .addComponents(viewInDashboardButton, uploadNowButton);
         
         await interaction.editReply({
-          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on Imgur and linked to your article${article.source === 'airtable' ? ' and Airtable' : ''}.`,
+          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === 'airtable' ? ' and Airtable' : ''}.`,
           components: [buttonRow]
         });
         
@@ -1599,7 +1599,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
           .addComponents(viewInDashboardButton, uploadNowButton);
         
         await interaction.editReply({
-          content: `Ready to upload a web (main) image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on Imgur and linked to your article${article.source === 'airtable' ? ' and Airtable' : ''}.`,
+          content: `Ready to upload a web (main) image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === 'airtable' ? ' and Airtable' : ''}.`,
           components: [buttonRow]
         });
         
