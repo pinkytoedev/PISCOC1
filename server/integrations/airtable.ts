@@ -63,7 +63,8 @@ interface AirtableArticleResponse {
   _updatedTime?: string;           // Date
   Author?: string[];               // Link to another record (array of IDs)
   Body: string;                    // Long text (content)
-  Date?: string;                   // Date
+  Date?: string;                   // Date (creation timestamp)
+  Scheduled?: string;              // Date (publication date)
   Description?: string;            // Long text
   Featured?: boolean;              // Checkbox
   Finished?: boolean;              // Checkbox
@@ -84,7 +85,8 @@ interface AirtableArticleRequest {
   _updatedTime?: string;           // Date
   Author?: string[];               // Link to another record (array of IDs)
   Body: string;                    // Long text (content)
-  Date?: string;                   // Date
+  Date?: string;                   // Date (creation timestamp)
+  Scheduled?: string;              // Date (publication date)
   Description?: string;            // Long text
   Featured?: boolean;              // Checkbox
   Finished?: boolean;              // Checkbox
@@ -231,17 +233,19 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   // Add _updatedTime to track when this article was last updated
   airtableData._updatedTime = new Date().toISOString();
   
-  // Handle date mapping - Use the specific date field if available, fallback to publishedAt
-  // Airtable expects date in full ISO format with time
-  if (article.date) {
-    // If we have a direct date field, use it (this is the preferred field)
-    // This should already be in ISO format from our updated form handling
-    airtableData.Date = article.date;
+  // Set the creation timestamp in the "Date" field (always update this on push)
+  // If we don't have a creation date recorded, use current time
+  airtableData.Date = article.date || new Date().toISOString();
+  
+  // Handle publication schedule in the "Scheduled" field if available
+  if (article.scheduled) {
+    // For scheduled publication time, use the scheduled field
+    airtableData.Scheduled = article.scheduled;
   } else if (article.publishedAt) {
-    // Fall back to publishedAt if date not available
+    // Fall back to publishedAt if scheduled not available
     // Make sure it's a complete ISO string with time
     const date = new Date(article.publishedAt);
-    airtableData.Date = date.toISOString();
+    airtableData.Scheduled = date.toISOString();
   }
   
   // Add author reference if we found one
