@@ -33,6 +33,7 @@ interface ArticleTableProps {
 export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: ArticleTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
+  const [showCreationDate, setShowCreationDate] = useState(false);
   const mainImageFileInputRef = useRef<HTMLInputElement>(null);
   const instaImageFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingArticleId, setUploadingArticleId] = useState<number | null>(null);
@@ -305,11 +306,19 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
               
               {/* Publication Details */}
               <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-1 text-muted-foreground">Published:</div>
+                <div className="col-span-1 text-muted-foreground">Created:</div>
+                <div className="col-span-2">
+                  {article.date 
+                    ? new Date(article.date).toLocaleString() 
+                    : 'Not recorded'}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-1 text-muted-foreground">Scheduled:</div>
                 <div className="col-span-2">
                   {article.publishedAt 
                     ? new Date(article.publishedAt).toLocaleString() 
-                    : 'Not published'}
+                    : 'Not scheduled'}
                 </div>
               </div>
               
@@ -433,8 +442,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Status
               </th>
-              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Published
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center">
+                <button 
+                  onClick={() => setShowCreationDate(!showCreationDate)} 
+                  className="flex items-center group"
+                  title={showCreationDate ? "Showing Creation Date (Airtable's Date field)" : "Showing Scheduled Date (Airtable's Scheduled field)"}
+                >
+                  {showCreationDate ? "Created" : "Scheduled"}
+                  <RefreshCw className="h-3 w-3 ml-1 opacity-20 group-hover:opacity-100 transition-opacity" />
+                </button>
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Source
@@ -525,7 +541,14 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                     <StatusBadge status={article.status || 'draft'} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : '--'}
+                    {showCreationDate 
+                      ? article.date 
+                        ? new Date(article.date).toLocaleDateString() 
+                        : '--'
+                      : article.publishedAt 
+                        ? new Date(article.publishedAt).toLocaleDateString() 
+                        : '--'
+                    }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex items-center">
@@ -735,7 +758,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                     <span className="font-medium">Photo:</span> {article.photo || 'N/A'}
                   </div>
                   <div>
-                    <span className="font-medium">Published:</span> {article.publishedAt ? new Date(article.publishedAt).toLocaleDateString() : 'Unpublished'}
+                    <span className="font-medium">{showCreationDate ? 'Created:' : 'Scheduled:'}</span> {
+                      showCreationDate 
+                        ? article.date 
+                          ? new Date(article.date).toLocaleDateString() 
+                          : 'Not recorded'
+                        : article.publishedAt 
+                          ? new Date(article.publishedAt).toLocaleDateString() 
+                          : 'Unscheduled'
+                    }
                   </div>
                   <div>
                     {article.hashtags && (
