@@ -122,6 +122,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       const formData = new FormData();
       formData.append('image', file);
       
+      // We're still using MainImage as the param, but internally the server will use MainImageLink
       const response = await fetch(`/api/imgbb/upload-to-airtable/${articleId}/${fieldName}`, {
         method: "POST",
         body: formData,
