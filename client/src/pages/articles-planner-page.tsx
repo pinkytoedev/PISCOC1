@@ -10,7 +10,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { EventSourceInput } from '@fullcalendar/core';
+import { EventSourceInput, EventClickArg } from '@fullcalendar/core';
 import {
   Popover,
   PopoverContent,
@@ -75,11 +75,14 @@ export default function ArticlesPlannerPage() {
     }) : [];
   
   // Handle calendar event click
-  const handleEventClick = (clickInfo: { event: { extendedProps: { article: Article } } }) => {
-    const article = clickInfo.event.extendedProps.article;
-    const articleId = article.id;
-    // Navigate to the article edit page or open a modal to view/edit
-    setLocation(`/articles?edit=${articleId}`);
+  const handleEventClick = (clickInfo: EventClickArg) => {
+    // Use type assertion to access the article from extendedProps
+    const article = clickInfo.event.extendedProps?.article as Article;
+    
+    if (article && article.id) {
+      // Navigate to the article edit page
+      setLocation(`/articles?edit=${article.id}`);
+    }
   };
   
   // Handle changing the calendar view
@@ -171,7 +174,19 @@ export default function ArticlesPlannerPage() {
                   events={calendarEvents as EventSourceInput}
                   eventClick={handleEventClick}
                   eventContent={(eventInfo) => {
-                    const article = eventInfo.event.extendedProps.article;
+                    // Use type assertion to get the article from extendedProps
+                    const article = eventInfo.event.extendedProps?.article as Article | undefined;
+                    
+                    if (!article) {
+                      return (
+                        <div className="cursor-pointer p-1">
+                          <div className="font-semibold text-white truncate">
+                            {eventInfo.event.title}
+                          </div>
+                        </div>
+                      );
+                    }
+                    
                     return (
                       <Popover>
                         <PopoverTrigger asChild>
