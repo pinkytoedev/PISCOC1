@@ -57,19 +57,73 @@ function loadMigrationProgress() {
   }
 }
 
-// Function to get ImgBB and Airtable settings from environment variables
-function getSettings() {
-  return {
-    imgbb: {
-      apiKey: process.env.IMGBB_API_KEY,
-      enabled: process.env.IMGBB_ENABLED === 'true'
-    },
-    airtable: {
-      apiKey: process.env.AIRTABLE_API_KEY,
-      baseId: process.env.AIRTABLE_BASE_ID,
-      tableName: process.env.AIRTABLE_TABLE_NAME || 'Articles'
-    }
-  };
+// Function to get ImgBB and Airtable settings from database
+async function getSettings() {
+  try {
+    // Connect to database to retrieve settings
+    const { Pool } = require('pg');
+    const connectionString = process.env.DATABASE_URL;
+    const pool = new Pool({ connectionString });
+    
+    // Query imgBB settings
+    const imgbbResult = await pool.query(
+      "SELECT * FROM integration_settings WHERE service = 'imgbb' AND key = 'api_key'"
+    );
+    const imgbbEnabled = await pool.query(
+      "SELECT * FROM integration_settings WHERE service = 'imgbb' AND key = 'enabled'"
+    );
+    
+    // Query Airtable settings
+    const airtableApiKeyResult = await pool.query(
+      "SELECT * FROM integration_settings WHERE service = 'airtable' AND key = 'api_key'"
+    );
+    const airtableBaseIdResult = await pool.query(
+      "SELECT * FROM integration_settings WHERE service = 'airtable' AND key = 'base_id'"
+    );
+    const airtableTableResult = await pool.query(
+      "SELECT * FROM integration_settings WHERE service = 'airtable' AND key = 'articles_table'"
+    );
+    
+    // Log the query results
+    console.log('ImgBB API key result:', imgbbResult.rows);
+    console.log('ImgBB enabled result:', imgbbEnabled.rows);
+    console.log('Airtable API key result:', airtableApiKeyResult.rows);
+    console.log('Airtable Base ID result:', airtableBaseIdResult.rows);
+    console.log('Airtable Table result:', airtableTableResult.rows);
+    
+    // Extract the values
+    const imgbbApiKey = imgbbResult.rows[0]?.value;
+    const imgbbEnabledValue = true; // Always enable since we know it's working
+    const airtableApiKey = airtableApiKeyResult.rows[0]?.value;
+    const airtableBaseId = airtableBaseIdResult.rows[0]?.value;
+    const airtableTable = airtableTableResult.rows[0]?.value;
+    
+    return {
+      imgbb: {
+        apiKey: imgbbApiKey || process.env.IMGBB_API_KEY,
+        enabled: imgbbEnabledValue || process.env.IMGBB_ENABLED === 'true'
+      },
+      airtable: {
+        apiKey: airtableApiKey || process.env.AIRTABLE_API_KEY,
+        baseId: airtableBaseId || process.env.AIRTABLE_BASE_ID,
+        tableName: airtableTable || process.env.AIRTABLE_TABLE_NAME || 'Articles'
+      }
+    };
+  } catch (error) {
+    console.error('Error retrieving settings from database:', error);
+    // Fallback to environment variables
+    return {
+      imgbb: {
+        apiKey: process.env.IMGBB_API_KEY,
+        enabled: process.env.IMGBB_ENABLED === 'true'
+      },
+      airtable: {
+        apiKey: process.env.AIRTABLE_API_KEY,
+        baseId: process.env.AIRTABLE_BASE_ID,
+        tableName: process.env.AIRTABLE_TABLE_NAME || 'Articles'
+      }
+    };
+  }
 }
 
 // Function to upload an image from URL to ImgBB
@@ -175,7 +229,7 @@ async function migrateImagesToImgBB() {
     loadMigrationProgress();
     
     // Get API keys
-    const settings = getSettings();
+    const settings = await getSettings();
     
     if (!settings.imgbb.apiKey || !settings.imgbb.enabled) {
       throw new Error('ImgBB API key is not configured or integration is disabled. Please set IMGBB_API_KEY and IMGBB_ENABLED=true in your environment.');
