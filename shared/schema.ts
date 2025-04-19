@@ -49,7 +49,8 @@ export const articles = pgTable("articles", {
   instagramImageUrl: text("instagram_image_url"), // For Airtable instaPhoto field
   featured: text("featured").notNull().default("no"),
   publishedAt: timestamp("published_at"),
-  date: text("date"), // Airtable Date field (stored as string)
+  date: text("date"), // Airtable Date field for creation timestamp (stored as string)
+  scheduled: text("scheduled"), // Airtable Scheduled field for publication scheduling (stored as string)
   finished: boolean("finished").default(false), // Maps to Airtable's Finished checkbox
   author: text("author").notNull(),
   photo: text("photo"),
@@ -182,7 +183,8 @@ export const articleSchema = z.object({
   instagramImageUrl: z.string().optional(), // Airtable instaPhoto field
   featured: z.string(),
   publishedAt: z.date().optional(),
-  date: z.string().optional(), // Airtable Date field
+  date: z.string().optional(), // Airtable Date field (creation timestamp)
+  scheduled: z.string().optional(), // Airtable Scheduled field (publication date)
   finished: z.boolean().optional(), // Airtable Finished field
   author: z.string(),
   photo: z.string(),
