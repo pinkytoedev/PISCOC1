@@ -350,7 +350,7 @@ const WebsiteArchitectureDiagram = () => {
           label="Integrations Core"
           type="integration"
           description="Core integration system that connects with external services."
-          connections={["express", "discord", "airtable", "instagram", "imgur"]}
+          connections={["express", "discord", "airtable", "instagram", "imgbb"]}
         />
         
         <DiagramNode
@@ -390,14 +390,14 @@ const WebsiteArchitectureDiagram = () => {
         />
         
         <DiagramNode
-          id="imgur"
+          id="imgbb"
           x={600}
           y={450}
           width={120}
           height={40}
-          label="Imgur"
+          label="ImgBB"
           type="integration"
-          description="Integration with Imgur for image hosting and management."
+          description="Integration with ImgBB for image hosting and management."
           connections={["integrations"]}
         />
         
@@ -541,7 +541,7 @@ const WebsiteArchitectureDiagram = () => {
           from={{ x: 475, y: 405 }} 
           to={{ x: 600, y: 450 }} 
           fromId="integrations" 
-          toId="imgur"
+          toId="imgbb"
           color="#8b5cf6"
         />
         
@@ -743,7 +743,7 @@ const TechnologyStack = () => {
       { name: "Discord.js", description: "Library for interacting with the Discord API", category: "social" },
       { name: "Airtable API", description: "Client for interacting with Airtable databases", category: "content" },
       { name: "Instagram API", description: "Interface for Instagram content and interactions", category: "social" },
-      { name: "Imgur API", description: "Service for image hosting and management", category: "media" }
+      { name: "ImgBB API", description: "Service for image hosting and management", category: "media" }
     ]
   };
   
