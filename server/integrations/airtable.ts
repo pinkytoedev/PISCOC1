@@ -8,7 +8,7 @@ import {
   uploadImageUrlAsLinkField,
   cleanupUploadedFile 
 } from "../utils/imageUploader";
-import { uploadImageToImgur, uploadImageUrlToImgur } from "../utils/imgurUploader";
+import { uploadImageToImgBB, uploadImageUrlToImgBB } from "../utils/imgbbUploader";
 
 // Type definitions for Airtable responses
 interface AirtableRecord<T> {
@@ -1562,16 +1562,16 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(400).json({ message: "No image file uploaded" });
       }
       
-      // Check if Imgur integration is enabled
-      const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
-      const isImgurEnabled = imgurClientIdSetting?.enabled && !!imgurClientIdSetting?.value;
+      // Check if ImgBB integration is enabled
+      const imgbbApiKeySetting = await storage.getIntegrationSettingByKey('imgbb', 'api_key');
+      const isImgBBEnabled = imgbbApiKeySetting?.enabled && !!imgbbApiKeySetting?.value;
       
-      if (isImgurEnabled) {
-        // Imgur integration is enabled, using Imgur as intermediary
-        console.log("Imgur integration is enabled, using Imgur as intermediary for upload");
+      if (isImgBBEnabled) {
+        // ImgBB integration is enabled, using ImgBB as intermediary
+        console.log("ImgBB integration is enabled, using ImgBB as intermediary for upload");
         
         // We can't use redirect here because we need to forward the file
-        // So we'll call the Imgur upload function directly
+        // So we'll call the ImgBB upload function directly
         const file = {
           path: req.file.path,
           filename: req.file.originalname,
@@ -1579,19 +1579,19 @@ export function setupAirtableRoutes(app: Express) {
           size: req.file.size
         };
         
-        // Step 1: Upload to Imgur
-        const imgurResult = await uploadImageToImgur(file);
+        // Step 1: Upload to ImgBB
+        const imgbbResult = await uploadImageToImgBB(file);
         
         // Always cleanup the uploaded file after processing
         cleanupUploadedFile(file.path);
         
-        if (!imgurResult) {
-          return res.status(500).json({ message: 'Failed to upload image to Imgur' });
+        if (!imgbbResult) {
+          return res.status(500).json({ message: 'Failed to upload image to ImgBB' });
         }
         
-        // Step 2: Upload Imgur URL to Airtable
+        // Step 2: Upload ImgBB URL to Airtable
         const airtableResult = await uploadImageUrlToAirtable(
-          imgurResult.link,
+          imgbbResult.url,
           article.externalId,
           fieldName,
           file.filename
@@ -1599,8 +1599,8 @@ export function setupAirtableRoutes(app: Express) {
         
         if (!airtableResult) {
           return res.status(500).json({ 
-            message: 'Image uploaded to Imgur but failed to update Airtable',
-            imgurLink: imgurResult.link 
+            message: 'Image uploaded to ImgBB but failed to update Airtable',
+            imgbbUrl: imgbbResult.url 
           });
         }
         
@@ -1608,10 +1608,10 @@ export function setupAirtableRoutes(app: Express) {
         const updateData: Partial<InsertArticle> = {};
         
         if (fieldName === 'MainImage') {
-          updateData.imageUrl = imgurResult.link;
+          updateData.imageUrl = imgbbResult.url;
           updateData.imageType = 'url';
         } else if (fieldName === 'instaPhoto') {
-          updateData.instagramImageUrl = imgurResult.link;
+          updateData.instagramImageUrl = imgbbResult.url;
         }
         
         await storage.updateArticle(articleId, updateData);
@@ -1624,18 +1624,18 @@ export function setupAirtableRoutes(app: Express) {
           resourceId: articleId.toString(),
           details: {
             fieldName,
-            imgurId: imgurResult.id,
-            imgurLink: imgurResult.link,
+            imgbbId: imgbbResult.id,
+            imgbbUrl: imgbbResult.url,
             filename: file.filename
           }
         });
         
         return res.json({
-          message: `Image uploaded successfully to Imgur and then to ${fieldName}`,
-          imgur: {
-            id: imgurResult.id,
-            link: imgurResult.link,
-            deletehash: imgurResult.deletehash
+          message: `Image uploaded successfully to ImgBB and then to ${fieldName}`,
+          imgbb: {
+            id: imgbbResult.id,
+            url: imgbbResult.url,
+            display_url: imgbbResult.display_url
           },
           airtable: airtableResult
         });
@@ -1760,23 +1760,23 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(400).json({ message: "This article is not from Airtable" });
       }
       
-      // Check if Imgur integration is enabled
-      const imgurClientIdSetting = await storage.getIntegrationSettingByKey('imgur', 'client_id');
-      const isImgurEnabled = imgurClientIdSetting?.enabled && !!imgurClientIdSetting?.value;
+      // Check if ImgBB integration is enabled
+      const imgbbApiKeySetting = await storage.getIntegrationSettingByKey('imgbb', 'api_key');
+      const isImgBBEnabled = imgbbApiKeySetting?.enabled && !!imgbbApiKeySetting?.value;
       
-      if (isImgurEnabled) {
-        // Imgur integration is enabled, using Imgur as intermediary
-        console.log("Imgur integration is enabled, using Imgur as intermediary for URL upload");
+      if (isImgBBEnabled) {
+        // ImgBB integration is enabled, using ImgBB as intermediary
+        console.log("ImgBB integration is enabled, using ImgBB as intermediary for URL upload");
         
-        // We'll call the Imgur upload function directly rather than redirecting
-        // Step 1: Upload URL to Imgur
-        const imgurResult = await uploadImageUrlToImgur(imageUrl, filename);
+        // We'll call the ImgBB upload function directly rather than redirecting
+        // Step 1: Upload URL to ImgBB
+        const imgbbResult = await uploadImageUrlToImgBB(imageUrl, filename);
         
-        if (!imgurResult) {
-          return res.status(500).json({ message: 'Failed to upload image URL to Imgur' });
+        if (!imgbbResult) {
+          return res.status(500).json({ message: 'Failed to upload image URL to ImgBB' });
         }
         
-        // Step 2: Upload Imgur URL to Airtable using the new link field approach
+        // Step 2: Upload ImgBB URL to Airtable using the new link field approach
         // Map the field names to their link field equivalents
         const fieldMappings = {
           'MainImage': 'MainImageLink',
@@ -1788,15 +1788,15 @@ export function setupAirtableRoutes(app: Express) {
         
         // Upload using the new link field function
         const airtableResult = await uploadImageUrlAsLinkField(
-          imgurResult.link,
+          imgbbResult.url,
           article.externalId,
           targetFieldName
         );
         
         if (!airtableResult) {
           return res.status(500).json({ 
-            message: 'Image uploaded to Imgur but failed to update Airtable',
-            imgurLink: imgurResult.link 
+            message: 'Image uploaded to ImgBB but failed to update Airtable',
+            imgbbUrl: imgbbResult.url 
           });
         }
         
@@ -1804,10 +1804,10 @@ export function setupAirtableRoutes(app: Express) {
         const updateData: Partial<InsertArticle> = {};
         
         if (fieldName === 'MainImage') {
-          updateData.imageUrl = imgurResult.link;
+          updateData.imageUrl = imgbbResult.url;
           updateData.imageType = 'url';
         } else if (fieldName === 'instaPhoto') {
-          updateData.instagramImageUrl = imgurResult.link;
+          updateData.instagramImageUrl = imgbbResult.url;
         }
         
         await storage.updateArticle(articleId, updateData);
@@ -1821,18 +1821,18 @@ export function setupAirtableRoutes(app: Express) {
           details: {
             fieldName,
             originalUrl: imageUrl,
-            imgurId: imgurResult.id,
-            imgurLink: imgurResult.link,
+            imgbbId: imgbbResult.id,
+            imgbbUrl: imgbbResult.url,
             filename
           }
         });
         
         return res.json({
-          message: `Image URL uploaded successfully to Imgur and then to ${fieldName}`,
-          imgur: {
-            id: imgurResult.id,
-            link: imgurResult.link,
-            deletehash: imgurResult.deletehash
+          message: `Image URL uploaded successfully to ImgBB and then to ${fieldName}`,
+          imgbb: {
+            id: imgbbResult.id,
+            url: imgbbResult.url,
+            display_url: imgbbResult.display_url
           },
           airtable: airtableResult
         });
