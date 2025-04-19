@@ -102,7 +102,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         };
       }
       
-      // Format date for datetime-local input if we have publishedAt
+      // Format scheduled date for datetime-local input
       if (formDataToUse.publishedAt instanceof Date) {
         const dateObj = formDataToUse.publishedAt;
         
@@ -114,7 +114,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         const hours = String(dateObj.getHours()).padStart(2, '0');
         const minutes = String(dateObj.getMinutes()).padStart(2, '0');
         
-        formDataToUse.date = `${year}-${month}-${day}T${hours}:${minutes}`;
+        // Use scheduled field instead of date for the publication datetime
+        formDataToUse.scheduled = `${year}-${month}-${day}T${hours}:${minutes}`;
+      } 
+      // Use the direct scheduled field if it exists and publishedAt doesn't
+      else if (formDataToUse.scheduled && !formDataToUse.publishedAt) {
+        // If we have a scheduled value but no publishedAt, keep the scheduled value
+        // This is already correctly formatted
       }
       
       // Set photo to "none" if it's empty for select component
@@ -491,41 +497,45 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     // Create a copy of the form data to modify
     const submissionData = { ...formData };
     
-    // Handle date field from datetime-local input
-    if (submissionData.date) {
-      // Convert date string from datetime-local to Date object
-      try {
-        const dateTime = new Date(submissionData.date);
+    // Always set the creation timestamp in the "date" field
+  // This will be sent to Airtable's "Date" field to track when the article was created
+  submissionData.date = new Date().toISOString();
+
+  // Handle publication date & time from the datetime-local input (for scheduled field)
+  if (submissionData.scheduled) {
+    // Convert scheduled string from datetime-local to Date object for publishedAt
+    try {
+      const dateTime = new Date(submissionData.scheduled);
+      
+      // Check if valid date
+      if (!isNaN(dateTime.getTime())) {
+        // Use this date for publishedAt
+        submissionData.publishedAt = dateTime;
         
-        // Check if valid date
-        if (!isNaN(dateTime.getTime())) {
-          // Use this date for publishedAt
-          submissionData.publishedAt = dateTime;
-          
-          // Keep the ISO string for Airtable (it already has the right format from datetime-local)
-          // submissionData.date is already correctly formatted from the input
-        } else {
-          console.warn("Invalid date format from datetime-local input");
-          // If date is invalid and status is published, default to current
-          if (submissionData.status === "published") {
-            submissionData.publishedAt = new Date();
-            submissionData.date = submissionData.publishedAt.toISOString();
-          }
-        }
-      } catch (error) {
-        console.error("Error parsing date:", error);
-        // If parsing fails and status is published, default to current
+        // Keep the ISO string format for Airtable Scheduled field
+        // submissionData.scheduled is already correctly formatted from the input
+      } else {
+        console.warn("Invalid date format from datetime-local input");
+        // If scheduled date is invalid and status is published, default to current
         if (submissionData.status === "published") {
           submissionData.publishedAt = new Date();
-          submissionData.date = submissionData.publishedAt.toISOString();
+          submissionData.scheduled = submissionData.publishedAt.toISOString();
         }
       }
+    } catch (error) {
+      console.error("Error parsing scheduled date:", error);
+      // If parsing fails and status is published, default to current
+      if (submissionData.status === "published") {
+        submissionData.publishedAt = new Date();
+        submissionData.scheduled = submissionData.publishedAt.toISOString();
+      }
     }
-    // If no date is provided but status is published, set current date
-    else if (submissionData.status === "published") {
-      submissionData.publishedAt = new Date();
-      submissionData.date = submissionData.publishedAt.toISOString();
-    }
+  }
+  // If no scheduled date is provided but status is published, set current date
+  else if (submissionData.status === "published") {
+    submissionData.publishedAt = new Date();
+    submissionData.scheduled = submissionData.publishedAt.toISOString();
+  }
     
     // Set the finished field based on status
     submissionData.finished = submissionData.status === "published";
@@ -900,17 +910,17 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             </div>
             
             <div>
-              <Label htmlFor="date">Publication Date & Time</Label>
+              <Label htmlFor="scheduled">Publication Date & Time</Label>
               <Input
-                id="date"
-                name="date"
+                id="scheduled"
+                name="scheduled"
                 type="datetime-local"
-                value={formData.date || ''}
+                value={formData.scheduled || ''}
                 onChange={handleInputChange}
                 placeholder="YYYY-MM-DD HH:MM"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Used for Airtable chronological ordering
+                When this article should be published (Airtable "Scheduled" field)
               </p>
             </div>
 

@@ -696,8 +696,9 @@ export function setupAirtableRoutes(app: Express) {
             imagePath: null,
             instagramImageUrl: instagramImageUrl, // Store instaPhoto URL separately
             featured: fields.Featured ? "yes" : "no",
-            publishedAt: fields.Date ? new Date(fields.Date) : null,
-            date: fields.Date || "", // Store the raw date string from Airtable
+            publishedAt: fields.Scheduled ? new Date(fields.Scheduled) : null,
+            date: fields.Date || "", // Store the creation timestamp from Airtable
+            scheduled: fields.Scheduled || "", // Store the publication date from Airtable
             finished: !!fields.Finished, // Store the finished state directly
             author: authorName,
             photo: photoName,
