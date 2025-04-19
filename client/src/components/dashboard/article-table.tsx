@@ -235,20 +235,41 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     if (!articles || articles.length === 0) return;
     
     const now = new Date();
+    console.log("Auto-publishing check at:", now.toISOString());
     
     // Find articles that are scheduled and their published date has passed
     const articlesToPublish = articles.filter(article => {
-      // Only check articles that have a publish date, are not already published, and are in the "scheduled" status
-      if (!article.publishedAt || article.status === 'published') {
+      // Skip if no publish date is set
+      if (!article.publishedAt) {
+        return false;
+      }
+      
+      // Skip if already published
+      if (article.status === 'published') {
         return false;
       }
       
       const scheduledDate = new Date(article.publishedAt);
-      return scheduledDate <= now && article.status === 'scheduled';
+      const shouldPublish = scheduledDate <= now;
+      
+      // Log potential articles for debugging
+      if (shouldPublish) {
+        console.log(`Article ${article.id} "${article.title}" is ready for publishing:`, {
+          scheduledTime: scheduledDate.toISOString(),
+          currentTime: now.toISOString(),
+          currentStatus: article.status
+        });
+      }
+      
+      // Check if the scheduled date has passed and publish regardless of current status
+      return shouldPublish;
     });
+    
+    console.log(`Found ${articlesToPublish.length} articles to auto-publish`);
     
     // Publish each article that needs to be published
     articlesToPublish.forEach(article => {
+      console.log(`Auto-publishing article ${article.id}: "${article.title}"`);
       updateArticleStatusMutation.mutate({
         id: article.id,
         status: 'published'
@@ -259,14 +280,21 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   // Set up periodic checking for articles that need to be published
   useEffect(() => {
     // Check immediately when component mounts or articles data changes
-    checkAndPublishScheduledArticles();
-    
-    // Set up interval to check every minute
-    const intervalId = setInterval(checkAndPublishScheduledArticles, 60000);
-    
-    // Clean up interval on unmount
-    return () => clearInterval(intervalId);
-  }, [articles]);
+    if (articles) {
+      console.log("Articles data loaded, checking for scheduled articles...");
+      checkAndPublishScheduledArticles();
+      
+      // Set up interval to check every 15 seconds for testing
+      // (In production, this would be every minute)
+      const intervalId = setInterval(checkAndPublishScheduledArticles, 15000);
+      
+      // Clean up interval on unmount
+      return () => {
+        console.log("Clearing auto-publish interval");
+        clearInterval(intervalId);
+      };
+    }
+  }, [articles, updateArticleStatusMutation]);
   
   // Filter articles first
   const filteredArticles = articles?.filter(article => {
