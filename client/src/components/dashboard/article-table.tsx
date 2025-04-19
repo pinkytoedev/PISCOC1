@@ -456,10 +456,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                   <td className="px-6 py-4">
                     <div className="flex items-start">
                       <div className="h-10 w-10 flex-shrink-0">
-                        {/* Use MainImageLink if available, fallback to imageUrl (from MainImage attachment) */}
-                        {article.mainImageLink ? (
-                          <img className="h-10 w-10 rounded object-cover" src={article.mainImageLink} alt="" />
-                        ) : article.imageUrl ? (
+                        {article.imageUrl ? (
                           <img className="h-10 w-10 rounded object-cover" src={article.imageUrl} alt="" />
                         ) : (
                           <div className="h-10 w-10 rounded bg-gray-200 flex items-center justify-center text-gray-500">
@@ -705,14 +702,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
             {sortedArticles.map((article) => (
               <div key={article.id} className="bg-white rounded-lg shadow p-4">
                 <div className="flex items-center space-x-3 mb-3">
-                  {/* Mobile view - use MainImageLink if available, fallback to imageUrl */}
-                  {article.mainImageLink ? (
-                    <img 
-                      src={article.mainImageLink} 
-                      alt="" 
-                      className="h-12 w-12 rounded-md object-cover flex-shrink-0"
-                    />
-                  ) : article.imageUrl ? (
+                  {article.imageUrl ? (
                     <img 
                       src={article.imageUrl} 
                       alt="" 
