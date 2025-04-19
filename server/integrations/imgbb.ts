@@ -157,7 +157,7 @@ export function setupImgBBRoutes(app: Express) {
       const airtableSettings = await storage.getIntegrationSettings('airtable');
       const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
       const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
-      const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
+      const tableName = airtableSettings.find(s => s.key === 'articles_table')?.value;
       
       if (!apiKey || !baseId || !tableName) {
         throw new Error('Airtable integration is not configured properly');
@@ -301,7 +301,7 @@ export function setupImgBBRoutes(app: Express) {
       const airtableSettings = await storage.getIntegrationSettings('airtable');
       const apiKey = airtableSettings.find(s => s.key === 'api_key')?.value;
       const baseId = airtableSettings.find(s => s.key === 'base_id')?.value;
-      const tableName = airtableSettings.find(s => s.key === 'table_name')?.value;
+      const tableName = airtableSettings.find(s => s.key === 'articles_table')?.value;
       
       if (!apiKey || !baseId || !tableName) {
         throw new Error('Airtable integration is not configured properly');
