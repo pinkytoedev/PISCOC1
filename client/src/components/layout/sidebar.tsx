@@ -18,7 +18,8 @@ import {
   SiDiscord, 
   SiAirtable, 
   SiInstagram,
-  SiImgur
+  SiImgur,
+  SiCloudinary // Using Cloudinary's icon for ImgBB since there's no official ImgBB icon
 } from "react-icons/si";
 
 interface SidebarProps {
@@ -73,6 +74,11 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           name: "Imgur",
           path: "/integrations/imgur",
           icon: <SiImgur className="w-5 h-5" />
+        },
+        {
+          name: "ImgBB",
+          path: "/integrations/imgbb",
+          icon: <SiCloudinary className="w-5 h-5" />
         }
       ]
     },
