@@ -85,17 +85,10 @@ export default function ArticlesPlannerPage() {
     }
   };
   
-  // Handle changing the calendar view
+  // Handle changing the calendar view using state variable
+  // Using key prop on FullCalendar forces re-render when viewType changes
   const handleViewChange = (newViewType: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
     setViewType(newViewType);
-    
-    // Get calendar API instance and change view programmatically
-    const calendarApi = document.querySelector('.fc')?.classList;
-    if (calendarApi) {
-      // Remove all view-related classes and add the new one
-      calendarApi.remove('fc-view-dayGridMonth', 'fc-view-timeGridWeek', 'fc-view-timeGridDay');
-      calendarApi.add(`fc-view-${newViewType}`);
-    }
   };
   
   return (
@@ -165,15 +158,16 @@ export default function ArticlesPlannerPage() {
             </div>
 
             {/* Calendar View */}
-            <div className="bg-white rounded-lg shadow p-4 h-[calc(100vh-240px)]">
+            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 h-[calc(100vh-240px)]">
               {isLoading ? (
                 <div className="flex justify-center items-center h-full">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                 </div>
               ) : (
                 <FullCalendar
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                   initialView={viewType}
+                  key={viewType} // Key prop forces complete re-render when view changes
                   headerToolbar={{
                     left: 'prev,next today',
                     center: 'title',
@@ -190,14 +184,23 @@ export default function ArticlesPlannerPage() {
                     week: 'Week',
                     day: 'Day'
                   }}
+                  // Custom styling to match app design
+                  dayCellClassNames="hover:bg-gray-50"
+                  moreLinkClassNames="text-primary font-medium"
+                  slotLabelClassNames="text-gray-600 font-medium"
+                  dayHeaderClassNames="text-gray-600 font-semibold"
+                  titleFormat={{ 
+                    year: 'numeric', 
+                    month: 'long' 
+                  }}
                   eventContent={(eventInfo) => {
                     // Use type assertion to get the article from extendedProps
                     const article = eventInfo.event.extendedProps?.article as Article | undefined;
                     
                     if (!article) {
                       return (
-                        <div className="cursor-pointer p-1">
-                          <div className="font-semibold text-white truncate">
+                        <div className="cursor-pointer p-1 rounded hover:opacity-90 transition-opacity">
+                          <div className="font-semibold text-white truncate text-sm">
                             {eventInfo.event.title}
                           </div>
                         </div>
@@ -207,8 +210,8 @@ export default function ArticlesPlannerPage() {
                     return (
                       <Popover>
                         <PopoverTrigger asChild>
-                          <div className="cursor-pointer p-1">
-                            <div className="font-semibold text-white truncate">
+                          <div className="cursor-pointer p-1 rounded hover:opacity-90 transition-opacity">
+                            <div className="font-semibold text-white truncate text-sm">
                               {eventInfo.event.title}
                             </div>
                           </div>
