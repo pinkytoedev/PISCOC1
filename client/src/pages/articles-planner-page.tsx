@@ -86,8 +86,16 @@ export default function ArticlesPlannerPage() {
   };
   
   // Handle changing the calendar view
-  const handleViewChange = (viewType: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
-    setViewType(viewType);
+  const handleViewChange = (newViewType: 'dayGridMonth' | 'timeGridWeek' | 'timeGridDay') => {
+    setViewType(newViewType);
+    
+    // Get calendar API instance and change view programmatically
+    const calendarApi = document.querySelector('.fc')?.classList;
+    if (calendarApi) {
+      // Remove all view-related classes and add the new one
+      calendarApi.remove('fc-view-dayGridMonth', 'fc-view-timeGridWeek', 'fc-view-timeGridDay');
+      calendarApi.add(`fc-view-${newViewType}`);
+    }
   };
   
   return (
@@ -169,10 +177,19 @@ export default function ArticlesPlannerPage() {
                   headerToolbar={{
                     left: 'prev,next today',
                     center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                    right: '' // We're using our custom UI controls
                   }}
                   events={calendarEvents as EventSourceInput}
                   eventClick={handleEventClick}
+                  themeSystem="standard"
+                  aspectRatio={1.8}
+                  contentHeight="auto"
+                  buttonText={{
+                    today: 'Today',
+                    month: 'Month',
+                    week: 'Week',
+                    day: 'Day'
+                  }}
                   eventContent={(eventInfo) => {
                     // Use type assertion to get the article from extendedProps
                     const article = eventInfo.event.extendedProps?.article as Article | undefined;
