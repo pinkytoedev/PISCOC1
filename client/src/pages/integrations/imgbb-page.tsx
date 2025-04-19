@@ -221,7 +221,7 @@ export default function ImgBBPage() {
                   )}
                 </CardContent>
                 <CardFooter className="flex justify-between bg-muted/50 text-xs text-muted-foreground">
-                  <div>Last updated: {apiKeySetting?.updatedAt ? new Date(apiKeySetting.updatedAt).toLocaleString() : 'Never'}</div>
+                  <div>Last updated: {apiKeySetting ? 'Updated' : 'Never'}</div>
                   <div>{apiKeySetting?.enabled === false ? 'Disabled' : 'Enabled'}</div>
                 </CardFooter>
               </Card>

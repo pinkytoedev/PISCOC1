@@ -7,6 +7,7 @@ import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgurRoutes } from "./integrations/imgur";
+import { setupImgBBRoutes } from "./integrations/imgbb";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import * as path from "path";
@@ -706,6 +707,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAirtableRoutes(app);
   setupInstagramRoutes(app);
   setupImgurRoutes(app);
+  setupImgBBRoutes(app);
   registerAirtableTestRoutes(app);
   
   // Auto-start Discord bot if settings are available
