@@ -116,13 +116,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     },
   });
   
-  // Add mutation for uploading images to Imgur (both main and insta images)
+  // Add mutation for uploading images to ImgBB (both main and insta images)
   const uploadImageMutation = useMutation({
     mutationFn: async ({ articleId, file, fieldName }: { articleId: number, file: File, fieldName: 'MainImage' | 'instaPhoto' }) => {
       const formData = new FormData();
       formData.append('image', file);
       
-      const response = await fetch(`/api/imgur/upload-to-airtable/${articleId}/${fieldName}`, {
+      const response = await fetch(`/api/imgbb/upload-to-airtable/${articleId}/${fieldName}`, {
         method: "POST",
         body: formData,
         credentials: 'include'
@@ -137,7 +137,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       
       toast({
         title: "Image uploaded",
-        description: `Image was successfully uploaded to Imgur${data.airtable ? ' and Airtable' : ''}.`,
+        description: `Image was successfully uploaded to ImgBB${data.airtable ? ' and Airtable' : ''}.`,
       });
     },
     onError: (error) => {
