@@ -32,9 +32,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const [mainImageUploading, setMainImageUploading] = useState(false);
   const [instagramImageUploading, setInstagramImageUploading] = useState(false);
   
-  // Imgur integration status
-  const [imgurEnabled, setImgurEnabled] = useState(false);
-  const [imgurClientId, setImgurClientId] = useState("");
+  // ImgBB integration status
+  const [imgbbEnabled, setImgBBEnabled] = useState(false);
+  const [imgbbApiKey, setImgBBApiKey] = useState("");
   
   // Default values for new article
   const defaultForm: Partial<InsertArticle> = {
@@ -62,31 +62,31 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   );
   
   // Reset form when modal opens/closes or article changes
-  // Fetch Imgur settings when modal opens
+  // Fetch ImgBB settings when modal opens
   useEffect(() => {
-    const fetchImgurSettings = async () => {
+    const fetchImgBBSettings = async () => {
       try {
-        const response = await fetch('/api/imgur/settings');
+        const response = await fetch('/api/imgbb/settings');
         if (response.ok) {
           const settings = await response.json();
-          const clientIdSetting = settings.find((s: any) => s.key === 'client_id');
+          const apiKeySetting = settings.find((s: any) => s.key === 'api_key');
           const enabledSetting = settings.find((s: any) => s.key === 'enabled');
           
-          if (clientIdSetting) {
-            setImgurClientId(clientIdSetting.value);
+          if (apiKeySetting) {
+            setImgBBApiKey(apiKeySetting.value);
           }
           
           if (enabledSetting) {
-            setImgurEnabled(enabledSetting.value === 'true');
+            setImgBBEnabled(enabledSetting.value === 'true');
           }
         }
       } catch (error) {
-        console.error('Failed to fetch Imgur settings:', error);
+        console.error('Failed to fetch ImgBB settings:', error);
       }
     };
     
     if (isOpen) {
-      fetchImgurSettings();
+      fetchImgBBSettings();
     }
   }, [isOpen]);
 
@@ -272,10 +272,10 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     
     setMainImageUploading(true);
     
-    // Use Imgur integration if enabled, otherwise use direct Airtable upload
-    if (imgurEnabled) {
-      // Use the imgur-to-airtable endpoint which handles the Imgur upload and Airtable update
-      fetch(`/api/imgur/upload-to-airtable/${editArticle.id}/MainImage`, {
+    // Use ImgBB integration if enabled, otherwise use direct Airtable upload
+    if (imgbbEnabled) {
+      // Use the imgbb-to-airtable endpoint which handles the ImgBB upload and Airtable update
+      fetch(`/api/imgbb/upload-to-airtable/${editArticle.id}/MainImage`, {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -283,15 +283,15 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       .then(response => {
         if (!response.ok) {
           return response.json().then(errorData => {
-            throw new Error(errorData.message || "Failed to upload image via Imgur");
+            throw new Error(errorData.message || "Failed to upload image via ImgBB");
           });
         }
         return response.json();
       })
       .then(data => {
         toast({
-          title: "Main image uploaded via Imgur successfully",
-          description: "The image was uploaded to Imgur and linked to Airtable",
+          title: "Main image uploaded via ImgBB successfully",
+          description: "The image was uploaded to ImgBB and linked to Airtable",
         });
         
         // Update the form data with the new image URL from Imgur
@@ -348,12 +348,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           imageUrl: imageUrl as string
         }));
         
-        console.log("Imgur upload response for Main image:", data);
+        console.log("ImgBB upload response for Main image:", data);
         setMainImageUploading(false);
       })
       .catch(error => {
         toast({
-          title: "Failed to upload image via Imgur",
+          title: "Failed to upload image via ImgBB",
           description: error.message || "There was an error uploading the image",
           variant: "destructive",
         });
@@ -377,10 +377,10 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     
     setInstagramImageUploading(true);
     
-    // Use Imgur integration if enabled, otherwise use direct Airtable upload
-    if (imgurEnabled) {
-      // Use the imgur-to-airtable endpoint which handles the Imgur upload and Airtable update
-      fetch(`/api/imgur/upload-to-airtable/${editArticle.id}/instaPhoto`, {
+    // Use ImgBB integration if enabled, otherwise use direct Airtable upload
+    if (imgbbEnabled) {
+      // Use the imgbb-to-airtable endpoint which handles the ImgBB upload and Airtable update
+      fetch(`/api/imgbb/upload-to-airtable/${editArticle.id}/instaPhoto`, {
         method: 'POST',
         body: formData,
         credentials: 'include',
@@ -388,15 +388,15 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       .then(response => {
         if (!response.ok) {
           return response.json().then(errorData => {
-            throw new Error(errorData.message || "Failed to upload image via Imgur");
+            throw new Error(errorData.message || "Failed to upload image via ImgBB");
           });
         }
         return response.json();
       })
       .then(data => {
         toast({
-          title: "Instagram image uploaded via Imgur successfully",
-          description: "The image was uploaded to Imgur and linked to Airtable",
+          title: "Instagram image uploaded via ImgBB successfully",
+          description: "The image was uploaded to ImgBB and linked to Airtable",
         });
         
         // Update the form data with the new image URL from Imgur
@@ -453,12 +453,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           instagramImageUrl: imageUrl as string
         }));
         
-        console.log("Imgur upload response for Instagram image:", data);
+        console.log("ImgBB upload response for Instagram image:", data);
         setInstagramImageUploading(false);
       })
       .catch(error => {
         toast({
-          title: "Failed to upload image via Imgur",
+          title: "Failed to upload image via ImgBB",
           description: error.message || "There was an error uploading the image",
           variant: "destructive",
         });

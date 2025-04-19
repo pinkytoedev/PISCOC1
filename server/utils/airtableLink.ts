@@ -1,43 +1,41 @@
 /**
  * Utility functions for working with Airtable link fields
- * These functions handle uploading images to Imgur and updating Airtable link fields
+ * These functions handle uploading images to ImgBB and updating Airtable link fields
  */
 
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 
 /**
- * Uploads an image URL to Imgur and returns the new URL
+ * Uploads an image URL to ImgBB and returns the new URL
  * @param imageUrl - The source image URL to upload
- * @param imgurClientId - The Imgur API client ID
- * @returns The new Imgur URL
+ * @param imgbbApiKey - The ImgBB API key
+ * @returns The new ImgBB URL
  */
-export async function uploadImageToImgur(imageUrl: string, imgurClientId: string): Promise<string> {
+export async function uploadImageToImgBB(imageUrl: string, imgbbApiKey: string): Promise<string> {
   try {
-    console.log(`Uploading image to Imgur: ${imageUrl}`);
+    console.log(`Uploading image to ImgBB: ${imageUrl}`);
     
     const formData = new FormData();
+    formData.append('key', imgbbApiKey);
     formData.append('image', imageUrl);
     
-    const response = await fetch('https://api.imgur.com/3/image', {
+    const response = await fetch('https://api.imgbb.com/1/upload', {
       method: 'POST',
-      headers: {
-        'Authorization': `Client-ID ${imgurClientId}`
-      },
       body: formData
     });
     
-    const data = await response.json() as { success: boolean; data: { link: string; error?: string } };
+    const data = await response.json() as { success: boolean; data: { url: string; display_url: string; error?: string } };
     
     if (!response.ok || !data.success) {
-      console.error('Imgur API error:', data);
-      throw new Error(`Failed to upload image to Imgur: ${data.data?.error || 'Unknown error'}`);
+      console.error('ImgBB API error:', data);
+      throw new Error(`Failed to upload image to ImgBB: ${data.data?.error || 'Unknown error'}`);
     }
     
-    console.log(`Imgur upload successful: ${data.data.link}`);
-    return data.data.link;
+    console.log(`ImgBB upload successful: ${data.data.url}`);
+    return data.data.url;
   } catch (error) {
-    console.error('Error in uploadImageToImgur:', error);
+    console.error('Error in uploadImageToImgBB:', error);
     throw error;
   }
 }
@@ -108,14 +106,14 @@ export async function updateAirtableLinkField(
 }
 
 /**
- * Complete process to upload an image to Imgur and update an Airtable record with the link
+ * Complete process to upload an image to ImgBB and update an Airtable record with the link
  * @param imageUrl - The source image URL to upload
  * @param airtableApiKey - The Airtable API key
  * @param airtableBaseId - The Airtable base ID
  * @param airtableTableName - The Airtable table name
  * @param recordId - The ID of the record to update
  * @param fieldName - The field name to update (MainImageLink or InstaPhotoLink)
- * @param imgurClientId - The Imgur API client ID
+ * @param imgbbApiKey - The ImgBB API key
  */
 export async function processImageAndUpdateLinkField(
   imageUrl: string,
@@ -124,11 +122,11 @@ export async function processImageAndUpdateLinkField(
   airtableTableName: string,
   recordId: string,
   fieldName: string,
-  imgurClientId: string
+  imgbbApiKey: string
 ): Promise<string> {
   try {
-    // Step 1: Upload the image to Imgur
-    const imgurUrl = await uploadImageToImgur(imageUrl, imgurClientId);
+    // Step 1: Upload the image to ImgBB
+    const imgbbUrl = await uploadImageToImgBB(imageUrl, imgbbApiKey);
     
     // Step 2: Update the Airtable record with the new link
     await updateAirtableLinkField(
@@ -137,10 +135,10 @@ export async function processImageAndUpdateLinkField(
       airtableTableName,
       recordId,
       fieldName,
-      imgurUrl
+      imgbbUrl
     );
     
-    return imgurUrl;
+    return imgbbUrl;
   } catch (error) {
     console.error('Error in processImageAndUpdateLinkField:', error);
     throw error;
