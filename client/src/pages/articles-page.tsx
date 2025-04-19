@@ -8,7 +8,7 @@ import { CreateArticleModal } from "@/components/modals/create-article-modal";
 import { ViewArticleModal } from "@/components/modals/view-article-modal";
 import { Button } from "@/components/ui/button";
 import { Article } from "@shared/schema";
-import { Plus, Filter, ArrowUpDown, CalendarClock } from "lucide-react";
+import { Plus, Filter, ArrowUpDown, CalendarClock, CalendarDays } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -166,6 +166,15 @@ export default function ArticlesPage() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation('/articles/planner')} 
+                  className="w-full md:w-auto"
+                >
+                  <CalendarDays className="mr-2 h-4 w-4" />
+                  Calendar View
+                </Button>
                 
                 <Button onClick={handleCreateClick} className="w-full md:w-auto">
                   <Plus className="mr-2 h-4 w-4" />
