@@ -294,7 +294,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           description: "The image was uploaded to ImgBB and linked to Airtable",
         });
         
-        // Update the form data with the new image URL from Imgur
+        // Update the form data with the new image URL from ImgBB
         // The response can have different structures based on the endpoint
         let imageUrl: string | null = null;
         
@@ -399,7 +399,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           description: "The image was uploaded to ImgBB and linked to Airtable",
         });
         
-        // Update the form data with the new image URL from Imgur
+        // Update the form data with the new image URL from ImgBB
         // The response can have different structures based on the endpoint
         let imageUrl: string | null = null;
         
