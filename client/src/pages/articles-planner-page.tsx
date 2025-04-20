@@ -40,8 +40,9 @@ export default function ArticlesPlannerPage() {
   // Convert articles to calendar events
   const calendarEvents = articles ? articles
     .filter(article => {
-      // Include articles with a valid scheduled date, publishedAt date, or date field
-      // First check scheduled, then publishedAt, then fall back to date
+      // Include articles with a valid scheduled date (from Airtable "Scheduled" field), 
+      // publishedAt date, or date field (fallback)
+      // Note: Airtable field is "Scheduled" (capital S) but stored as "scheduled" (lowercase) in our DB
       return (article.scheduled && article.scheduled.length > 0) || article.publishedAt || (article.date && article.date.length > 0);
     })
     .map(article => {
