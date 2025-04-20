@@ -40,12 +40,19 @@ export default function ArticlesPlannerPage() {
   // Convert articles to calendar events
   const calendarEvents = articles ? articles
     .filter(article => {
-      // Only include articles with a scheduled date or publishedAt date
-      return article.scheduled || article.publishedAt;
+      // Only include articles with a scheduled date, publishedAt date, or createdAt date
+      return article.scheduled || article.publishedAt || article.createdAt;
     })
     .map(article => {
-      // Use the scheduled date if available, fallback to publishedAt
-      const dateStr = article.scheduled || (article.publishedAt ? new Date(article.publishedAt).toISOString() : '');
+      // Priority order: scheduled > publishedAt > createdAt
+      let dateStr = '';
+      if (article.scheduled) {
+        dateStr = article.scheduled;
+      } else if (article.publishedAt) {
+        dateStr = new Date(article.publishedAt).toISOString();
+      } else if (article.createdAt) {
+        dateStr = new Date(article.createdAt).toISOString();
+      }
       
       // Extract date and time for proper display in calendar
       let startDate, endDate;
@@ -54,7 +61,7 @@ export default function ArticlesPlannerPage() {
         const date = new Date(dateStr);
         
         // Default to 9 AM if no specific time was provided (most articles)
-        if (article.scheduled && !article.scheduled.includes('T')) {
+        if (dateStr && !dateStr.includes('T')) {
           // If only date is provided (no time), set it to 9:00 AM
           startDate = new Date(date.setHours(9, 0, 0));
           endDate = new Date(date.setHours(10, 0, 0)); // 1 hour duration
@@ -271,8 +278,8 @@ export default function ArticlesPlannerPage() {
                                 {article.author && <span>By {article.author}</span>}
                               </div>
                               <div>
-                                {article.publishedAt && 
-                                  new Date(article.publishedAt).toLocaleString(undefined, {
+                                {(article.scheduled || article.publishedAt) && 
+                                  new Date(article.scheduled || article.publishedAt).toLocaleString(undefined, {
                                     year: 'numeric',
                                     month: 'short',
                                     day: 'numeric',
