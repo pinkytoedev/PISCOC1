@@ -28,7 +28,7 @@ export default function Dashboard() {
   });
   
   // Get recently published articles, limited to 5
-  // Filter only published articles and sort by Scheduled date in chronological order (oldest first)
+  // Filter only published articles and sort by Scheduled date in reverse chronological order (newest first)
   const recentArticles = articles
     ?.filter(article => article.status === "published")
     .sort((a, b) => {
@@ -37,8 +37,8 @@ export default function Dashboard() {
                    (a.publishedAt ? new Date(a.publishedAt).getTime() : 0);
       const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 
                    (b.publishedAt ? new Date(b.publishedAt).getTime() : 0);
-      // Sort in chronological order (oldest first)
-      return dateA - dateB;
+      // Sort in reverse chronological order (newest first)
+      return dateB - dateA;
     })
     .slice(0, 5);
   
