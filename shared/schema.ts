@@ -50,7 +50,7 @@ export const articles = pgTable("articles", {
   featured: text("featured").notNull().default("no"),
   publishedAt: timestamp("published_at"),
   date: text("date"), // Airtable Date field for creation timestamp (stored as string)
-  scheduled: text("scheduled"), // Airtable Scheduled field for publication scheduling (stored as string)
+  Scheduled: text("scheduled"), // Airtable Scheduled field for publication scheduling (stored as string)
   finished: boolean("finished").default(false), // Maps to Airtable's Finished checkbox
   author: text("author").notNull(),
   photo: text("photo"),
@@ -184,7 +184,7 @@ export const articleSchema = z.object({
   featured: z.string(),
   publishedAt: z.date().optional(),
   date: z.string().optional(), // Airtable Date field (creation timestamp)
-  scheduled: z.string().optional(), // Airtable Scheduled field (publication date)
+  Scheduled: z.string().optional(), // Airtable Scheduled field (publication date)
   finished: z.boolean().optional(), // Airtable Finished field
   author: z.string(),
   photo: z.string(),

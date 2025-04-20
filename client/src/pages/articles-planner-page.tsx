@@ -42,14 +42,14 @@ export default function ArticlesPlannerPage() {
     .filter(article => {
       // Include articles with a valid scheduled date (from Airtable "Scheduled" field), 
       // publishedAt date, or date field (fallback)
-      // Note: Airtable field is "Scheduled" (capital S) but stored as "scheduled" (lowercase) in our DB
-      return (article.scheduled && article.scheduled.length > 0) || article.publishedAt || (article.date && article.date.length > 0);
+      // Note: We use "Scheduled" (capital S) consistently throughout our system to match Airtable
+      return (article.Scheduled && article.Scheduled.length > 0) || article.publishedAt || (article.date && article.date.length > 0);
     })
     .map(article => {
-      // Priority order: scheduled > publishedAt > date
+      // Priority order: Scheduled > publishedAt > date
       let dateStr = '';
-      if (article.scheduled && article.scheduled.length > 0) {
-        dateStr = article.scheduled;
+      if (article.Scheduled && article.Scheduled.length > 0) {
+        dateStr = article.Scheduled;
       } else if (article.publishedAt) {
         dateStr = new Date(article.publishedAt).toISOString();
       } else if (article.date && article.date.length > 0) {
@@ -280,8 +280,8 @@ export default function ArticlesPlannerPage() {
                                 {article.author && <span>By {article.author}</span>}
                               </div>
                               <div>
-                                {article.scheduled && article.scheduled.length > 0 ? 
-                                  new Date(article.scheduled as string).toLocaleString(undefined, {
+                                {article.Scheduled && article.Scheduled.length > 0 ? 
+                                  new Date(article.Scheduled as string).toLocaleString(undefined, {
                                     year: 'numeric',
                                     month: 'short',
                                     day: 'numeric',
