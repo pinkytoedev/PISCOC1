@@ -128,7 +128,7 @@ interface AirtableCarouselQuote {
   philo: string;
 }
 
-// Helper function to make Airtable API requests
+// Helper function to make Airtable API requests with pagination support
 async function airtableRequest(
   apiKey: string,
   baseId: string,
@@ -137,10 +137,16 @@ async function airtableRequest(
   data?: any,
   queryParams?: Record<string, string | number | boolean>
 ) {
+  // Only implement pagination for GET requests
+  if (method === "GET") {
+    return await airtableRequestWithPagination(apiKey, baseId, tableName, queryParams);
+  }
+  
+  // For non-GET requests, use the regular implementation
   // Build the URL with query parameters if provided
   let url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
   
-  if (queryParams && Object.keys(queryParams).length > 0 && method === "GET") {
+  if (queryParams && Object.keys(queryParams).length > 0) {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(queryParams)) {
       params.append(key, String(value));
@@ -170,6 +176,94 @@ async function airtableRequest(
   }
   
   return response.json();
+}
+
+// Helper function that implements pagination for GET requests
+async function airtableRequestWithPagination(
+  apiKey: string,
+  baseId: string,
+  tableName: string,
+  queryParams?: Record<string, string | number | boolean>
+) {
+  // Initialize the result object with empty records array
+  const result: any = { records: [] };
+  
+  // Initialize pagination parameters
+  let offset: string | undefined = undefined;
+  let hasMorePages = true;
+  let pageCount = 0;
+  
+  // Clone the query parameters to avoid modifying the original
+  const params = { ...queryParams } || {};
+  
+  // Airtable has a maximum limit of 100 records per request
+  // If no limit is specified, we use the maximum
+  if (!params.maxRecords) {
+    // A very high number to effectively get all records
+    params.maxRecords = 10000;
+  }
+  
+  // Default page size if not specified is 100 (Airtable's maximum)
+  if (!params.pageSize) {
+    params.pageSize = 100;
+  }
+  
+  console.log(`Starting paginated Airtable request for table: ${tableName}`);
+  
+  // Fetch all pages
+  while (hasMorePages) {
+    // Build the URL with pagination parameters
+    let url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
+    const urlParams = new URLSearchParams();
+    
+    // Add all query parameters
+    for (const [key, value] of Object.entries(params)) {
+      urlParams.append(key, String(value));
+    }
+    
+    // Add the offset parameter if we have one
+    if (offset) {
+      urlParams.append('offset', offset);
+    }
+    
+    url += `?${urlParams.toString()}`;
+    
+    console.log(`Airtable API request (page ${pageCount + 1}): GET ${url.split('?')[0]}`);
+    
+    const options: RequestInit = {
+      method: 'GET',
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      }
+    };
+    
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
+    }
+    
+    const pageData = await response.json();
+    
+    // Add records from this page to our result
+    if (pageData.records && Array.isArray(pageData.records)) {
+      result.records = [...result.records, ...pageData.records];
+    }
+    
+    // Check if there are more pages
+    if (pageData.offset) {
+      offset = pageData.offset;
+      pageCount++;
+    } else {
+      hasMorePages = false;
+    }
+  }
+  
+  console.log(`Completed paginated Airtable request. Retrieved ${result.records.length} records from ${pageCount + 1} pages.`);
+  
+  return result;
 }
 
 // Helper function to delete a record from Airtable
