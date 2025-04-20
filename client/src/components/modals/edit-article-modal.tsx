@@ -33,10 +33,11 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
     if (isOpen && article) {
       const formDataToUse = { ...article };
       
-      // Format scheduled date for datetime-local input if it exists
-      if (formDataToUse.scheduled) {
+      // Format date for datetime-local input - use scheduled or fallback to publishedAt
+      const dateToFormat = formDataToUse.scheduled || formDataToUse.publishedAt;
+      if (dateToFormat) {
         // Make sure it's in the right format for datetime-local input
-        const scheduledDate = new Date(formDataToUse.scheduled);
+        const scheduledDate = new Date(dateToFormat);
         if (!isNaN(scheduledDate.getTime())) {
           // Format as YYYY-MM-DDThh:mm
           const year = scheduledDate.getFullYear();
