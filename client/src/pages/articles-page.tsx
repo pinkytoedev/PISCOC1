@@ -27,7 +27,7 @@ export default function ArticlesPage() {
   const [editArticle, setEditArticle] = useState<Article | null>(null);
   const [viewArticle, setViewArticle] = useState<Article | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
-  const [sortBy, setSortBy] = useState<string>(sortParam || "chronological");
+  const [sortBy, setSortBy] = useState<string>(sortParam || "newest");
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
