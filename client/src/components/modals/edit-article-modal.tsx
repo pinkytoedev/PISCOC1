@@ -33,8 +33,8 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
     if (isOpen && article) {
       const formDataToUse = { ...article };
       
-      // Format date for datetime-local input - use scheduled or fallback to publishedAt
-      const dateToFormat = formDataToUse.scheduled || formDataToUse.publishedAt;
+      // Format date for datetime-local input - use Scheduled or fallback to publishedAt
+      const dateToFormat = formDataToUse.Scheduled || formDataToUse.publishedAt;
       if (dateToFormat) {
         // Make sure it's in the right format for datetime-local input
         const scheduledDate = new Date(dateToFormat);
@@ -46,7 +46,7 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
           const hours = String(scheduledDate.getHours()).padStart(2, '0');
           const minutes = String(scheduledDate.getMinutes()).padStart(2, '0');
           
-          formDataToUse.scheduled = `${year}-${month}-${day}T${hours}:${minutes}`;
+          formDataToUse.Scheduled = `${year}-${month}-${day}T${hours}:${minutes}`;
         }
       }
       
@@ -190,12 +190,12 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="scheduled">Scheduled Publish Date</Label>
+              <Label htmlFor="Scheduled">Scheduled Publish Date</Label>
               <Input
-                id="scheduled"
-                name="scheduled"
+                id="Scheduled"
+                name="Scheduled"
                 type="datetime-local"
-                value={formData.scheduled || ""}
+                value={formData.Scheduled || ""}
                 onChange={handleInputChange}
               />
             </div>

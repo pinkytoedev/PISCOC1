@@ -332,9 +332,9 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   airtableData.Date = article.date || new Date().toISOString();
   
   // Handle publication schedule in the "Scheduled" field if available
-  if (article.scheduled) {
-    // For scheduled publication time, use the scheduled field
-    airtableData.Scheduled = article.scheduled;
+  if (article.Scheduled) {
+    // For scheduled publication time, use the Scheduled field
+    airtableData.Scheduled = article.Scheduled;
   } else if (article.publishedAt) {
     // Fall back to publishedAt if scheduled not available
     // Make sure it's a complete ISO string with time
@@ -797,7 +797,7 @@ export function setupAirtableRoutes(app: Express) {
             featured: fields.Featured ? "yes" : "no",
             publishedAt: fields.Scheduled ? new Date(fields.Scheduled) : null,
             date: fields.Date || "", // Store the creation timestamp from Airtable
-            scheduled: fields.Scheduled || "", // Store the publication date from Airtable
+            Scheduled: fields.Scheduled || "", // Store the publication date from Airtable
             finished: !!fields.Finished, // Store the finished state directly
             author: authorName,
             photo: photoName,
