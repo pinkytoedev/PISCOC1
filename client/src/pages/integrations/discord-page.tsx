@@ -950,11 +950,41 @@ export default function DiscordPage() {
                             
                             <div>
                               <h3 className="text-sm font-medium mb-2">Available Commands</h3>
-                              <div className="bg-gray-900 text-gray-100 p-3 rounded-md font-mono text-sm">
+                              <div className="bg-gray-900 text-gray-100 p-3 rounded-md font-mono text-sm space-y-2">
                                 <div className="flex items-center">
                                   <Terminal className="h-4 w-4 mr-2 text-green-400" />
                                   <span className="text-green-400">/ping</span>
                                   <span className="ml-3 text-gray-400">Check the bot's response time</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/list_articles</span>
+                                  <span className="ml-3 text-gray-400">List articles that have not been published yet</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/create_article</span>
+                                  <span className="ml-3 text-gray-400">Create a new article draft</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/edit_article</span>
+                                  <span className="ml-3 text-gray-400">Edit an existing draft article</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/insta</span>
+                                  <span className="ml-3 text-gray-400">Upload an Instagram image to an unpublished article</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/web</span>
+                                  <span className="ml-3 text-gray-400">Upload a web (main) image to an unpublished article</span>
+                                </div>
+                                <div className="flex items-center">
+                                  <Terminal className="h-4 w-4 mr-2 text-green-400" />
+                                  <span className="text-green-400">/upload_content</span>
+                                  <span className="ml-3 text-gray-400">Upload an HTML, RTF, or plain text file as article content</span>
                                 </div>
                               </div>
                             </div>
@@ -1069,6 +1099,8 @@ export default function DiscordPage() {
                         <p className="text-sm text-gray-500 mt-1">
                           Enter your bot token and application ID, initialize the bot, and test the commands in your Discord server.
                           Try the <span className="font-mono text-xs bg-gray-100 px-1 rounded">/ping</span> command to verify it's working.
+                          The bot offers multiple commands including <span className="font-mono text-xs bg-gray-100 px-1 rounded">/create_article</span>, 
+                          <span className="font-mono text-xs bg-gray-100 px-1 rounded">/list_articles</span>, and more for managing content directly from Discord.
                         </p>
                       </div>
                     </div>
