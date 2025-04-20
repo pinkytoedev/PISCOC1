@@ -11,6 +11,7 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { EventSourceInput, EventClickArg } from '@fullcalendar/core';
+import { EditArticleModal } from "@/components/modals/edit-article-modal";
 import {
   Popover,
   PopoverContent,
@@ -29,6 +30,8 @@ export default function ArticlesPlannerPage() {
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
   const [viewType, setViewType] = useState<'dayGridMonth' | 'timeGridWeek' | 'timeGridDay'>('dayGridMonth');
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
@@ -100,8 +103,9 @@ export default function ArticlesPlannerPage() {
     const article = clickInfo.event.extendedProps?.article as Article;
     
     if (article && article.id) {
-      // Navigate to the article edit page
-      setLocation(`/articles?edit=${article.id}`);
+      // Open the edit modal with the selected article
+      setSelectedArticle(article);
+      setEditModalOpen(true);
     }
   };
   
@@ -179,9 +183,9 @@ export default function ArticlesPlannerPage() {
 
             {/* Calendar View */}
             <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 overflow-hidden" 
-                 style={{ 
-                   height: viewType === 'timeGridDay' ? 'calc(100vh-180px)' : 'calc(100vh-240px)',
-                 }}>
+                style={{ 
+                  height: viewType === 'timeGridDay' ? 'calc(100vh - 180px)' : 'calc(100vh - 240px)',
+                }}>
               {isLoading ? (
                 <div className="flex justify-center items-center h-full">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -282,7 +286,10 @@ export default function ArticlesPlannerPage() {
                               variant="outline" 
                               size="sm" 
                               className="w-full mt-4"
-                              onClick={() => setLocation(`/articles?edit=${article.id}`)}
+                              onClick={() => {
+                                setSelectedArticle(article);
+                                setEditModalOpen(true);
+                              }}
                             >
                               Edit Article
                             </Button>
@@ -318,6 +325,12 @@ export default function ArticlesPlannerPage() {
           </div>
         </main>
       </div>
+
+      <EditArticleModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        article={selectedArticle}
+      />
     </div>
   );
 }
