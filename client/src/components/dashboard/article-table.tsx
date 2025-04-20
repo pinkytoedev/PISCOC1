@@ -354,9 +354,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
     } else if (sort === 'chronological') {
       // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
-      const dateA = a.scheduled ? new Date(a.scheduled).getTime() : 
+      const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 
                   (a.publishedAt ? new Date(a.publishedAt).getTime() : 0);
-      const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 
+      const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() : 
                   (b.publishedAt ? new Date(b.publishedAt).getTime() : 0);
       
       // If both have dates, sort by those dates
@@ -691,8 +691,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                       ? article.date 
                         ? new Date(article.date).toLocaleDateString() 
                         : '--'
-                      : article.scheduled && article.scheduled.length > 0
-                        ? new Date(article.scheduled).toLocaleDateString()
+                      : article.Scheduled && article.Scheduled.length > 0
+                        ? new Date(article.Scheduled).toLocaleDateString()
                         : article.publishedAt 
                           ? new Date(article.publishedAt).toLocaleDateString() 
                           : '--'
@@ -919,8 +919,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         ? article.date 
                           ? new Date(article.date).toLocaleDateString() 
                           : 'Not recorded'
-                        : article.scheduled && article.scheduled.length > 0
-                          ? new Date(article.scheduled).toLocaleDateString()
+                        : article.Scheduled && article.Scheduled.length > 0
+                          ? new Date(article.Scheduled).toLocaleDateString()
                           : article.publishedAt 
                             ? new Date(article.publishedAt).toLocaleDateString() 
                             : 'Unscheduled'
