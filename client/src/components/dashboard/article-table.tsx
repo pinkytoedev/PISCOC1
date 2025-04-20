@@ -693,7 +693,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         : '--'
                       : article.Scheduled 
                         ? new Date(article.Scheduled).toLocaleDateString()
-                        : '--'
+                        : article.publishedAt
+                          ? new Date(article.publishedAt).toLocaleDateString()
+                          : '--'
                     }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -919,7 +921,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                           : 'Not recorded'
                         : article.Scheduled
                           ? new Date(article.Scheduled).toLocaleDateString()
-                          : 'Unscheduled'
+                          : article.publishedAt
+                            ? new Date(article.publishedAt).toLocaleDateString()
+                            : 'Unscheduled'
                     }
                   </div>
                   <div>
