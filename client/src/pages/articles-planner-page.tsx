@@ -40,18 +40,17 @@ export default function ArticlesPlannerPage() {
   // Convert articles to calendar events
   const calendarEvents = articles ? articles
     .filter(article => {
-      // Only include articles with a scheduled date, publishedAt date, or createdAt date
-      return article.scheduled || article.publishedAt || article.createdAt;
+      // Only include articles with a valid scheduled date or publishedAt date
+      // We'll exclude createdAt to prevent showing too many articles
+      return (article.scheduled && article.scheduled.length > 0) || article.publishedAt;
     })
     .map(article => {
-      // Priority order: scheduled > publishedAt > createdAt
+      // Priority order: scheduled > publishedAt
       let dateStr = '';
-      if (article.scheduled) {
+      if (article.scheduled && article.scheduled.length > 0) {
         dateStr = article.scheduled;
       } else if (article.publishedAt) {
         dateStr = new Date(article.publishedAt).toISOString();
-      } else if (article.createdAt) {
-        dateStr = new Date(article.createdAt).toISOString();
       }
       
       // Extract date and time for proper display in calendar
@@ -278,14 +277,23 @@ export default function ArticlesPlannerPage() {
                                 {article.author && <span>By {article.author}</span>}
                               </div>
                               <div>
-                                {(article.scheduled || article.publishedAt) && 
-                                  new Date(article.scheduled || article.publishedAt).toLocaleString(undefined, {
+                                {article.scheduled && article.scheduled.length > 0 ? 
+                                  new Date(article.scheduled as string).toLocaleString(undefined, {
                                     year: 'numeric',
                                     month: 'short',
                                     day: 'numeric',
                                     hour: '2-digit',
                                     minute: '2-digit'
                                   })
+                                : article.publishedAt ? 
+                                  new Date(article.publishedAt).toLocaleString(undefined, {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
+                                : ""
                                 }
                               </div>
                             </div>
