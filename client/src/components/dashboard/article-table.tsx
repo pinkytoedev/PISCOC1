@@ -257,11 +257,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     
     // Find articles that are scheduled and their publication date has passed
     const articlesToPublish = articles.filter(article => {
-      // Skip if no scheduled date is set - check Scheduled field first, then fallback to publishedAt
-      // Handle empty strings for Scheduled as well
-      const scheduledDateTime = 
-        (article.Scheduled && article.Scheduled.length > 0) ? article.Scheduled : 
-        article.publishedAt ? article.publishedAt : null;
+      // Skip if no scheduled date is set - check Scheduled field only
+      const scheduledDateTime = article.Scheduled;
       
       if (!scheduledDateTime) {
         return false;
@@ -358,13 +355,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       // Sort by oldest first
       return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
     } else if (sort === 'chronological') {
-      // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
-      const dateA = (a.Scheduled && a.Scheduled.length > 0) ? new Date(a.Scheduled).getTime() : 
-                  (a.publishedAt ? new Date(a.publishedAt).getTime() : 
-                   (a.date ? new Date(a.date).getTime() : 0));
-      const dateB = (b.Scheduled && b.Scheduled.length > 0) ? new Date(b.Scheduled).getTime() : 
-                  (b.publishedAt ? new Date(b.publishedAt).getTime() : 
-                   (b.date ? new Date(b.date).getTime() : 0));
+      // Sort by the Scheduled date field from Airtable only
+      const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 0;
+      const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() : 0;
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
@@ -463,9 +456,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                 <div className="col-span-2">
                   {article.Scheduled 
                     ? new Date(article.Scheduled).toLocaleString() 
-                    : article.publishedAt 
-                      ? new Date(article.publishedAt).toLocaleString() 
-                      : 'Not scheduled'}
+                    : 'Not scheduled'}
                 </div>
               </div>
               
@@ -700,13 +691,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                       ? article.date 
                         ? new Date(article.date).toLocaleDateString() 
                         : '--'
-                      : article.Scheduled && article.Scheduled.length > 0
+                      : article.Scheduled 
                         ? new Date(article.Scheduled).toLocaleDateString()
-                        : article.publishedAt 
-                          ? new Date(article.publishedAt).toLocaleDateString() 
-                          : article.date 
-                            ? new Date(article.date).toLocaleDateString() 
-                            : '--'
+                        : '--'
                     }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -930,13 +917,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                         ? article.date 
                           ? new Date(article.date).toLocaleDateString() 
                           : 'Not recorded'
-                        : article.Scheduled && article.Scheduled.length > 0
+                        : article.Scheduled
                           ? new Date(article.Scheduled).toLocaleDateString()
-                          : article.publishedAt 
-                            ? new Date(article.publishedAt).toLocaleDateString() 
-                            : article.date 
-                              ? new Date(article.date).toLocaleDateString() 
-                              : 'Unscheduled'
+                          : 'Unscheduled'
                     }
                   </div>
                   <div>
