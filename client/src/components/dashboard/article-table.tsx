@@ -348,13 +348,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   
   // Then sort articles based on sort parameter
   const sortedArticles = filteredArticles ? [...filteredArticles].sort((a, b) => {
-    if (!sort || sort === 'newest') {
-      // Sort by newest first (created/updated date)
-      return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
-    } else if (sort === 'oldest') {
-      // Sort by oldest first
-      return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
-    } else if (sort === 'chronological') {
+    // Default to chronological sort if not specified otherwise
+    if (!sort || sort === 'chronological') {
       // Sort by the Scheduled date field from Airtable only
       const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 0;
       const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() : 0;
@@ -369,7 +364,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       if (!dateA && dateB) return 1;
       
       // If neither has a date, fall back to createdAt
+      return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
+    } else if (sort === 'newest') {
+      // Sort by newest first (created/updated date)
       return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+    } else if (sort === 'oldest') {
+      // Sort by oldest first
+      return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
     }
     
     return 0;
