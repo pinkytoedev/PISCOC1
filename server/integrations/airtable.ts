@@ -390,6 +390,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         
         // Using Link field for MainImage instead of attachment field
         // Use the MainImageLink field which accepts a URL string
+        // Use the MainImageLink field which accepts a URL string
         airtableData.MainImageLink = article.imageUrl;
         
         console.log("Setting MainImageLink:", article.imageUrl);
