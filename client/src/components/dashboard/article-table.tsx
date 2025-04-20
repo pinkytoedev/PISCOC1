@@ -353,13 +353,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
       // Sort by oldest first
       return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
     } else if (sort === 'chronological') {
-      // Sort by the article Date field from Airtable (stored in publishedAt)
-      const dateA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-      const dateB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+      // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
+      const dateA = a.scheduled ? new Date(a.scheduled).getTime() : 
+                  (a.publishedAt ? new Date(a.publishedAt).getTime() : 0);
+      const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 
+                  (b.publishedAt ? new Date(b.publishedAt).getTime() : 0);
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
-        return dateB - dateA; // Most recent dates first
+        return dateA - dateB; // Chronological order (oldest first)
       }
       
       // If only one has a date, prioritize the one with a date
