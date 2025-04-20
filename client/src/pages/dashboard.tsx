@@ -32,11 +32,9 @@ export default function Dashboard() {
   const recentArticles = articles
     ?.filter(article => article.status === "published")
     .sort((a, b) => {
-      // Use the scheduled date field first, fall back to publishedAt if not available
-      const dateA = a.scheduled ? new Date(a.scheduled).getTime() : 
-                   (a.publishedAt ? new Date(a.publishedAt).getTime() : 0);
-      const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 
-                   (b.publishedAt ? new Date(b.publishedAt).getTime() : 0);
+      // Use only the scheduled date field for sorting
+      const dateA = a.scheduled ? new Date(a.scheduled).getTime() : 0;
+      const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 0;
       // Sort in chronological order (oldest first)
       return dateA - dateB;
     })
