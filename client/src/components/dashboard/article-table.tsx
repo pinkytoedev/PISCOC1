@@ -255,10 +255,11 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     const now = new Date();
     console.log("Auto-publishing check at:", now.toISOString());
     
-    // Find articles that are scheduled and their published date has passed
+    // Find articles that are scheduled and their publication date has passed
     const articlesToPublish = articles.filter(article => {
-      // Skip if no publish date is set
-      if (!article.publishedAt) {
+      // Skip if no scheduled date is set - check Scheduled field first, then fallback to publishedAt
+      const scheduledDateTime = article.Scheduled || article.publishedAt;
+      if (!scheduledDateTime) {
         return false;
       }
       
@@ -272,7 +273,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         return false;
       }
       
-      const scheduledDate = new Date(article.publishedAt);
+      const scheduledDate = new Date(scheduledDateTime);
       const shouldPublish = scheduledDate <= now;
       
       // Log potential articles for debugging
@@ -454,9 +455,11 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Scheduled:</div>
                 <div className="col-span-2">
-                  {article.publishedAt 
-                    ? new Date(article.publishedAt).toLocaleString() 
-                    : 'Not scheduled'}
+                  {article.Scheduled 
+                    ? new Date(article.Scheduled).toLocaleString() 
+                    : article.publishedAt 
+                      ? new Date(article.publishedAt).toLocaleString() 
+                      : 'Not scheduled'}
                 </div>
               </div>
               
