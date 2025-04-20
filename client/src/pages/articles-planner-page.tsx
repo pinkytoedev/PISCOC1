@@ -40,17 +40,19 @@ export default function ArticlesPlannerPage() {
   // Convert articles to calendar events
   const calendarEvents = articles ? articles
     .filter(article => {
-      // Only include articles with a valid scheduled date or publishedAt date
-      // We'll exclude createdAt to prevent showing too many articles
-      return (article.scheduled && article.scheduled.length > 0) || article.publishedAt;
+      // Include articles with a valid scheduled date, publishedAt date, or date field
+      // First check scheduled, then publishedAt, then fall back to date
+      return (article.scheduled && article.scheduled.length > 0) || article.publishedAt || (article.date && article.date.length > 0);
     })
     .map(article => {
-      // Priority order: scheduled > publishedAt
+      // Priority order: scheduled > publishedAt > date
       let dateStr = '';
       if (article.scheduled && article.scheduled.length > 0) {
         dateStr = article.scheduled;
       } else if (article.publishedAt) {
         dateStr = new Date(article.publishedAt).toISOString();
+      } else if (article.date && article.date.length > 0) {
+        dateStr = article.date;
       }
       
       // Extract date and time for proper display in calendar
@@ -287,6 +289,14 @@ export default function ArticlesPlannerPage() {
                                   })
                                 : article.publishedAt ? 
                                   new Date(article.publishedAt).toLocaleString(undefined, {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
+                                : article.date && article.date.length > 0 ?
+                                  new Date(article.date).toLocaleString(undefined, {
                                     year: 'numeric',
                                     month: 'short',
                                     day: 'numeric',
