@@ -49,6 +49,11 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
         }
       }
       
+      // Handle empty author field
+      if (!formDataToUse.author) {
+        formDataToUse.author = "none";
+      }
+      
       setFormData(formDataToUse);
     }
   }, [isOpen, article]);
@@ -61,7 +66,12 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
 
   // Handle select changes
   const handleSelectChange = (name: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    // Handle "none" value as empty string for author
+    if (name === "author" && value === "none") {
+      setFormData((prev) => ({ ...prev, [name]: "" }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
   
   // Handle checkbox changes
@@ -161,7 +171,7 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
             <div className="space-y-2">
               <Label htmlFor="author">Author</Label>
               <Select
-                value={formData.author || ""}
+                value={formData.author || "none"}
                 onValueChange={(value) => handleSelectChange("author", value)}
               >
                 <SelectTrigger id="author">
@@ -173,7 +183,7 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
                       {member.name}
                     </SelectItem>
                   ))}
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                 </SelectContent>
               </Select>
             </div>
