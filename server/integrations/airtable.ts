@@ -710,17 +710,22 @@ export function setupAirtableRoutes(app: Express) {
             syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
           }
           
-          // Get the image URL from MainImage attachment if it exists and log the full structure
+          // Use helper function that correctly prioritizes the link fields over attachment fields
+          // Default image URL to use if no images are found
           let imageUrl = defaultImageUrl;
           let instagramImageUrl = "";
           
-          if (fields.MainImage && fields.MainImage.length > 0) {
-            try {
-              // Log the full structure to better understand the Airtable format
+          try {
+            // Check for MainImageLink first (preferred) then fallback to MainImage attachment
+            if (fields.MainImageLink && typeof fields.MainImageLink === 'string') {
+              imageUrl = fields.MainImageLink;
+              syncResults.details.push(`Record ${record.id}: Found MainImageLink: ${imageUrl.substring(0, 50)}...`);
+            }
+            // If no MainImageLink, try MainImage attachment
+            else if (fields.MainImage && fields.MainImage.length > 0) {
               console.log(`Record ${record.id}: MainImage attachment structure:`, JSON.stringify(fields.MainImage[0], null, 2));
               
               // Extract the URL from the attachment object
-              // First try the url property, then check for thumbnails
               if (fields.MainImage[0].url) {
                 imageUrl = fields.MainImage[0].url;
               } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.full) {
@@ -729,20 +734,19 @@ export function setupAirtableRoutes(app: Express) {
                 imageUrl = fields.MainImage[0].thumbnails.large.url;
               }
               
-              syncResults.details.push(`Record ${record.id}: Found MainImage: ${imageUrl.substring(0, 50)}...`);
-            } catch (error) {
-              console.error(`Error parsing MainImage for record ${record.id}:`, error);
-              syncResults.details.push(`Record ${record.id}: Error parsing MainImage, using default`);
+              syncResults.details.push(`Record ${record.id}: Found MainImage attachment: ${imageUrl.substring(0, 50)}...`);
             }
-          }
-          
-          if (fields.instaPhoto && fields.instaPhoto.length > 0) {
-            try {
-              // Log the full structure to better understand the Airtable format
+            
+            // Check for InstaPhotoLink first (preferred) then fallback to instaPhoto attachment
+            if (fields.InstaPhotoLink && typeof fields.InstaPhotoLink === 'string') {
+              instagramImageUrl = fields.InstaPhotoLink;
+              syncResults.details.push(`Record ${record.id}: Found InstaPhotoLink: ${instagramImageUrl.substring(0, 50)}...`);
+            }
+            // If no InstaPhotoLink, try instaPhoto attachment
+            else if (fields.instaPhoto && fields.instaPhoto.length > 0) {
               console.log(`Record ${record.id}: instaPhoto attachment structure:`, JSON.stringify(fields.instaPhoto[0], null, 2));
               
               // Extract the URL from the attachment object
-              // First try the url property, then check for thumbnails
               if (fields.instaPhoto[0].url) {
                 instagramImageUrl = fields.instaPhoto[0].url;
               } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.full) {
@@ -751,17 +755,17 @@ export function setupAirtableRoutes(app: Express) {
                 instagramImageUrl = fields.instaPhoto[0].thumbnails.large.url;
               }
               
-              syncResults.details.push(`Record ${record.id}: Found instaPhoto: ${instagramImageUrl.substring(0, 50)}...`);
-              
-              // Use instaPhoto as fallback if MainImage is not available
-              if (!fields.MainImage || fields.MainImage.length === 0) {
-                imageUrl = instagramImageUrl;
-                syncResults.details.push(`Record ${record.id}: Using instaPhoto as MainImage is not available`);
-              }
-            } catch (error) {
-              console.error(`Error parsing instaPhoto for record ${record.id}:`, error);
-              syncResults.details.push(`Record ${record.id}: Error parsing instaPhoto, using default if needed`);
+              syncResults.details.push(`Record ${record.id}: Found instaPhoto attachment: ${instagramImageUrl.substring(0, 50)}...`);
             }
+            
+            // Use instaPhoto/InstaPhotoLink as fallback if no main image
+            if (imageUrl === defaultImageUrl && instagramImageUrl !== "") {
+              imageUrl = instagramImageUrl;
+              syncResults.details.push(`Record ${record.id}: Using Instagram image as main image fallback`);
+            }
+          } catch (error) {
+            console.error(`Error processing images for record ${record.id}:`, error);
+            syncResults.details.push(`Record ${record.id}: Error processing images, using defaults`);
           }
           
           // Get the author name as a string (first one if it's an array)
