@@ -32,11 +32,20 @@ export default function Dashboard() {
   const recentArticles = articles
     ?.filter(article => article.status === "published")
     .sort((a, b) => {
-      // Use only the scheduled date field for sorting
-      const dateA = a.scheduled ? new Date(a.scheduled).getTime() : 0;
-      const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 0;
-      // Sort in chronological order (oldest first)
-      return dateA - dateB;
+      // Use the scheduled date field (from Airtable's "Scheduled" field) for sorting
+      // If not available, fall back to publishedAt or createdAt
+      const getDateValue = (article) => {
+        if (article.scheduled) return new Date(article.scheduled).getTime();
+        if (article.publishedAt) return new Date(article.publishedAt).getTime();
+        if (article.createdAt) return new Date(article.createdAt).getTime();
+        return 0;
+      };
+      
+      const dateA = getDateValue(a);
+      const dateB = getDateValue(b);
+      
+      // Sort in chronological order (newest first for recently published)
+      return dateB - dateA;
     })
     .slice(0, 5);
   
