@@ -27,21 +27,19 @@ export default function Dashboard() {
     queryKey: ['/api/articles'],
   });
   
-  // Get the 5 most recent published articles
-  // First filter only published articles
+  // Get recently published articles, limited to 5
+  // Filter only published articles and sort by Scheduled date in chronological order (oldest first)
   const recentArticles = articles
     ?.filter(article => article.status === "published")
-    // Sort by scheduled date in reverse chronological order (newest first)
     .sort((a, b) => {
       // Use the scheduled date field first, fall back to publishedAt if not available
       const dateA = a.scheduled ? new Date(a.scheduled).getTime() : 
                    (a.publishedAt ? new Date(a.publishedAt).getTime() : 0);
       const dateB = b.scheduled ? new Date(b.scheduled).getTime() : 
                    (b.publishedAt ? new Date(b.publishedAt).getTime() : 0);
-      // Sort in reverse chronological order (newest first) for the dashboard
-      return dateB - dateA;
+      // Sort in chronological order (oldest first)
+      return dateA - dateB;
     })
-    // Take the 5 most recent articles
     .slice(0, 5);
   
   // Get pending articles for review
@@ -130,7 +128,7 @@ export default function Dashboard() {
             {/* Recent Articles Section */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-medium text-gray-900">Latest Publications</h2>
+                <h2 className="text-lg font-medium text-gray-900">Recent Publications</h2>
                 <Link href="/articles">
                   <Button variant="outline" size="sm">
                     View all
