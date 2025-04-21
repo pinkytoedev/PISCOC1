@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -158,6 +158,33 @@ export type InsertIntegrationSetting = z.infer<typeof insertIntegrationSettingSc
 
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
+
+// Admin requests table
+export const adminRequests = pgTable("admin_requests", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // 'pinkytoe', 'piscoc', 'misc'
+  urgency: text("urgency").notNull(), // 'low', 'medium', 'high', 'critical'
+  status: varchar("status", { length: 50 }).notNull().default("open"),
+  createdBy: varchar("created_by", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  assignedTo: integer("assigned_to").references(() => users.id),
+  discordUserId: varchar("discord_user_id", { length: 255 }),
+  discordUserName: varchar("discord_user_name", { length: 255 }),
+  notes: text("notes"),
+});
+
+export const insertAdminRequestSchema = createInsertSchema(adminRequests, {
+  // Exclude these fields as they're generated automatically
+  id: undefined,
+  createdAt: undefined,
+  updatedAt: undefined,
+});
+
+export type AdminRequest = typeof adminRequests.$inferSelect;
+export type InsertAdminRequest = z.infer<typeof insertAdminRequestSchema>;
 
 // Extended form validation schemas
 export const teamSchema = z.object({
