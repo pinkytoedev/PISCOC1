@@ -195,7 +195,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                 <li className="px-2" key={section.section}>
                   <div
                     className={cn(
-                      "px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider",
+                      "px-3 py-2 text-xs font-semibold text-white uppercase tracking-wider",
                       collapsed ? "text-center" : "",
                     )}
                   >
@@ -278,8 +278,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
               e.stopPropagation();
             }}
           >
-            <div className="p-4 flex items-center justify-between border-b border-gray-700">
-              <h2 className="text-lg font-semibold">Dashboard</h2>
+            <div className="p-4 flex items-center justify-between border-b border-pink">
+              <h2 className="text-lg font-semibold text-white">Dashboard</h2>
               <Button
                 variant="ghost"
                 size="sm"
@@ -288,7 +288,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                   e.stopPropagation();
                   if (onMobileClose) onMobileClose();
                 }}
-                className="text-gray-400 hover:text-white touch-manipulation p-2"
+                className="text-white hover:text-white touch-manipulation p-2"
                 type="button"
                 aria-label="Close menu"
               >
@@ -300,7 +300,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
               <ul className="space-y-8">
                 {navItems.map((section) => (
                   <li className="px-2" key={section.section}>
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                    <div className="px-3 py-2 text-xs font-semibold text-white uppercase tracking-wider">
                       {section.section}
                     </div>
                     <ul className="mt-1 space-y-1">
