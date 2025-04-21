@@ -33,21 +33,25 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
     <header className="bg-white border-b border-gray-200 shadow-sm">
       <div className="flex justify-between items-center px-4 py-3">
         <div className="flex items-center space-x-3">
-          <Button 
-            variant="default" 
-            size="default"
+          <button 
             onClick={(e) => {
+              // Use a native button instead of Button component
               e.preventDefault();
               e.stopPropagation();
               console.log("Menu button clicked");
-              if (onMobileMenuToggle) onMobileMenuToggle();
+              // Delay handling to avoid any race conditions
+              if (onMobileMenuToggle) {
+                setTimeout(() => {
+                  onMobileMenuToggle();
+                }, 10);
+              }
             }} 
-            className="md:hidden mr-2 touch-manipulation p-2 bg-primary hover:bg-primary/80 active:bg-primary/90"
+            className="md:hidden mr-2 touch-manipulation p-3 bg-primary hover:bg-primary/80 active:bg-primary/90 text-white rounded-md"
             aria-label="Toggle mobile menu"
             type="button"
           >
             <Menu className="h-5 w-5 text-white" />
-          </Button>
+          </button>
           <div className="font-medium text-xl flex items-center">
             <span className="mr-2 text-primary">
               <LinkIcon className="h-5 w-5" />
