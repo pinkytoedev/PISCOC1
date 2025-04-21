@@ -7,6 +7,7 @@ import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgBBRoutes } from "./integrations/imgbb";
+import { setupDirectUploadRoutes } from "./integrations/directUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
@@ -36,6 +37,9 @@ const handleZodError = (error: ZodError) => {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
+  
+  // Set up direct upload routes
+  setupDirectUploadRoutes(app);
   
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {

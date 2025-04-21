@@ -9,7 +9,7 @@ import fs from 'fs';
 import multer from 'multer';
 import { storage } from '../storage';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
-import { processZipFile as extractHTMLFromZip } from '../utils/zipProcessor';
+import { processZipFile } from '../utils/zipProcessor';
 
 // Configure multer for file uploads with larger size limits
 const uploadDir = path.join(process.cwd(), 'uploads');
