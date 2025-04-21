@@ -68,7 +68,7 @@ export default function ApiStatusPage() {
   };
 
   return (
-    <Layout>
+    <Layout title="API Status Dashboard">
       <div className="container mx-auto py-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">API Status Dashboard</h1>
