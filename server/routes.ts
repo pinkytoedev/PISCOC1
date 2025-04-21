@@ -481,25 +481,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin-requests", isAuthenticated, async (req, res) => {
     try {
-      // Basic validation
-      const { title, description, category, urgency } = req.body;
-      
-      if (!title || !description || !category || !urgency) {
-        return res.status(400).json({ 
-          message: "Missing required fields (title, description, category, urgency)" 
-        });
-      }
-      
-      // Create admin request
-      const request = await storage.createAdminRequest({
-        title,
-        description,
-        category,
-        urgency,
+      // Use Zod for validation
+      const validatedData = insertAdminRequestSchema.parse({
+        ...req.body,
         status: 'open',
         createdBy: 'web',
+        createdAt: new Date(),
         ...(req.user ? { userId: req.user.id } : {})
       });
+      
+      // Create admin request
+      const request = await storage.createAdminRequest(validatedData);
       
       // Log activity
       await storage.createActivityLog({
@@ -508,14 +500,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceType: 'admin_request',
         resourceId: request.id.toString(),
         details: {
-          title,
-          category,
-          urgency
+          title: request.title,
+          category: request.category,
+          urgency: request.urgency
         }
       });
       
       res.status(201).json(request);
     } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json(handleZodError(error));
+      }
       console.error("Error creating admin request", error);
       res.status(500).json({ message: "Failed to create admin request" });
     }
@@ -536,8 +531,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Admin request not found" });
       }
       
+      // Validate the update data using Zod
+      const validatedData = insertAdminRequestSchema.partial().parse({
+        ...req.body,
+        updatedAt: new Date()
+      });
+      
       // Update the request
-      const updatedRequest = await storage.updateAdminRequest(id, req.body);
+      const updatedRequest = await storage.updateAdminRequest(id, validatedData);
       
       // Log activity
       await storage.createActivityLog({
@@ -546,13 +547,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceType: 'admin_request',
         resourceId: id.toString(),
         details: {
-          changes: req.body,
+          changes: validatedData,
           previousStatus: currentRequest.status
         }
       });
       
       res.json(updatedRequest);
     } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json(handleZodError(error));
+      }
       console.error(`Error updating admin request with ID ${req.params.id}`, error);
       res.status(500).json({ message: "Failed to update admin request" });
     }
