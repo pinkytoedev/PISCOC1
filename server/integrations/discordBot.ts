@@ -556,8 +556,12 @@ async function openArticleEditModal(interaction: any, articleId: number) {
  */
 async function handleModalSubmission(interaction: ModalSubmitInteraction) {
   try {
+    // Handle admin request modal submission
+    if (interaction.customId === 'admin_request_modal') {
+      await handleAdminRequestModalSubmit(interaction);
+    }
     // Handle article creation
-    if (interaction.customId === 'create_article_modal') {
+    else if (interaction.customId === 'create_article_modal') {
       await interaction.deferReply({ ephemeral: true });
       
       // Get form input values
@@ -729,8 +733,18 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
  */
 async function handleStringSelectMenuInteraction(interaction: any) {
   try {
+    // Handle admin request category selection
+    if (interaction.customId === 'admin_request_category') {
+      const category = interaction.values[0];
+      await finalizeAdminRequest(interaction, interaction.user.id, category);
+    }
+    // Handle admin request urgency selection
+    else if (interaction.customId === 'admin_request_urgency') {
+      const urgency = interaction.values[0];
+      await finalizeAdminRequest(interaction, interaction.user.id, undefined, urgency);
+    }
     // Handle article selection dropdown
-    if (interaction.customId === 'article_select') {
+    else if (interaction.customId === 'article_select') {
       // Get the selected article ID before deferring
       const articleId = parseInt(interaction.values[0], 10);
       
