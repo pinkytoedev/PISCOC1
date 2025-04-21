@@ -1,5 +1,6 @@
 /**
  * Utility functions for uploading images to ImgBB
+ * Supports file uploads and URL-based uploads
  */
 
 import fetch from 'node-fetch';

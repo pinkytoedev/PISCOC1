@@ -8,6 +8,7 @@ import * as path from 'path';
 import { storage } from '../storage';
 import * as util from 'util';
 import { exec } from 'child_process';
+import { uploadToImgBB } from './imgbbUploader';
 
 // Promisify exec
 const execPromise = util.promisify(exec);
