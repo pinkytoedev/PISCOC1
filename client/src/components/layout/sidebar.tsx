@@ -263,7 +263,9 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           onClick={(e) => {
             // Close the sidebar when clicking the overlay (outside the sidebar)
             if (e.target === e.currentTarget && onMobileClose) {
+              e.preventDefault(); // Prevent other events from firing
               onMobileClose();
+              console.log("Mobile sidebar overlay clicked, closing sidebar");
             }
           }}
         >
@@ -297,11 +299,18 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                             <Link
                               href={item.path}
                               className={cn(
-                                "flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors touch-manipulation",
+                                "flex items-center px-3 py-4 text-sm font-medium rounded-md transition-colors touch-manipulation",
                                 isActive
                                   ? "bg-[#202225] text-white"
                                   : "text-gray-300 hover:bg-[#202225] hover:text-white",
                               )}
+                              onClick={() => {
+                                // On mobile, close the sidebar when a link is clicked
+                                if (mobileOpen && onMobileClose) {
+                                  onMobileClose();
+                                  console.log("Mobile sidebar link clicked, closing sidebar");
+                                }
+                              }}
                             >
                               <span className="flex-shrink-0">{item.icon}</span>
                               <span className="ml-3">{item.name}</span>
