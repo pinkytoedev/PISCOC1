@@ -68,13 +68,22 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       // Handle Airtable synchronization when status is set to "published"
       if (article && variables.status === 'published') {
         if (article.source === 'airtable' && article.externalId) {
-          // For existing Airtable articles, just update them
+          // For existing Airtable articles, update them immediately
           console.log('Updating existing Airtable article:', article.id);
-          updateAirtableMutation.mutate(article.id);
+          
+          // Wait a brief moment to ensure the database has been updated
+          setTimeout(() => {
+            updateAirtableMutation.mutate(article.id);
+          }, 500);
+          
         } else if (article.source !== 'airtable') {
           // For non-Airtable articles, push them to Airtable
           console.log('Pushing new article to Airtable:', article.id);
-          pushToAirtableMutation.mutate(article.id);
+          
+          // Wait a brief moment to ensure the database has been updated
+          setTimeout(() => {
+            pushToAirtableMutation.mutate(article.id);
+          }, 500);
         }
       }
       
