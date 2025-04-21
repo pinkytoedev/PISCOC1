@@ -13,7 +13,6 @@ import {
   Shield,
   X,
   CalendarDays,
-  Activity,
   Upload,
   Bug,
 } from "lucide-react";
@@ -124,12 +123,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           path: "/users",
           icon: <UserCog className="w-5 h-5" />,
           adminOnly: true, // This item is admin-only
-        },
-        {
-          name: "API Status",
-          path: "/api-status",
-          icon: <Activity className="w-5 h-5" />,
-          adminOnly: false, // Available to all users
         },
         {
           name: "Debug Center",
