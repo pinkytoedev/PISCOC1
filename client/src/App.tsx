@@ -16,6 +16,7 @@ import ArticlesPlannerPage from "@/pages/articles-planner-page";
 import TeamMembersPage from "@/pages/team-members-page";
 import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
+import ApiStatusPage from "@/pages/api-status-page";
 import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
@@ -36,6 +37,7 @@ function Router() {
       <ProtectedRoute path="/team-members" component={TeamMembersPage} />
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
       <AdminProtectedRoute path="/users" component={UserManagementPage} />
+      <ProtectedRoute path="/api-status" component={ApiStatusPage} />
       <AdminProtectedRoute path="/integrations/discord" component={DiscordPage} />
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
