@@ -8,10 +8,35 @@ import * as path from 'path';
 import { storage } from '../storage';
 import * as util from 'util';
 import { exec } from 'child_process';
-import { uploadToImgBB } from './imgbbUploader';
+import { uploadImageToImgBB, UploadedFileInfo, ImgBBUploadResponse } from './imgbbUploader';
 
 // Promisify exec
 const execPromise = util.promisify(exec);
+
+/**
+ * Get MIME type from file extension
+ */
+function getMimeTypeFromExtension(extension: string): string {
+  const ext = extension.toLowerCase();
+  const mimeMap: Record<string, string> = {
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.svg': 'image/svg+xml',
+    '.bmp': 'image/bmp'
+  };
+  
+  return mimeMap[ext] || 'application/octet-stream';
+}
+
+/**
+ * Escape string for use in regular expressions
+ */
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Process a zip file and extract HTML content
@@ -35,8 +60,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     console.log(`Extracting ZIP file to ${tempDir}...`);
     await execPromise(`unzip -o "${filePath}" -d "${tempDir}"`);
     
-    // Look for HTML files recursively
-    const findHtmlFiles = (dir: string): string[] => {
+    // Recursive file finder helper function
+    const findFiles = (dir: string, extensions: string[]): string[] => {
       let results: string[] = [];
       const items = fs.readdirSync(dir);
       
@@ -46,13 +71,23 @@ export async function processZipFile(filePath: string, articleId: number): Promi
         
         if (stat.isDirectory()) {
           // Recursively search subdirectories
-          results = results.concat(findHtmlFiles(itemPath));
-        } else if (item.endsWith('.html')) {
+          results = results.concat(findFiles(itemPath, extensions));
+        } else if (extensions.some(ext => item.toLowerCase().endsWith(ext.toLowerCase()))) {
           results.push(itemPath);
         }
       }
       
       return results;
+    };
+    
+    // Look for HTML files recursively
+    const findHtmlFiles = (dir: string): string[] => {
+      return findFiles(dir, ['.html']);
+    };
+    
+    // Look for image files recursively
+    const findImageFiles = (dir: string): string[] => {
+      return findFiles(dir, ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']);
     };
     
     // Find all HTML files in the extracted ZIP
@@ -67,9 +102,77 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     console.log(`Using HTML file: ${mainHtmlFile}`);
     
     // Read HTML content
-    const htmlContent = fs.readFileSync(mainHtmlFile, 'utf-8');
+    let htmlContent = fs.readFileSync(mainHtmlFile, 'utf-8');
     if (!htmlContent) {
       throw new Error(`HTML file is empty: ${path.basename(mainHtmlFile)}`);
+    }
+    
+    // Find all image files in the extracted ZIP
+    const imageFiles = findImageFiles(tempDir);
+    console.log(`Found ${imageFiles.length} image files in ZIP archive`);
+    
+    // Upload images to ImgBB and build a mapping of original paths to new URLs
+    const imageMapping: Record<string, string> = {};
+    
+    if (imageFiles.length > 0) {
+      for (const imagePath of imageFiles) {
+        const relativePath = path.relative(tempDir, imagePath);
+        const mimeType = getMimeTypeFromExtension(path.extname(imagePath));
+        
+        // Prepare for ImgBB upload
+        const fileInfo: UploadedFileInfo = {
+          path: imagePath,
+          filename: path.basename(imagePath),
+          size: fs.statSync(imagePath).size,
+          mimetype: mimeType
+        };
+        
+        // Upload to ImgBB
+        console.log(`Uploading image: ${relativePath}`);
+        const uploadResult = await uploadImageToImgBB(fileInfo);
+        
+        if (uploadResult) {
+          // Store the mapping of original path to ImgBB URL
+          imageMapping[relativePath] = uploadResult.display_url;
+          console.log(`Uploaded image ${relativePath} to ImgBB: ${uploadResult.display_url}`);
+          
+          // Also store the image in our database
+          await storage.createImageAsset({
+            originalFilename: path.basename(imagePath),
+            storagePath: uploadResult.url,
+            mimeType: fileInfo.mimetype,
+            size: fileInfo.size,
+            hash: uploadResult.id,
+            isDefault: false,
+            category: 'article',
+            metadata: {
+              articleId,
+              originalPath: relativePath,
+              displayUrl: uploadResult.display_url,
+              imgbbData: uploadResult
+            }
+          });
+        } else {
+          console.warn(`Failed to upload image: ${relativePath}`);
+        }
+      }
+      
+      // Replace image paths in HTML content
+      Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
+        // Handle different path patterns (with or without leading ./, relative paths, etc.)
+        const pathVariations = [
+          originalPath,
+          `./${originalPath}`,
+          `/${originalPath}`,
+          path.basename(originalPath)
+        ];
+        
+        // Replace all variations of the path with the new URL
+        pathVariations.forEach(pathVar => {
+          const regex = new RegExp(`(src|href)=['"](${escapeRegExp(pathVar)})['"']`, 'gi');
+          htmlContent = htmlContent.replace(regex, `$1="${newUrl}"`);
+        });
+      });
     }
     
     // Update article content
