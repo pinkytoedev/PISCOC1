@@ -335,8 +335,10 @@ export default function DebugCenterPage() {
                                 {log.action.charAt(0).toUpperCase() + log.action.slice(1)} {log.resourceType.replace('_', ' ')}
                               </h3>
                               <p className="text-sm text-gray-500">
-                                {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })} • 
-                                User ID: {log.userId}
+                                {typeof log.timestamp === 'string' 
+                                  ? formatDistanceToNow(new Date(log.timestamp), { addSuffix: true }) 
+                                  : "Unknown time"} • 
+                                User ID: {log.userId || 'System'}
                               </p>
                             </div>
                             <div className="mt-2 sm:mt-0">
