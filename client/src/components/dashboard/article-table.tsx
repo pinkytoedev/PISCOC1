@@ -640,33 +640,33 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
             ) : sortedArticles && sortedArticles.length > 0 ? (
               sortedArticles.map((article) => (
                 <tr key={article.id} className={article.source === 'airtable' ? 'bg-blue-50/30' : ''}>
-                  <td className="px-6 py-6">
+                  <td className="px-6 py-4">
                     <div className="flex items-start">
-                      <div className="h-14 w-14 flex-shrink-0">
+                      <div className="h-10 w-10 flex-shrink-0">
                         {article.imageUrl ? (
-                          <img className="h-14 w-14 rounded object-cover" src={article.imageUrl} alt="" />
+                          <img className="h-10 w-10 rounded object-cover" src={article.imageUrl} alt="" />
                         ) : (
-                          <div className="h-14 w-14 rounded bg-gray-200 flex items-center justify-center text-gray-500">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <div className="h-10 w-10 rounded bg-gray-200 flex items-center justify-center text-gray-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                           </div>
                         )}
                       </div>
-                      <div className="ml-5 max-w-md">
+                      <div className="ml-4 max-w-xs">
                         <div 
-                          className="text-base font-medium text-gray-900 line-clamp-2 max-w-[300px]"
-                          title={article.title}
+                          className="text-sm font-medium text-gray-900 truncate max-w-[200px]"
+                          title={article.title.length > 35 ? article.title : undefined}
                         >
-                          {truncateText(article.title, 60)}
+                          {truncateText(article.title, 35)}
                         </div>
                         
                         {article.description && (
                           <div 
-                            className="text-sm text-gray-500 line-clamp-2 max-w-[300px] mt-2"
-                            title={article.description}
+                            className="text-xs text-gray-500 truncate max-w-[200px] mt-1"
+                            title={article.description.length > 40 ? article.description : undefined}
                           >
-                            {truncateText(article.description, 80)}
+                            {truncateText(article.description, 40)}
                           </div>
                         )}
                         
@@ -976,49 +976,43 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
             )}
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 gap-6 p-5">
+          <div className="space-y-4 p-4">
             {sortedArticles.map((article) => (
-              <div key={article.id} className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-start space-x-4 mb-4">
+              <div key={article.id} className="bg-white rounded-lg shadow p-4">
+                <div className="flex items-center space-x-3 mb-3">
                   {article.imageUrl ? (
                     <img 
                       src={article.imageUrl} 
                       alt="" 
-                      className="h-16 w-16 rounded-md object-cover flex-shrink-0"
+                      className="h-12 w-12 rounded-md object-cover flex-shrink-0"
                     />
                   ) : (
-                    <div className="h-16 w-16 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="h-12 w-12 rounded-md bg-gray-200 flex items-center justify-center text-gray-500 flex-shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-medium text-gray-900 line-clamp-2">
+                    <h3 className="text-sm font-medium text-gray-900 truncate">
                       {article.title}
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                       ID: {article.id} • {article.source || 'Local'}
                     </p>
-                    {article.description && (
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">
-                        {article.description}
-                      </p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <StatusBadge status={article.status || 'draft'} />
+                    {autoPublishingArticleId === article.id && (
+                      <div className="flex items-center text-xs text-amber-600 mt-1">
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        <span>Publishing...</span>
+                      </div>
                     )}
                   </div>
                 </div>
                 
-                <div className="flex justify-between items-center mb-4">
-                  <StatusBadge status={article.status || 'draft'} className="text-sm" />
-                  {autoPublishingArticleId === article.id && (
-                    <div className="flex items-center text-sm text-amber-600">
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                      <span>Publishing...</span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-4">
+                <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3">
                   <div>
                     <span className="font-medium">Author:</span> {article.author || 'Unassigned'}
                   </div>
@@ -1041,14 +1035,14 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
                   <div>
                     {article.hashtags && (
                       <div className="flex flex-wrap gap-1 mt-1">
-                        {formatTags(article.hashtags).slice(0, 3).map((tag, index) => (
+                        {formatTags(article.hashtags).slice(0, 2).map((tag, index) => (
                           <Badge key={index} variant="outline" className="text-xs py-0">
                             {tag}
                           </Badge>
                         ))}
-                        {formatTags(article.hashtags).length > 3 && (
+                        {formatTags(article.hashtags).length > 2 && (
                           <Badge variant="outline" className="text-xs py-0">
-                            +{formatTags(article.hashtags).length - 3}
+                            +{formatTags(article.hashtags).length - 2}
                           </Badge>
                         )}
                       </div>
