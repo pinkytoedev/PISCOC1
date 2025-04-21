@@ -12,7 +12,8 @@ import {
   BookOpen,
   Shield,
   X,
-  CalendarDays
+  CalendarDays,
+  Activity
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -115,6 +116,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           path: "/users",
           icon: <UserCog className="w-5 h-5" />,
           adminOnly: true // This item is admin-only
+        },
+        {
+          name: "API Status",
+          path: "/api-status",
+          icon: <Activity className="w-5 h-5" />,
+          adminOnly: false // Available to all users
         },
         {
           name: "Documentation",

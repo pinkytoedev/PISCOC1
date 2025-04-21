@@ -9,6 +9,7 @@ import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgBBRoutes } from "./integrations/imgbb";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
+import { getAllApiStatuses } from "./api-status";
 import * as path from "path";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
 import { ZodError } from "zod";
@@ -676,6 +677,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         error: 'Failed to fetch migration progress',
         message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // API Status endpoint
+  app.get('/api/status', async (req, res) => {
+    try {
+      // Add cache control headers to prevent caching
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
+      const apiStatuses = await getAllApiStatuses();
+      res.json(apiStatuses);
+    } catch (error) {
+      console.error('Error fetching API statuses:', error);
+      res.status(500).json({ 
+        message: 'Failed to fetch API statuses',
+        error: error instanceof Error ? error.message : String(error)
       });
     }
   });
