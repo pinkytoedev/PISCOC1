@@ -3265,6 +3265,246 @@ async function handleContentUploadCommand(interaction: any) {
 /**
  * Auto-start the Discord bot if settings are available
  */
+/**
+ * Process a zip file attachment from Discord and extract HTML content
+ * @param attachment Discord attachment containing a zip file
+ * @param articleId The ID of the article to update
+ * @returns Status of the operation with a message
+ */
+async function processZipFile(
+  attachment: any,
+  articleId: number
+): Promise<{ success: boolean; message: string; content?: string }> {
+  try {
+    console.log('==== processZipFile STARTED ====');
+    console.log('Attachment details:', {
+      name: attachment.name,
+      contentType: attachment.contentType,
+      url: attachment.url,
+      size: attachment.size
+    });
+    console.log('Processing for article ID:', articleId);
+    
+    // Validate the attachment is a ZIP file
+    if (!attachment.name.toLowerCase().endsWith('.zip')) {
+      return {
+        success: false,
+        message: `Invalid file type. Please upload a ZIP file. Received file: ${attachment.name}`
+      };
+    }
+    
+    // Get the article from storage
+    const article = await storage.getArticle(articleId);
+    
+    if (!article) {
+      console.error(`Article ID ${articleId} not found in database.`);
+      return {
+        success: false,
+        message: `Article with ID ${articleId} not found.`
+      };
+    }
+    
+    console.log(`Processing zip file for article: "${article.title}" (ID: ${articleId}), file: ${attachment.name}`);
+    
+    // STEP 1: Download the ZIP file from Discord's CDN
+    console.log('STEP 1: Downloading ZIP file from Discord CDN:', attachment.url);
+    
+    try {
+      const response = await fetch(attachment.url);
+      
+      if (!response.ok) {
+        console.error('Failed to download file from Discord, status:', response.status);
+        return {
+          success: false,
+          message: `Failed to download ZIP file from Discord. Status: ${response.status}`
+        };
+      }
+      
+      // Get ZIP file content as ArrayBuffer
+      const buffer = await response.arrayBuffer();
+      
+      if (!buffer || buffer.byteLength === 0) {
+        console.error('Downloaded ZIP buffer is empty!');
+        return {
+          success: false,
+          message: 'Downloaded ZIP file appears to be empty. Please check the file and try again.'
+        };
+      }
+      
+      console.log('Downloaded ZIP file, size:', buffer.byteLength, 'bytes');
+      
+      // STEP 2: Create a temporary directory to extract the ZIP
+      const tempDir = path.join(process.cwd(), 'temp', `article_${articleId}_${Date.now()}`);
+      console.log('STEP 2: Creating temporary directory:', tempDir);
+      
+      // Create the directory
+      await fs.ensureDir(tempDir);
+      
+      // STEP 3: Create a temporary file for the ZIP content
+      const zipPath = path.join(tempDir, 'content.zip');
+      console.log('STEP 3: Creating temporary ZIP file:', zipPath);
+      
+      // Write the ZIP content to a file
+      await fs.writeFile(zipPath, Buffer.from(buffer));
+      
+      // STEP 4: Extract the ZIP file
+      console.log('STEP 4: Extracting ZIP file to temporary directory');
+      await extract(zipPath, { dir: tempDir });
+      
+      // STEP 5: Look for HTML files, prioritizing index.html
+      console.log('STEP 5: Looking for HTML files in extracted content');
+      const files = await fs.readdir(tempDir);
+      
+      let mainHtmlFile = '';
+      let htmlContent = '';
+      
+      // First, look for index.html
+      if (files.includes('index.html')) {
+        mainHtmlFile = 'index.html';
+        htmlContent = await fs.readFile(path.join(tempDir, mainHtmlFile), 'utf8');
+      } 
+      // If no index.html, look for any HTML file
+      else {
+        const htmlFiles = files.filter(file => file.endsWith('.html') || file.endsWith('.htm'));
+        
+        if (htmlFiles.length > 0) {
+          mainHtmlFile = htmlFiles[0];
+          htmlContent = await fs.readFile(path.join(tempDir, mainHtmlFile), 'utf8');
+        }
+      }
+      
+      // If no HTML file found
+      if (!htmlContent) {
+        console.error('No HTML file found in ZIP');
+        
+        // Cleanup
+        try {
+          await fs.remove(tempDir);
+          console.log('Cleaned up temporary directory');
+        } catch (cleanupError) {
+          console.error('Error cleaning up:', cleanupError);
+        }
+        
+        return {
+          success: false,
+          message: 'No HTML file found in the ZIP. Please ensure your ZIP contains an index.html file or at least one HTML file.'
+        };
+      }
+      
+      console.log(`Found HTML file: ${mainHtmlFile}, content length: ${htmlContent.length} characters`);
+      
+      // STEP 6: Update the article with the HTML content
+      console.log('STEP 6: Updating article with HTML content');
+      
+      const updateData: Partial<Article> = {
+        content: htmlContent,
+        contentFormat: 'html'
+      };
+      
+      // Update the article
+      const updatedArticle = await storage.updateArticle(articleId, updateData);
+      
+      if (!updatedArticle) {
+        console.error('Failed to update article with HTML content');
+        
+        // Cleanup
+        try {
+          await fs.remove(tempDir);
+          console.log('Cleaned up temporary directory');
+        } catch (cleanupError) {
+          console.error('Error cleaning up:', cleanupError);
+        }
+        
+        return {
+          success: false,
+          message: 'Failed to update article with the HTML content. Database error.'
+        };
+      }
+      
+      console.log('Article successfully updated with HTML content');
+      
+      // STEP 7: Sync to Airtable if needed
+      if (article.source === 'airtable' && article.externalId) {
+        console.log('STEP 7: Syncing HTML content to Airtable');
+        
+        try {
+          // Get Airtable settings
+          const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+          const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+          const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+          
+          if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value && 
+              apiKeySetting.enabled && baseIdSetting.enabled && tableNameSetting.enabled) {
+            
+            const apiKey = apiKeySetting.value;
+            const baseId = baseIdSetting.value;
+            const tableName = tableNameSetting.value;
+            
+            console.log(`Syncing HTML content to Airtable record: ${article.externalId}`);
+            
+            // Update just the Body field in Airtable
+            const airtableResponse = await fetch(`https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`, {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                fields: {
+                  Body: htmlContent,
+                  _updatedTime: new Date().toISOString()
+                }
+              })
+            });
+            
+            if (!airtableResponse.ok) {
+              const errorText = await airtableResponse.text();
+              console.error('Error syncing to Airtable:', errorText);
+            } else {
+              console.log('Successfully synced HTML content to Airtable');
+            }
+          } else {
+            console.log('Airtable settings unavailable or disabled, skipping sync');
+          }
+        } catch (error) {
+          console.error('Error syncing content to Airtable:', error);
+          // Don't fail the whole operation if Airtable sync fails
+        }
+      }
+      
+      // Cleanup
+      try {
+        await fs.remove(tempDir);
+        console.log('Cleaned up temporary directory');
+      } catch (cleanupError) {
+        console.error('Error cleaning up:', cleanupError);
+      }
+      
+      console.log('==== processZipFile COMPLETED SUCCESSFULLY ====');
+      
+      return {
+        success: true,
+        message: `HTML content from ${mainHtmlFile} in the ZIP file has been successfully extracted and set as the article content.`,
+        content: htmlContent
+      };
+      
+    } catch (downloadError) {
+      console.error('Error downloading or processing ZIP file:', downloadError);
+      return {
+        success: false,
+        message: `Error processing ZIP file: ${downloadError instanceof Error ? downloadError.message : 'Unknown download error'}`
+      };
+    }
+    
+  } catch (error) {
+    console.error('==== processZipFile ERROR ====', error);
+    return {
+      success: false,
+      message: `Error processing ZIP file: ${error instanceof Error ? error.message : 'Unknown error'}`
+    };
+  }
+}
+
 export const autoStartDiscordBot = async () => {
   try {
     // Check if we have the required settings
