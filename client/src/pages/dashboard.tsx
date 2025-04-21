@@ -1,12 +1,15 @@
 import { useEffect, useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { StatusCard } from "@/components/dashboard/status-card";
 import { ArticleTable } from "@/components/dashboard/article-table";
 import { Button } from "@/components/ui/button";
-import { Newspaper, Clock, CheckCircle, ChevronRight } from "lucide-react";
+import { Newspaper, Clock, CheckCircle, ChevronRight, Upload, Loader2 } from "lucide-react";
+import { SiAirtable } from "react-icons/si";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Article } from "@shared/schema";
 
 interface DashboardMetrics {
@@ -18,7 +21,9 @@ interface DashboardMetrics {
 }
 
 export default function Dashboard() {
+  const { toast } = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [pushingArticleId, setPushingArticleId] = useState<number | null>(null);
   
   // Add a useEffect to log when mobileMenuOpen changes
   useEffect(() => {
@@ -43,6 +48,34 @@ export default function Dashboard() {
       setMobileMenuOpen(false);
     }, 50); // Slight delay for better reliability
   };
+  
+  // Add mutation for pushing non-Airtable articles to Airtable
+  const pushToAirtableMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      setPushingArticleId(articleId);
+      const response = await apiRequest(
+        "POST", 
+        `/api/airtable/push/article/${articleId}`
+      );
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      setPushingArticleId(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({
+        title: "Pushed to Airtable",
+        description: "The article was successfully pushed to Airtable.",
+      });
+    },
+    onError: (error) => {
+      setPushingArticleId(null);
+      toast({
+        title: "Airtable push failed",
+        description: error.message || "Failed to push article to Airtable.",
+        variant: "destructive",
+      });
+    },
+  });
   
   // Fetch metrics for the dashboard
   const { data: metrics, isLoading: isLoadingMetrics } = useQuery<DashboardMetrics>({
@@ -112,6 +145,38 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <Button 
+                  variant="outline"
+                  className="flex items-center gap-2"
+                  onClick={() => {
+                    // Find published articles not already in Airtable
+                    const publishedArticles = articles?.filter(article => 
+                      article.status === "published" && 
+                      article.source !== "airtable"
+                    );
+                    
+                    if (publishedArticles && publishedArticles.length > 0) {
+                      // Push the first one that's not already in Airtable
+                      pushToAirtableMutation.mutate(publishedArticles[0].id);
+                    } else {
+                      toast({
+                        title: "No articles to push",
+                        description: "All published articles are already in Airtable.",
+                      });
+                    }
+                  }}
+                  disabled={pushToAirtableMutation.isPending || !articles?.some(article => 
+                    article.status === "published" && article.source !== "airtable"
+                  )}
+                >
+                  {pushToAirtableMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SiAirtable className="h-4 w-4" />
+                  )}
+                  Push to Airtable
+                </Button>
+                
                 <Link href="/articles/new">
                   <Button>
                     Create Article
