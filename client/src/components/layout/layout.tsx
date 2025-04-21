@@ -17,7 +17,7 @@ export function Layout({ children, title = "Content Management System" }: Layout
   };
   
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen">
       <Sidebar 
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
@@ -30,9 +30,11 @@ export function Layout({ children, title = "Content Management System" }: Layout
           onMobileMenuToggle={toggleMobileMenu} 
         />
         
-        {/* Main content area */}
-        <main className="flex-1 overflow-auto">
-          {children}
+        {/* Main content area with pink style */}
+        <main className="flex-1 overflow-auto p-4">
+          <div className="bg-pink-translucent shadow-pink rounded-lg border border-pink p-4 h-full">
+            {children}
+          </div>
         </main>
       </div>
     </div>
