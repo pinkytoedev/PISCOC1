@@ -20,6 +20,7 @@ import ApiStatusPage from "@/pages/api-status-page";
 import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
+import UploadsPage from "@/pages/uploads";
 
 import ImgBBPage from "@/pages/integrations/imgbb-page";
 import DocsPage from "@/pages/docs-page";
@@ -38,6 +39,7 @@ function Router() {
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
       <AdminProtectedRoute path="/users" component={UserManagementPage} />
       <ProtectedRoute path="/api-status" component={ApiStatusPage} />
+      <ProtectedRoute path="/uploads" component={UploadsPage} />
       <AdminProtectedRoute path="/integrations/discord" component={DiscordPage} />
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
