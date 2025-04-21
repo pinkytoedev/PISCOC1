@@ -14,6 +14,7 @@ A comprehensive multi-platform integration ecosystem that connects Discord, Airt
   - [Environment Setup](#environment-setup)
   - [Database Setup](#database-setup)
 - [Development](#development)
+- [API Documentation](#api-documentation)
 - [External Services Integration](#external-services-integration)
   - [Discord](#discord)
   - [Airtable](#airtable)
@@ -159,6 +160,25 @@ npm run dev
 ```
 
 The application will be available at http://localhost:5000
+
+## API Documentation
+
+The application provides a comprehensive set of RESTful API endpoints for managing various aspects of the system. For detailed API documentation, see [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
+
+The API is divided into several categories:
+
+- **Authentication**: User authentication and session management
+- **Team Members**: Team member profiles management
+- **Articles**: Content article management
+- **Carousel Quotes**: Management of quotes displayed in carousels
+- **Admin Requests**: Administrative request tracking and management
+- **Image Assets**: Image file management
+- **Integration Settings**: Configuration for external service integrations
+- **Activity Logs**: System activity tracking
+- **Metrics**: System performance and usage metrics
+- **API Status**: Health and status of integrated services
+
+All API endpoints follow RESTful conventions and support JSON data format.
 
 ## External Services Integration
 
