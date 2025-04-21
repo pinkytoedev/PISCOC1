@@ -43,6 +43,19 @@ let client: Client | null = null;
 export const discordBot = {
   get client() { return client; }
 };
+
+// Temporary storage for admin requests in progress
+// Maps user ID to their in-progress request data
+interface AdminRequestInProgress {
+  title: string;
+  description: string;
+  userId: string;
+  userName: string;
+  category?: string;
+  urgency?: string;
+}
+
+const adminRequestsInProgress = new Map<string, AdminRequestInProgress>();
 // Define more detailed bot status interface
 interface GuildInfo {
   id: string;
@@ -2161,37 +2174,6 @@ const commands = [
   new SlashCommandBuilder()
     .setName('webreq')
     .setDescription('Submit an administrative request')
-    .addStringOption(option => 
-      option.setName('title')
-        .setDescription('Title of the request')
-        .setRequired(true)
-    )
-    .addStringOption(option => 
-      option.setName('description')
-        .setDescription('Detailed description of the request')
-        .setRequired(true)
-    )
-    .addStringOption(option => 
-      option.setName('category')
-        .setDescription('Category of the request')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Pinkytoe', value: 'pinkytoe' },
-          { name: 'PISCOC', value: 'piscoc' },
-          { name: 'Misc', value: 'misc' }
-        )
-    )
-    .addStringOption(option => 
-      option.setName('urgency')
-        .setDescription('Urgency level of the request')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Low', value: 'low' },
-          { name: 'Medium', value: 'medium' },
-          { name: 'High', value: 'high' },
-          { name: 'Critical', value: 'critical' }
-        )
-    )
 ];
 
 /**
@@ -3432,29 +3414,218 @@ async function handleWebImageCommand(interaction: any) {
  */
 async function handleWebRequestCommand(interaction: any) {
   try {
-    // Get options from the interaction
-    const title = interaction.options.getString('title');
-    const description = interaction.options.getString('description');
-    const category = interaction.options.getString('category');
-    const urgency = interaction.options.getString('urgency');
+    // Create a modal for admin request submission
+    const modal = new ModalBuilder()
+      .setCustomId('admin_request_modal')
+      .setTitle('Submit Administrative Request');
     
-    // Defer reply to give us time to process
+    // Add input fields for the form
+    const titleInput = new TextInputBuilder()
+      .setCustomId('title')
+      .setLabel('Title')
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('Enter a title for your request')
+      .setRequired(true)
+      .setMaxLength(100);
+      
+    const descriptionInput = new TextInputBuilder()
+      .setCustomId('description')
+      .setLabel('Description')
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder('Describe your request in detail')
+      .setRequired(true)
+      .setMaxLength(1000);
+      
+    // Create action rows for the inputs
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
+    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+    
+    // Create select components for category and urgency in the follow-up message
+    modal.addComponents(titleRow, descriptionRow);
+    
+    // Show the modal to the user
+    await interaction.showModal(modal);
+  } catch (error) {
+    console.error('Error showing admin request modal:', error);
+    await interaction.reply({ 
+      content: 'Sorry, there was an error creating the request form.', 
+      ephemeral: true 
+    });
+  }
+}
+
+/**
+ * Handle the admin request modal submission
+ */
+async function handleAdminRequestModalSubmit(interaction: ModalSubmitInteraction) {
+  try {
+    // Defer the reply to give us time to process and to show follow-up components
     await interaction.deferReply({ ephemeral: true });
+    
+    // Get submitted values from the modal
+    const title = interaction.fields.getTextInputValue('title');
+    const description = interaction.fields.getTextInputValue('description');
     
     // Get user information
     const userId = interaction.user.id;
     const userName = interaction.user.tag;
     
+    // Create select menus for category and urgency
+    const categorySelect = new StringSelectMenuBuilder()
+      .setCustomId('admin_request_category')
+      .setPlaceholder('Select a category')
+      .addOptions([
+        { label: 'Pinkytoe', value: 'pinkytoe', description: 'Related to Pinkytoe platform' },
+        { label: 'PISCOC', value: 'piscoc', description: 'Related to PISCOC services' },
+        { label: 'Misc', value: 'misc', description: 'Other miscellaneous requests' }
+      ]);
+    
+    const urgencySelect = new StringSelectMenuBuilder()
+      .setCustomId('admin_request_urgency')
+      .setPlaceholder('Select urgency level')
+      .addOptions([
+        { label: 'Low', value: 'low', description: 'Not time-sensitive' },
+        { label: 'Medium', value: 'medium', description: 'Normal priority' },
+        { label: 'High', value: 'high', description: 'Important request' },
+        { label: 'Critical', value: 'critical', description: 'Requires immediate attention' }
+      ]);
+    
+    // Create action rows for the select menus
+    const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect);
+    const urgencyRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(urgencySelect);
+    
+    // Store the title and description in a temporary response to use later
+    // We'll store this in a global map using the interaction ID
+    adminRequestsInProgress.set(interaction.user.id, {
+      title,
+      description,
+      userId,
+      userName
+    });
+    
+    // Send the response with the select menus
+    await interaction.editReply({
+      content: 'Please complete your request by selecting a category and urgency level:',
+      components: [categoryRow, urgencyRow]
+    });
+  } catch (error) {
+    console.error('Error handling admin request modal submission:', error);
+    if (interaction.deferred) {
+      await interaction.editReply({
+        content: 'There was an error processing your request. Please try again.',
+      });
+    } else {
+      await interaction.reply({
+        content: 'There was an error processing your request. Please try again.',
+        ephemeral: true
+      });
+    }
+  }
+}
+
+/**
+ * Handle admin request completion
+ * This function is called when both category and urgency have been selected
+ */
+async function finalizeAdminRequest(
+  interaction: MessageComponentInteraction, 
+  userId: string,
+  category?: string,
+  urgency?: string
+) {
+  try {
+    // Defer the reply update to give us time to process
+    await interaction.deferUpdate();
+    
+    // Get the in-progress request data
+    const requestData = adminRequestsInProgress.get(userId);
+    
+    if (!requestData) {
+      await interaction.editReply({
+        content: 'Your request session has expired. Please submit a new request using the /webreq command.',
+        components: []
+      });
+      return;
+    }
+    
+    // If we have both category and urgency, create the admin request
+    if (category && urgency && requestData.category && requestData.urgency) {
+      // Both were already set, this is a duplicate selection
+      await interaction.editReply({
+        content: 'You have already selected both category and urgency. Your request is being processed.',
+        components: []
+      });
+      return;
+    }
+    
+    // Update the request data with the new selection
+    if (category) {
+      requestData.category = category;
+    }
+    
+    if (urgency) {
+      requestData.urgency = urgency;
+    }
+    
+    // Update the stored data
+    adminRequestsInProgress.set(userId, requestData);
+    
+    // If we still don't have both selections, prompt for the missing one
+    if (!requestData.category || !requestData.urgency) {
+      let components = [];
+      
+      if (!requestData.category) {
+        const categorySelect = new StringSelectMenuBuilder()
+          .setCustomId('admin_request_category')
+          .setPlaceholder('Select a category')
+          .addOptions([
+            { label: 'Pinkytoe', value: 'pinkytoe', description: 'Related to Pinkytoe platform' },
+            { label: 'PISCOC', value: 'piscoc', description: 'Related to PISCOC services' },
+            { label: 'Misc', value: 'misc', description: 'Other miscellaneous requests' }
+          ]);
+        
+        const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect);
+        components.push(categoryRow);
+      }
+      
+      if (!requestData.urgency) {
+        const urgencySelect = new StringSelectMenuBuilder()
+          .setCustomId('admin_request_urgency')
+          .setPlaceholder('Select urgency level')
+          .addOptions([
+            { label: 'Low', value: 'low', description: 'Not time-sensitive' },
+            { label: 'Medium', value: 'medium', description: 'Normal priority' },
+            { label: 'High', value: 'high', description: 'Important request' },
+            { label: 'Critical', value: 'critical', description: 'Requires immediate attention' }
+          ]);
+        
+        const urgencyRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(urgencySelect);
+        components.push(urgencyRow);
+      }
+      
+      // Prompt for the missing selection
+      await interaction.editReply({
+        content: `Please complete your request by selecting the remaining options:${requestData.category ? '' : '\n• Category'}${requestData.urgency ? '' : '\n• Urgency level'}`,
+        components: components
+      });
+      return;
+    }
+    
+    // We have both selections, so create the admin request
+    const { title, description, userName } = requestData;
+    const categoryValue = requestData.category;
+    const urgencyValue = requestData.urgency;
+    
     // Format the category and urgency for display
-    const categoryDisplay = category.charAt(0).toUpperCase() + category.slice(1);
-    const urgencyDisplay = urgency.charAt(0).toUpperCase() + urgency.slice(1);
+    const categoryDisplay = categoryValue.charAt(0).toUpperCase() + categoryValue.slice(1);
+    const urgencyDisplay = urgencyValue.charAt(0).toUpperCase() + urgencyValue.slice(1);
     
     // Create the admin request in the database
     const adminRequest = await storage.createAdminRequest({
       title,
       description,
-      category,
-      urgency,
+      category: categoryValue,
+      urgency: urgencyValue,
       status: 'open',
       createdBy: 'discord',
       discordUserId: userId,
@@ -3471,7 +3642,7 @@ async function handleWebRequestCommand(interaction: any) {
         { name: 'Urgency', value: urgencyDisplay, inline: true },
         { name: 'Status', value: 'Open', inline: true }
       )
-      .setColor(getUrgencyColor(urgency))
+      .setColor(getUrgencyColor(urgencyValue))
       .setFooter({
         text: `Submitted by ${userName} • ${new Date().toLocaleString()}`
       });
@@ -3484,34 +3655,27 @@ async function handleWebRequestCommand(interaction: any) {
       resourceId: adminRequest.id.toString(),
       details: {
         title,
-        category,
-        urgency,
+        category: categoryValue,
+        urgency: urgencyValue,
         discordUser: userName
       }
     });
     
+    // Clear the stored data
+    adminRequestsInProgress.delete(userId);
+    
     // Send the response
     await interaction.editReply({
       embeds: [embed],
-      content: 'Your request has been submitted and will be reviewed by an administrator.'
+      content: 'Your request has been submitted and will be reviewed by an administrator.',
+      components: []
     });
-    
   } catch (error) {
-    console.error('Error handling admin request submission:', error);
-    
-    // If we already started replying, edit the reply
-    if (interaction.deferred) {
-      await interaction.editReply({
-        content: 'There was an error submitting your request. Please try again or contact an administrator.',
-        ephemeral: true
-      });
-    } else {
-      // Otherwise send a new reply
-      await interaction.reply({
-        content: 'There was an error submitting your request. Please try again or contact an administrator.',
-        ephemeral: true
-      });
-    }
+    console.error('Error handling admin request finalization:', error);
+    await interaction.editReply({
+      content: 'There was an error submitting your request. Please try again or contact an administrator.',
+      components: []
+    });
   }
 }
 
