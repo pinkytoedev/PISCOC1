@@ -24,13 +24,15 @@ export default function TestPage() {
         });
       })
       .then(data => {
-        if (data.status === 'success' && data.appId) {
-          setApiAppId(data.appId);
+        if (data.configured && data.status === 'success') {
+          setApiAppId('✓ Facebook is configured');
+        } else if (data.appId === 'CONFIGURED') {
+          setApiAppId('✓ Facebook is configured');
         } else if (data.appId) {
-          // Legacy support for old API format
-          setApiAppId(data.appId);
+          // For security, don't display the actual App ID
+          setApiAppId('✓ Facebook App ID returned from API');
         } else {
-          setApiAppId('Not returned from API');
+          setApiAppId('✗ Facebook is not configured');
         }
       })
       .catch(err => {
