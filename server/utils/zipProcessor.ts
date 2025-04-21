@@ -5,8 +5,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as extractZip from 'extract-zip';
 import { storage } from '../storage';
+import * as util from 'util';
+import { exec } from 'child_process';
+
+// Promisify exec
+const execPromise = util.promisify(exec);
 
 /**
  * Process a zip file and extract HTML content
@@ -26,9 +30,9 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     // Create temp extraction directory
     fs.mkdirSync(tempDir, { recursive: true });
     
-    // Extract ZIP
+    // Extract ZIP using unzip command
     console.log(`Extracting ZIP file to ${tempDir}...`);
-    await extractZip(filePath, { dir: tempDir });
+    await execPromise(`unzip -o "${filePath}" -d "${tempDir}"`);
     
     // Check for index.html
     const indexPath = path.join(tempDir, 'index.html');
