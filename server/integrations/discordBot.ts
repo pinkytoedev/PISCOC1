@@ -475,12 +475,19 @@ async function openArticleEditModal(interaction: any, articleId: number) {
       .setRequired(true)
       .setMaxLength(500);
     
+    // The Body field may contain HTML which can be quite large
+    // Discord has a 4000 character limit, so we need to truncate if needed
+    let contentValue = article.content || '';
+    if (contentValue.length > 3900) {
+      contentValue = contentValue.substring(0, 3900) + '\n...(content truncated - too large for Discord. Use Upload Zipped HTML to update)';
+    }
+    
     const bodyInput = new TextInputBuilder()
       .setCustomId('body')
       .setLabel('Body')  // Maps to Airtable's "Body" field
       .setStyle(TextInputStyle.Paragraph)
       .setPlaceholder('Enter the article content')
-      .setValue(article.content || '')
+      .setValue(contentValue)
       .setRequired(true)
       .setMaxLength(4000);
     
