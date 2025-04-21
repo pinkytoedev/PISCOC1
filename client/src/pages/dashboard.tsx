@@ -63,9 +63,15 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <Header title="Dashboard" />
+      <Header 
+        title="Dashboard" 
+        onMobileMenuToggle={toggleMobileMenu}
+      />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        <Sidebar 
+          mobileOpen={mobileMenuOpen}
+          onMobileClose={() => setMobileMenuOpen(false)}
+        />
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <div className="max-w-7xl mx-auto">
             {/* Breadcrumbs */}
