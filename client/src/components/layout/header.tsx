@@ -30,7 +30,7 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
     : "US";
 
   return (
-    <header className="bg-white border-b border-gray-200 shadow-sm">
+    <header className="bg-pink-translucent backdrop-blur-md border-b border-pink shadow-pink">
       <div className="flex justify-between items-center px-4 py-3">
         <div className="flex items-center space-x-3">
           <button 
@@ -53,19 +53,19 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
             <Menu className="h-5 w-5 text-white" />
           </button>
           <div className="font-medium text-xl flex items-center">
-            <span className="mr-2 text-primary">
+            <span className="mr-2 text-[#FF69B4]">
               <LinkIcon className="h-5 w-5" />
             </span>
-            <span className="hidden sm:inline">{title}</span>
-            <span className="sm:hidden">Dashboard</span>
+            <span className="hidden sm:inline text-[#CC3F85]">{title}</span>
+            <span className="sm:hidden text-[#CC3F85]">Dashboard</span>
           </div>
-          <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded hidden sm:inline-block">v1.0.0</span>
+          <span className="px-2 py-1 text-xs font-medium bg-[#FFCAE3] text-[#CC3F85] rounded-md hidden sm:inline-block shadow-pink">v1.0.0</span>
         </div>
         
         <div className="flex items-center space-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-3 text-gray-500 hover:text-gray-700 relative touch-manipulation" type="button" aria-label="Notifications">
+              <button className="p-3 text-[#FF69B4] hover:text-[#CC3F85] relative touch-manipulation" type="button" aria-label="Notifications">
                 <Bell className="h-5 w-5" />
                 {notifications.length > 0 && (
                   <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
@@ -96,23 +96,23 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
               )}
               
               <div className="px-4 py-3 text-center text-xs">
-                <Link href="/notifications" className="text-primary hover:underline block py-2 touch-manipulation">
+                <Link href="/notifications" className="text-[#FF69B4] hover:underline block py-2 touch-manipulation">
                   View all notifications
                 </Link>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
           
-          <Separator orientation="vertical" className="h-8" />
+          <Separator orientation="vertical" className="h-8 bg-[#FFCAE3]" />
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 touch-manipulation" type="button" aria-label="User menu">
-                <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                  <span className="text-sm font-medium text-gray-600">{userInitials}</span>
+              <button className="flex items-center space-x-2 p-2 rounded-md hover:bg-[#FFCAE3]/50 touch-manipulation" type="button" aria-label="User menu">
+                <div className="h-8 w-8 rounded-full bg-[#FF69B4] flex items-center justify-center shadow-pink">
+                  <span className="text-sm font-medium text-white">{userInitials}</span>
                 </div>
-                <span className="text-sm font-medium hidden sm:inline">{user?.username}</span>
-                <ChevronDown className="h-4 w-4 text-gray-500" />
+                <span className="text-sm font-medium hidden sm:inline text-gray-800">{user?.username}</span>
+                <ChevronDown className="h-4 w-4 text-[#FF69B4]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[200px]">
