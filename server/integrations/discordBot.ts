@@ -3427,6 +3427,113 @@ async function handleWebImageCommand(interaction: any) {
 }
 
 /**
+ * Handler for the /webreq command
+ * Submits an administrative request to the system
+ */
+async function handleWebRequestCommand(interaction: any) {
+  try {
+    // Get options from the interaction
+    const title = interaction.options.getString('title');
+    const description = interaction.options.getString('description');
+    const category = interaction.options.getString('category');
+    const urgency = interaction.options.getString('urgency');
+    
+    // Defer reply to give us time to process
+    await interaction.deferReply({ ephemeral: true });
+    
+    // Get user information
+    const userId = interaction.user.id;
+    const userName = interaction.user.tag;
+    
+    // Format the category and urgency for display
+    const categoryDisplay = category.charAt(0).toUpperCase() + category.slice(1);
+    const urgencyDisplay = urgency.charAt(0).toUpperCase() + urgency.slice(1);
+    
+    // Create the admin request in the database
+    const adminRequest = await storage.createAdminRequest({
+      title,
+      description,
+      category,
+      urgency,
+      status: 'open',
+      createdBy: 'discord',
+      discordUserId: userId,
+      discordUserName: userName
+    });
+    
+    // Create an embed with request details for the response
+    const embed = new EmbedBuilder()
+      .setTitle('Admin Request Submitted')
+      .setDescription(`Your request has been submitted successfully with ID #${adminRequest.id}`)
+      .addFields(
+        { name: 'Title', value: title },
+        { name: 'Category', value: categoryDisplay, inline: true },
+        { name: 'Urgency', value: urgencyDisplay, inline: true },
+        { name: 'Status', value: 'Open', inline: true }
+      )
+      .setColor(getUrgencyColor(urgency))
+      .setFooter({
+        text: `Submitted by ${userName} • ${new Date().toLocaleString()}`
+      });
+    
+    // Log the activity
+    await storage.createActivityLog({
+      userId: null,
+      action: 'create',
+      resourceType: 'admin_request',
+      resourceId: adminRequest.id.toString(),
+      details: {
+        title,
+        category,
+        urgency,
+        discordUser: userName
+      }
+    });
+    
+    // Send the response
+    await interaction.editReply({
+      embeds: [embed],
+      content: 'Your request has been submitted and will be reviewed by an administrator.'
+    });
+    
+  } catch (error) {
+    console.error('Error handling admin request submission:', error);
+    
+    // If we already started replying, edit the reply
+    if (interaction.deferred) {
+      await interaction.editReply({
+        content: 'There was an error submitting your request. Please try again or contact an administrator.',
+        ephemeral: true
+      });
+    } else {
+      // Otherwise send a new reply
+      await interaction.reply({
+        content: 'There was an error submitting your request. Please try again or contact an administrator.',
+        ephemeral: true
+      });
+    }
+  }
+}
+
+/**
+ * Helper function to get color based on urgency level
+ */
+function getUrgencyColor(urgency: string): number {
+  switch (urgency) {
+    case 'low':
+      return 0x3498db; // Blue
+    case 'medium':
+      return 0xf39c12; // Orange
+    case 'high':
+      return 0xe74c3c; // Red
+    case 'critical':
+      return 0x9b59b6; // Purple
+    default:
+      return 0x95a5a6; // Gray
+  }
+}
+
+/**
  * Handler for the /upload_content command
  * Allows users to select an unpublished article and upload an HTML or RTF file
  * to be used as the article content
