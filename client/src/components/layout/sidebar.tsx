@@ -9,7 +9,6 @@ import {
   Headphones,
   ChevronLeft,
   ChevronRight,
-  BookOpen,
   Shield,
   X,
   CalendarDays,
@@ -130,12 +129,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           icon: <Bug className="w-5 h-5" />,
           adminOnly: false, // Available to all users
         },
-        {
-          name: "Documentation",
-          path: "/docs",
-          icon: <BookOpen className="w-5 h-5" />,
-          adminOnly: false,
-        },
+
         {
           name: "Privacy Policy",
           path: "/privacy-policy",
