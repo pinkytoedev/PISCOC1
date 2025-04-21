@@ -47,29 +47,33 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
   const { user } = useAuth();
   
   // Define all navigation items
-  const allNavItems = [
+  const allNavItems: NavSection[] = [
     {
       section: "Content",
       items: [
         {
           name: "Articles",
           path: "/articles",
-          icon: <Newspaper className="w-5 h-5" />
+          icon: <Newspaper className="w-5 h-5" />,
+          adminOnly: false
         },
         {
           name: "Article Planner",
           path: "/articles/planner",
-          icon: <CalendarDays className="w-5 h-5" />
+          icon: <CalendarDays className="w-5 h-5" />,
+          adminOnly: false
         },
         {
           name: "Team Members",
           path: "/team-members",
-          icon: <Users className="w-5 h-5" />
+          icon: <Users className="w-5 h-5" />,
+          adminOnly: false
         },
         {
           name: "Carousel Quotes",
           path: "/carousel-quotes",
-          icon: <Quote className="w-5 h-5" />
+          icon: <Quote className="w-5 h-5" />,
+          adminOnly: false
         }
       ]
     },
@@ -80,22 +84,26 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
         {
           name: "Discord",
           path: "/integrations/discord",
-          icon: <SiDiscord className="w-5 h-5" />
+          icon: <SiDiscord className="w-5 h-5" />,
+          adminOnly: true
         },
         {
           name: "Airtable",
           path: "/integrations/airtable",
-          icon: <SiAirtable className="w-5 h-5" />
+          icon: <SiAirtable className="w-5 h-5" />,
+          adminOnly: true
         },
         {
           name: "Instagram",
           path: "/integrations/instagram",
-          icon: <SiInstagram className="w-5 h-5" />
+          icon: <SiInstagram className="w-5 h-5" />,
+          adminOnly: true
         },
         {
           name: "ImgBB",
           path: "/integrations/imgbb",
-          icon: <SiCloudinary className="w-5 h-5" />
+          icon: <SiCloudinary className="w-5 h-5" />,
+          adminOnly: true
         }
       ]
     },
@@ -111,12 +119,14 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
         {
           name: "Documentation",
           path: "/docs",
-          icon: <BookOpen className="w-5 h-5" />
+          icon: <BookOpen className="w-5 h-5" />,
+          adminOnly: false
         },
         {
           name: "Privacy Policy",
           path: "/privacy-policy",
-          icon: <Shield className="w-5 h-5" />
+          icon: <Shield className="w-5 h-5" />,
+          adminOnly: false
         }
       ]
     }
