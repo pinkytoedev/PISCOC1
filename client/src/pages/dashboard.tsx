@@ -60,7 +60,7 @@ export default function Dashboard() {
     .sort((a, b) => {
       // Use the scheduled date field (from Airtable's "Scheduled" field) for sorting
       // If not available, fall back to publishedAt or createdAt
-      const getDateValue = (article) => {
+      const getDateValue = (article: Article) => {
         if (article.scheduled) return new Date(article.scheduled).getTime();
         if (article.publishedAt) return new Date(article.publishedAt).getTime();
         if (article.createdAt) return new Date(article.createdAt).getTime();
@@ -75,9 +75,9 @@ export default function Dashboard() {
     })
     .slice(0, 5);
   
-  // Get pending articles for review
-  const pendingArticles = articles
-    ?.filter(article => article.status === "pending")
+  // Get draft articles
+  const draftArticles = articles
+    ?.filter(article => article.status === "draft")
     .slice(0, 5);
 
   return (
@@ -137,15 +137,16 @@ export default function Dashboard() {
                     note="from last month"
                   />
                   
+                  {/* Using pendingArticles count for now, backend needs update later */}
                   <StatusCard
-                    title="Pending Approval"
+                    title="Drafts"
                     value={metrics?.pendingArticles || 0}
                     icon={<Clock />}
                     iconBgColor="bg-yellow-100"
                     iconColor="text-yellow-600"
                     footer={
-                      <Link href="/articles?status=pending" className="text-sm text-primary hover:underline flex items-center">
-                        <span>Review pending</span>
+                      <Link href="/articles?status=draft" className="text-sm text-primary hover:underline flex items-center">
+                        <span>View drafts</span>
                         <ChevronRight className="ml-1 h-4 w-4" />
                       </Link>
                     }
@@ -238,11 +239,11 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Pending Review Section */}
+            {/* Drafts Section */}
             <div className="mb-8">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-medium text-gray-900">Pending Review</h2>
-                <Link href="/articles?status=pending">
+                <h2 className="text-lg font-medium text-gray-900">Drafts</h2>
+                <Link href="/articles?status=draft">
                   <Button variant="outline" size="sm">
                     View all
                   </Button>
@@ -259,9 +260,9 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow overflow-hidden">
-                  {pendingArticles && pendingArticles.length > 0 ? (
+                  {draftArticles && draftArticles.length > 0 ? (
                     <div className="divide-y divide-gray-200">
-                      {pendingArticles.map((article) => (
+                      {draftArticles.map((article) => (
                         <div key={article.id} className="p-4 hover:bg-gray-50">
                           <div className="flex items-center">
                             {article.imageUrl ? (
@@ -303,7 +304,7 @@ export default function Dashboard() {
                     </div>
                   ) : (
                     <div className="p-8 text-center">
-                      <p className="text-gray-500">No articles pending review</p>
+                      <p className="text-gray-500">No draft articles</p>
                     </div>
                   )}
                 </div>
