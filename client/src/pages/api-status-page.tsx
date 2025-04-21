@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { Link } from "wouter";
 import { Layout } from "@/components/layout/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -70,13 +71,36 @@ export default function ApiStatusPage() {
   return (
     <Layout title="API Status Dashboard">
       <div className="container mx-auto py-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">API Status Dashboard</h1>
+        {/* Breadcrumb */}
+        <nav className="flex mb-5" aria-label="Breadcrumb">
+          <ol className="inline-flex items-center space-x-1 md:space-x-3">
+            <li className="inline-flex items-center">
+              <a href="/" className="inline-flex items-center text-sm font-medium text-gray-700 hover:text-primary">
+                Dashboard
+              </a>
+            </li>
+            <li>
+              <div className="flex items-center">
+                <span className="mx-2 text-gray-400">/</span>
+                <span className="text-gray-900">API Status</span>
+              </div>
+            </li>
+          </ol>
+        </nav>
+
+        {/* Page Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">API Status Dashboard</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Monitor the health and availability of all connected integrations and services.
+            </p>
+          </div>
           <Button 
             onClick={() => refetch()}
             disabled={isLoading || isRefetching}
             variant="outline"
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 w-full md:w-auto"
           >
             {isRefetching ? (
               <Loader2 className="h-4 w-4 animate-spin" />
