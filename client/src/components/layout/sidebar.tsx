@@ -196,8 +196,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                       collapsed ? "text-center" : "",
                     )}
                   >
-                    {!collapsed && section.section}
-                    {collapsed && section.section.charAt(0)}
+                    <span className={collapsed ? "sr-only" : ""}>{section.section}</span>
+                    {collapsed && <span aria-hidden="true">{section.section.charAt(0)}</span>}
                   </div>
                   <ul className="mt-1 space-y-1">
                     {section.items.map((item) => {
@@ -250,7 +250,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
 
       {/* Mobile Sidebar */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50">
+        <div className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50 touch-auto">
           <aside className="bg-[#2F3136] text-white w-64 h-full flex flex-col overflow-hidden">
             <div className="p-4 flex items-center justify-between border-b border-gray-700">
               <h2 className="text-lg font-semibold">Dashboard</h2>
@@ -258,7 +258,9 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                 variant="ghost"
                 size="icon"
                 onClick={onMobileClose}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white touch-manipulation"
+                type="button"
+                aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
               </Button>
@@ -279,7 +281,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                             <Link
                               href={item.path}
                               className={cn(
-                                "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                                "flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors touch-manipulation",
                                 isActive
                                   ? "bg-[#202225] text-white"
                                   : "text-gray-300 hover:bg-[#202225] hover:text-white",
