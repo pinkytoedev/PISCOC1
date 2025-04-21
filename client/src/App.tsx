@@ -5,6 +5,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { FacebookProvider } from "@/contexts/FacebookContext";
 import { Toaster } from "@/components/ui/toaster";
 import { ProtectedRoute } from "@/lib/protected-route";
+import { AdminProtectedRoute } from "@/lib/admin-protected-route";
 import { useState, useEffect } from "react";
 
 // Pages

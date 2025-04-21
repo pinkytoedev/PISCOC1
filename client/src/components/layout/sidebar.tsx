@@ -21,17 +21,33 @@ import {
   SiInstagram,
   SiCloudinary // Using Cloudinary's icon for ImgBB since there's no official ImgBB icon
 } from "react-icons/si";
+import { useAuth } from "@/hooks/use-auth";
 
 interface SidebarProps {
   mobileOpen?: boolean;
   onMobileClose?: () => void;
 }
 
+interface NavItem {
+  name: string;
+  path: string;
+  icon: React.ReactNode;
+  adminOnly?: boolean;
+}
+
+interface NavSection {
+  section: string;
+  items: NavItem[];
+  adminOnly?: boolean;
+}
+
 export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
   const [location] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const { user } = useAuth();
   
-  const navItems = [
+  // Define all navigation items
+  const allNavItems = [
     {
       section: "Content",
       items: [
@@ -59,6 +75,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
     },
     {
       section: "Integrations",
+      adminOnly: true, // This section is admin-only
       items: [
         {
           name: "Discord",
@@ -75,7 +92,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           path: "/integrations/instagram",
           icon: <SiInstagram className="w-5 h-5" />
         },
-
         {
           name: "ImgBB",
           path: "/integrations/imgbb",
@@ -89,7 +105,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
         {
           name: "Users & Permissions",
           path: "/users",
-          icon: <UserCog className="w-5 h-5" />
+          icon: <UserCog className="w-5 h-5" />,
+          adminOnly: true // This item is admin-only
         },
         {
           name: "Documentation",
@@ -104,6 +121,16 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
       ]
     }
   ];
+  
+  // Filter nav items based on user's admin status
+  const navItems = allNavItems
+    .filter(section => !section.adminOnly || (user?.isAdmin === true))
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => !item.adminOnly || (user?.isAdmin === true))
+    }))
+    // Filter out sections with no items
+    .filter(section => section.items.length > 0);
 
   // Close mobile menu when route changes
   useEffect(() => {
