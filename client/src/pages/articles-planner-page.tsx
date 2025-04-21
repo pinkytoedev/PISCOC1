@@ -200,6 +200,7 @@ export default function ArticlesPlannerPage() {
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                 </div>
               ) : (
+                <div className={`h-full ${viewType === 'timeGridDay' ? 'overflow-x-auto' : ''}`}>
                 <FullCalendar
                   plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
                   initialView={viewType}
@@ -327,6 +328,7 @@ export default function ArticlesPlannerPage() {
                   height="100%"
                   dayMaxEvents={3}
                 />
+                </div>
               )}
             </div>
             
