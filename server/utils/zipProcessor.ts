@@ -3,9 +3,9 @@
  * Extracts HTML content from ZIP files for articles
  */
 
-import fs from 'fs';
-import path from 'path';
-import extract from 'extract-zip';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as extractZip from 'extract-zip';
 import { storage } from '../storage';
 
 /**
@@ -28,7 +28,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     
     // Extract ZIP
     console.log(`Extracting ZIP file to ${tempDir}...`);
-    await extract(filePath, { dir: tempDir });
+    await extractZip(filePath, { dir: tempDir });
     
     // Check for index.html
     const indexPath = path.join(tempDir, 'index.html');
