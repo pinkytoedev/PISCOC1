@@ -19,9 +19,15 @@ interface DashboardMetrics {
 export default function Dashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // Function to toggle the mobile menu state
   const toggleMobileMenu = () => {
-    console.log("Mobile menu toggled on dashboard");
-    setMobileMenuOpen(prevState => !prevState);
+    const newState = !mobileMenuOpen;
+    console.log(`Mobile menu toggled on dashboard: ${mobileMenuOpen} -> ${newState}`);
+    
+    // Using setTimeout to avoid potential event propagation issues
+    setTimeout(() => {
+      setMobileMenuOpen(newState);
+    }, 10);
   };
   
   // Fetch metrics for the dashboard
@@ -70,7 +76,11 @@ export default function Dashboard() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 
           mobileOpen={mobileMenuOpen}
-          onMobileClose={() => setMobileMenuOpen(false)}
+          onMobileClose={() => {
+            // Use setTimeout to avoid potential event propagation issues
+            console.log("Closing mobile sidebar");
+            setTimeout(() => setMobileMenuOpen(false), 10);
+          }}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <div className="max-w-7xl mx-auto">
