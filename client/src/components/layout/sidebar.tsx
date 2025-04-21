@@ -161,10 +161,10 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
 
   return (
     <>
-      {/* Desktop Sidebar */}
+      {/* Desktop Sidebar - Pink Themed */}
       <aside
         className={cn(
-          "bg-[#2F3136] text-white flex-shrink-0 flex-col transition-all duration-300 ease-in-out",
+          "bg-[#FF69B4] text-white flex-shrink-0 flex-col transition-all duration-300 ease-in-out shadow-pink",
           collapsed ? "w-20" : "w-64",
           "hidden md:flex",
         )}
@@ -212,8 +212,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                             className={cn(
                               "flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors touch-manipulation",
                               isActive
-                                ? "bg-[#202225] text-white"
-                                : "text-gray-300 hover:bg-[#202225] hover:text-white",
+                                ? "bg-[#CC3F85] text-white"
+                                : "text-white hover:bg-[#CC3F85] hover:text-white",
                               collapsed ? "justify-center" : "",
                             )}
                             aria-label={item.name}
@@ -235,18 +235,18 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
             </ul>
           </nav>
 
-          <div className="p-4 border-t border-gray-700">
-            <div className="bg-[#202225] rounded-md p-3">
+          <div className="p-4 border-t border-pink">
+            <div className="bg-[#CC3F85] rounded-md p-3 shadow-pink">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-[#FF69B4] flex items-center justify-center">
                     <Headphones className="text-white h-4 w-4" />
                   </div>
                 </div>
                 {!collapsed && (
                   <div className="ml-3">
                     <p className="text-sm font-medium text-white">Need help?</p>
-                    <p className="text-xs text-gray-400">Too Bad</p>
+                    <p className="text-xs text-white opacity-75">Too Bad</p>
                   </div>
                 )}
               </div>
@@ -272,7 +272,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           }}
         >
           <aside 
-            className="bg-[#2F3136] text-white w-64 h-full flex flex-col overflow-hidden"
+            className="bg-[#FF69B4] text-white w-64 h-full flex flex-col overflow-hidden shadow-pink"
             onClick={(e) => {
               // Stop clicks inside the sidebar from bubbling to the overlay
               e.stopPropagation();
@@ -313,8 +313,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                               className={cn(
                                 "flex items-center px-3 py-4 text-sm font-medium rounded-md transition-colors touch-manipulation",
                                 isActive
-                                  ? "bg-[#202225] text-white"
-                                  : "text-gray-300 hover:bg-[#202225] hover:text-white",
+                                  ? "bg-[#CC3F85] text-white"
+                                  : "text-white hover:bg-[#CC3F85] hover:text-white",
                               )}
                               onClick={(e) => {
                                 // Stop event bubbling
@@ -339,17 +339,17 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
               </ul>
             </nav>
 
-            <div className="p-4 border-t border-gray-700">
-              <div className="bg-[#202225] rounded-md p-3">
+            <div className="p-4 border-t border-pink">
+              <div className="bg-[#CC3F85] rounded-md p-3 shadow-pink">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
-                    <div className="h-8 w-8 rounded-full bg-green-500 flex items-center justify-center">
+                    <div className="h-8 w-8 rounded-full bg-[#FF69B4] flex items-center justify-center">
                       <Headphones className="text-white h-4 w-4" />
                     </div>
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-white">Need help?</p>
-                    <p className="text-xs text-gray-400">Too bad</p>
+                    <p className="text-xs text-white opacity-75">Too Bad</p>
                   </div>
                 </div>
               </div>

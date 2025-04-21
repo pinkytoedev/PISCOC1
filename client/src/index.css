@@ -2,26 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Discord highlight animation */
-@keyframes discord-highlight {
+/* Pink highlight animation - replaced Discord blue */
+@keyframes pink-highlight {
   0% {
-    box-shadow: 0 0 0 0 rgba(88, 101, 242, 0.4);
-    background-color: rgba(88, 101, 242, 0.1);
+    box-shadow: 0 0 0 0 rgba(255, 105, 180, 0.4);
+    background-color: rgba(255, 105, 180, 0.1);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(88, 101, 242, 0.2);
-    background-color: rgba(88, 101, 242, 0.2);
+    box-shadow: 0 0 0 10px rgba(255, 105, 180, 0.2);
+    background-color: rgba(255, 105, 180, 0.2);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(88, 101, 242, 0);
-    background-color: rgba(88, 101, 242, 0.1);
+    box-shadow: 0 0 0 0 rgba(255, 105, 180, 0);
+    background-color: rgba(255, 105, 180, 0.1);
   }
 }
 
 .discord-highlight {
-  animation: discord-highlight 2s infinite;
-  background-color: rgba(88, 101, 242, 0.1) !important;
+  animation: pink-highlight 2s infinite;
+  background-color: rgba(255, 105, 180, 0.1) !important;
   position: relative;
+}
+
+/* Global background pattern */
+.bg-pink-pattern {
+  background-image: url('/assets/images/pink-background.png');
+  background-repeat: repeat;
+  background-size: 500px auto;
+}
+
+/* Pink theme utilities */
+.bg-pink-translucent {
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+}
+
+.border-pink {
+  border-color: rgba(255, 105, 180, 0.5);
+}
+
+.shadow-pink {
+  box-shadow: 0 4px 12px rgba(255, 105, 180, 0.2);
 }
 
 @layer base {
@@ -31,5 +52,8 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    background-image: url('/assets/images/pink-background.png');
+    background-repeat: repeat;
+    background-size: 500px auto;
   }
 }
