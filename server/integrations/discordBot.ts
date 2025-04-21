@@ -289,6 +289,10 @@ async function handleCreateArticleCommand(interaction: any) {
 }
 
 /**
+ * Handler for the /edit_article command
+ * Retrieves the article and opens a modal for editing it
+ */
+/**
  * Create a select menu for unpublished articles
  */
 async function createArticleSelectMenu() {
@@ -343,7 +347,34 @@ async function createArticleSelectMenu() {
     .addOptions(options);
 }
 
-
+async function handleEditArticleCommand(interaction: any) {
+  await interaction.deferReply({ ephemeral: true });
+  
+  try {
+    // Create a select menu for article selection
+    const articleSelect = await createArticleSelectMenu();
+    
+    // If no articles available to edit
+    if (articleSelect.options[0].data.value === '0') {
+      await interaction.editReply('No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.');
+      return;
+    }
+    
+    // Create an action row with the article select menu
+    const row = new ActionRowBuilder().addComponents(articleSelect);
+    
+    // Show the selection menu to the user
+    await interaction.editReply({
+      content: 'Please select an article to edit:',
+      components: [row]
+    });
+    
+    // We'll handle the article editing in the string select menu interaction handler
+  } catch (error) {
+    console.error('Error handling edit article command:', error);
+    await interaction.editReply('Sorry, there was an error fetching articles. Please try again later.');
+  }
+}
 
 /**
  * Handler for the /writers command
