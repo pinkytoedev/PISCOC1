@@ -16,7 +16,7 @@ import ArticlesPlannerPage from "@/pages/articles-planner-page";
 import TeamMembersPage from "@/pages/team-members-page";
 import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
-import ApiStatusPage from "@/pages/api-status-page";
+// ApiStatusPage removed - now part of Debug Center
 import DebugCenterPage from "@/pages/debug-center-page";
 import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
@@ -39,7 +39,13 @@ function Router() {
       <ProtectedRoute path="/team-members" component={TeamMembersPage} />
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
       <AdminProtectedRoute path="/users" component={UserManagementPage} />
-      <ProtectedRoute path="/api-status" component={ApiStatusPage} />
+      {/* Redirect API Status to Debug Center */}
+      <Route path="/api-status">
+        {() => {
+          window.location.href = '/debug-center';
+          return null;
+        }}
+      </Route>
       <ProtectedRoute path="/debug-center" component={DebugCenterPage} />
       <ProtectedRoute path="/uploads" component={UploadsPage} />
       <AdminProtectedRoute path="/integrations/discord" component={DiscordPage} />
