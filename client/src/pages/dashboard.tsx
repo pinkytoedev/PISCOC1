@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
@@ -19,15 +19,28 @@ interface DashboardMetrics {
 export default function Dashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Function to toggle the mobile menu state
+  // Add a useEffect to log when mobileMenuOpen changes
+  useEffect(() => {
+    console.log(`MobileMenuOpen state changed to: ${mobileMenuOpen}`);
+  }, [mobileMenuOpen]);
+  
+  // Function to toggle the mobile menu state - simplified to always open
   const toggleMobileMenu = () => {
-    const newState = !mobileMenuOpen;
-    console.log(`Mobile menu toggled on dashboard: ${mobileMenuOpen} -> ${newState}`);
+    // Instead of toggling, explicitly set to true (to open)
+    // This avoids potential race conditions with state updates
+    console.log(`Opening mobile menu: ${mobileMenuOpen} -> true`);
     
-    // Using setTimeout to avoid potential event propagation issues
+    // Force it to be true (open the menu) - this simplifies debugging
+    setMobileMenuOpen(true);
+  };
+
+  // Function to close the mobile menu
+  const closeMobileMenu = () => {
+    console.log(`Closing mobile menu`);
+    // Using setTimeout to avoid race conditions
     setTimeout(() => {
-      setMobileMenuOpen(newState);
-    }, 10);
+      setMobileMenuOpen(false);
+    }, 50); // Slight delay for better reliability
   };
   
   // Fetch metrics for the dashboard
@@ -76,11 +89,7 @@ export default function Dashboard() {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar 
           mobileOpen={mobileMenuOpen}
-          onMobileClose={() => {
-            // Use setTimeout to avoid potential event propagation issues
-            console.log("Closing mobile sidebar");
-            setTimeout(() => setMobileMenuOpen(false), 10);
-          }}
+          onMobileClose={closeMobileMenu}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <div className="max-w-7xl mx-auto">
