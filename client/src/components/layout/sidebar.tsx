@@ -179,10 +179,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
               Dashboard
             </h2>
             <button
-              className="p-1 text-gray-400 hover:text-white"
+              className="p-2 text-gray-400 hover:text-white touch-manipulation"
               onClick={() => setCollapsed(!collapsed)}
+              type="button"
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {collapsed ? <ChevronRight /> : <ChevronLeft />}
+              {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
             </button>
           </div>
 
@@ -207,16 +209,20 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                           <Link
                             href={item.path}
                             className={cn(
-                              "flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                              "flex items-center px-3 py-3 text-sm font-medium rounded-md transition-colors touch-manipulation",
                               isActive
                                 ? "bg-[#202225] text-white"
                                 : "text-gray-300 hover:bg-[#202225] hover:text-white",
                               collapsed ? "justify-center" : "",
                             )}
+                            aria-label={item.name}
                           >
                             <span className="flex-shrink-0">{item.icon}</span>
                             {!collapsed && (
                               <span className="ml-3">{item.name}</span>
+                            )}
+                            {collapsed && (
+                              <span className="sr-only">{item.name}</span>
                             )}
                           </Link>
                         </li>

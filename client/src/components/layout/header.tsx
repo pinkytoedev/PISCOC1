@@ -56,7 +56,7 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
         <div className="flex items-center space-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-2 text-gray-500 hover:text-gray-700 relative">
+              <button className="p-3 text-gray-500 hover:text-gray-700 relative touch-manipulation" type="button" aria-label="Notifications">
                 <Bell className="h-5 w-5" />
                 {notifications.length > 0 && (
                   <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
@@ -64,7 +64,7 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
-              <div className="px-4 py-2 border-b border-gray-100">
+              <div className="px-4 py-3 border-b border-gray-100">
                 <h5 className="font-semibold text-sm">Notifications</h5>
               </div>
               
@@ -74,7 +74,7 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
                 </div>
               ) : (
                 notifications.map((notification, index) => (
-                  <DropdownMenuItem key={index} className="px-4 py-2 hover:bg-gray-50 border-b border-gray-100">
+                  <DropdownMenuItem key={index} className="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 touch-manipulation cursor-pointer">
                     <div className="w-full">
                       <div className="flex justify-between">
                         <span className="text-sm font-medium">{notification.title}</span>
@@ -86,8 +86,8 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
                 ))
               )}
               
-              <div className="px-4 py-2 text-center text-xs">
-                <Link href="/notifications" className="text-primary hover:underline">
+              <div className="px-4 py-3 text-center text-xs">
+                <Link href="/notifications" className="text-primary hover:underline block py-2 touch-manipulation">
                   View all notifications
                 </Link>
               </div>
@@ -98,7 +98,7 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center space-x-2">
+              <button className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 touch-manipulation" type="button" aria-label="User menu">
                 <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
                   <span className="text-sm font-medium text-gray-600">{userInitials}</span>
                 </div>
@@ -106,15 +106,15 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
                 <ChevronDown className="h-4 w-4 text-gray-500" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                <Link href="/profile">Profile</Link>
+            <DropdownMenuContent align="end" className="min-w-[200px]">
+              <DropdownMenuItem className="py-3 cursor-pointer touch-manipulation">
+                <Link href="/profile" className="w-full">Profile</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Link href="/settings">Settings</Link>
+              <DropdownMenuItem className="py-3 cursor-pointer touch-manipulation">
+                <Link href="/settings" className="w-full">Settings</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout}>
+              <DropdownMenuItem onClick={handleLogout} className="py-3 cursor-pointer touch-manipulation">
                 Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
