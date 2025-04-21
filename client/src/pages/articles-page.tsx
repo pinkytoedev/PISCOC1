@@ -137,9 +137,6 @@ export default function ArticlesPage() {
                     <DropdownMenuItem onClick={() => handleSortClick("oldest")}>
                       <CalendarClock className="mr-2 h-4 w-4 rotate-180" /> Oldest First
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleSortClick("chronological")}>
-                      <CalendarClock className="mr-2 h-4 w-4" /> Chronological (by Date field)
-                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 
