@@ -28,9 +28,10 @@ interface ArticleTableProps {
   onEdit?: (article: Article) => void;
   onView?: (article: Article) => void;
   onDelete?: (article: Article) => void;
+  highlightedArticleId?: number | null;
 }
 
-export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: ArticleTableProps) {
+export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlightedArticleId }: ArticleTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreationDate, setShowCreationDate] = useState(false);
@@ -639,7 +640,10 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
               </tr>
             ) : sortedArticles && sortedArticles.length > 0 ? (
               sortedArticles.map((article) => (
-                <tr key={article.id} className={article.source === 'airtable' ? 'bg-blue-50/30' : ''}>
+                <tr 
+                  key={article.id} 
+                  className={`${article.source === 'airtable' ? 'bg-blue-50/30' : ''} ${highlightedArticleId === article.id ? 'discord-highlight' : ''}`}
+                >
                   <td className="px-6 py-4">
                     <div className="flex items-start">
                       <div className="h-10 w-10 flex-shrink-0">
@@ -978,7 +982,10 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
         ) : (
           <div className="space-y-4 p-4">
             {sortedArticles.map((article) => (
-              <div key={article.id} className="bg-white rounded-lg shadow p-4">
+              <div 
+                key={article.id} 
+                className={`bg-white rounded-lg shadow p-4 ${highlightedArticleId === article.id ? 'discord-highlight' : ''}`}
+              >
                 <div className="flex items-center space-x-3 mb-3">
                   {article.imageUrl ? (
                     <img 
