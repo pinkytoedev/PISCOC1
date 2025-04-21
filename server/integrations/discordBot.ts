@@ -289,11 +289,15 @@ async function handleCreateArticleCommand(interaction: any) {
 }
 
 /**
- * Handler for the /edit_article command
+ * Article selection and edit handler
+ * Used by the /writers command (edit option)
  * Retrieves the article and opens a modal for editing it
  */
+
 /**
  * Create a select menu for unpublished articles
+ * This function is used by both the writers command edit flow and upload flow
+ * @returns A Discord select menu with unpublished articles
  */
 async function createArticleSelectMenu() {
   // Get all draft and pending articles
