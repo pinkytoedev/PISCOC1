@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown } from "lucide-react";
+import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
 import { 
   DropdownMenu,
@@ -40,6 +40,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   const [uploadingField, setUploadingField] = useState<'MainImage' | 'instaPhoto' | null>(null);
   const [pushingArticleId, setPushingArticleId] = useState<number | null>(null);
   const [autoPublishingArticleId, setAutoPublishingArticleId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const articlesPerPage = 15; // Show 15 articles per page
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
@@ -346,9 +348,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   });
   
   // Then sort articles based on sort parameter
-  const sortedArticles = filteredArticles ? [...filteredArticles].sort((a, b) => {
+  const sortedAllArticles = filteredArticles ? [...filteredArticles].sort((a, b) => {
     // Helper function to get the most relevant date for an article
-    const getRelevantDate = (article) => {
+    const getRelevantDate = (article: Article) => {
       // Prioritize Scheduled field from Airtable, then publishedAt, then createdAt
       if (article.Scheduled) return new Date(article.Scheduled).getTime();
       if (article.publishedAt) return new Date(article.publishedAt).getTime();
@@ -364,9 +366,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     } else if (sort === 'chronological') {
       // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
       const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 
-                  (a.Dare ? new Date(a.Date).getTime() : 0);
+                  (a.date ? new Date(a.date).getTime() : 0);
       const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() : 
-                  (b.Date ? new Date(b.Date).getTime() : 0);
+                  (b.date ? new Date(b.date).getTime() : 0);
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
@@ -383,6 +385,25 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     
     return 0;
   }) : [];
+  
+  // Calculate total pages
+  const totalPages = Math.ceil((sortedAllArticles?.length || 0) / articlesPerPage);
+  
+  // Get paginated articles
+  const sortedArticles = sortedAllArticles.slice(
+    (currentPage - 1) * articlesPerPage,
+    currentPage * articlesPerPage
+  );
+  
+  // Handle page changes
+  const handlePageChange = (page: number) => {
+    // Ensure page is within valid range
+    const newPage = Math.max(1, Math.min(page, totalPages));
+    setCurrentPage(newPage);
+    
+    // If we're changing page, scroll to top of the article table
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
   
   // Function to truncate text with ellipsis
   const truncateText = (text: string, maxLength: number) => {
