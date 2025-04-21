@@ -62,10 +62,20 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       
-      // After updating to published, update in Airtable if it's an Airtable article
+      // Get the updated article
       const article = articles?.find(a => a.id === variables.id);
-      if (article && article.source === 'airtable' && article.externalId) {
-        updateAirtableMutation.mutate(article.id);
+      
+      // Handle Airtable synchronization when status is set to "published"
+      if (article && variables.status === 'published') {
+        if (article.source === 'airtable' && article.externalId) {
+          // For existing Airtable articles, just update them
+          console.log('Updating existing Airtable article:', article.id);
+          updateAirtableMutation.mutate(article.id);
+        } else if (article.source !== 'airtable') {
+          // For non-Airtable articles, push them to Airtable
+          console.log('Pushing new article to Airtable:', article.id);
+          pushToAirtableMutation.mutate(article.id);
+        }
       }
       
       setAutoPublishingArticleId(null);
