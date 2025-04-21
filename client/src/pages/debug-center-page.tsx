@@ -38,10 +38,13 @@ interface AdminRequest {
   id: number;
   title: string;
   description: string;
-  status: 'pending' | 'in-progress' | 'completed';
-  priority: 'low' | 'medium' | 'high';
+  category: 'Pinkytoe' | 'PISCOC' | 'Misc';
+  urgency: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'in-progress' | 'resolved' | 'closed';
+  createdBy: string;
+  userId: number | null;
   createdAt: string;
-  updatedAt: string;
+  updatedAt: string | null;
 }
 
 interface PatchNote {
@@ -122,6 +125,18 @@ export default function DebugCenterPage() {
     queryKey: ['/api/activity-logs'],
     refetchInterval: 300000, // Refetch every 5 minutes
   });
+  
+  // Fetch admin requests
+  const {
+    data: adminRequests,
+    isLoading: isAdminRequestsLoading,
+    error: adminRequestsError,
+    refetch: refetchAdminRequests,
+    isRefetching: isAdminRequestsRefetching
+  } = useQuery<AdminRequest[]>({
+    queryKey: ['/api/admin-requests'],
+    refetchInterval: 60000, // Refetch every minute
+  });
 
   useEffect(() => {
     if (statusError) {
@@ -139,7 +154,15 @@ export default function DebugCenterPage() {
         variant: "destructive",
       });
     }
-  }, [statusError, logsError, toast]);
+    
+    if (adminRequestsError) {
+      toast({
+        title: "Error fetching admin requests",
+        description: adminRequestsError instanceof Error ? adminRequestsError.message : "An unknown error occurred",
+        variant: "destructive",
+      });
+    }
+  }, [statusError, logsError, adminRequestsError, toast]);
 
   // Format date strings
   const formatDate = (dateString: string) => {
@@ -167,9 +190,11 @@ export default function DebugCenterPage() {
     }
   };
 
-  // Priority badge renderer
-  const getPriorityBadge = (priority: string) => {
-    switch (priority) {
+  // Urgency badge renderer
+  const getUrgencyBadge = (urgency: string) => {
+    switch (urgency) {
+      case 'critical':
+        return <Badge variant="destructive" className="bg-red-600">Critical</Badge>;
       case 'high':
         return <Badge variant="destructive">High</Badge>;
       case 'medium':
@@ -180,16 +205,31 @@ export default function DebugCenterPage() {
     }
   };
 
+  // Category badge renderer
+  const getCategoryBadge = (category: string) => {
+    switch (category) {
+      case 'Pinkytoe':
+        return <Badge variant="default" className="bg-pink-500 hover:bg-pink-600">Pinkytoe</Badge>;
+      case 'PISCOC':
+        return <Badge variant="default" className="bg-purple-500 hover:bg-purple-600">PISCOC</Badge>;
+      case 'Misc':
+      default:
+        return <Badge variant="outline" className="bg-gray-200 text-gray-800 hover:bg-gray-300">Misc</Badge>;
+    }
+  };
+
   // Status badge renderer for admin requests
   const getRequestStatusBadge = (status: string) => {
     switch (status) {
-      case 'completed':
-        return <Badge className="bg-green-600 hover:bg-green-700">Completed</Badge>;
+      case 'resolved':
+        return <Badge className="bg-green-600 hover:bg-green-700">Resolved</Badge>;
+      case 'closed':
+        return <Badge className="bg-gray-600 hover:bg-gray-700">Closed</Badge>;
       case 'in-progress':
         return <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">In Progress</Badge>;
-      case 'pending':
+      case 'open':
       default:
-        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">Pending</Badge>;
+        return <Badge variant="outline" className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200">Open</Badge>;
     }
   };
 
@@ -242,8 +282,9 @@ export default function DebugCenterPage() {
               onClick={() => {
                 refetchStatus();
                 refetchLogs();
+                refetchAdminRequests();
               }}
-              disabled={isStatusLoading || isStatusRefetching || isLogsLoading || isLogsRefetching}
+              disabled={isStatusLoading || isStatusRefetching || isLogsLoading || isLogsRefetching || isAdminRequestsLoading || isAdminRequestsRefetching}
               variant="outline"
               className="flex items-center gap-2"
             >
@@ -369,24 +410,73 @@ export default function DebugCenterPage() {
           {/* Admin Requests Tab */}
           <TabsContent value="admin-requests" className="space-y-4">
             <Card>
-              <CardHeader>
-                <CardTitle>Admin Requests</CardTitle>
-                <CardDescription>
-                  Track and manage pending request from administrators
-                </CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Admin Requests</CardTitle>
+                  <CardDescription>
+                    Track and manage requests submitted via Discord or Web interface
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={() => refetchAdminRequests()}
+                  disabled={isAdminRequestsLoading || isAdminRequestsRefetching}
+                  variant="outline" 
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  {isAdminRequestsRefetching ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  Refresh
+                </Button>
               </CardHeader>
               <CardContent>
-                <div className="rounded-md border">
-                  <div className="grid grid-cols-1 divide-y">
-                    <div className="p-4 text-center">
-                      <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium">Admin Request Feature Coming Soon</h3>
+                {isAdminRequestsLoading ? (
+                  <div className="flex items-center justify-center p-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : adminRequests && adminRequests.length > 0 ? (
+                  <div className="rounded-md border overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="py-3 px-4 text-left font-medium">Title</th>
+                            <th className="py-3 px-4 text-left font-medium">Category</th>
+                            <th className="py-3 px-4 text-left font-medium">Urgency</th>
+                            <th className="py-3 px-4 text-left font-medium">Status</th>
+                            <th className="py-3 px-4 text-left font-medium">Created</th>
+                            <th className="py-3 px-4 text-left font-medium">Source</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {adminRequests.map((request) => (
+                            <tr key={request.id} className="hover:bg-muted/50">
+                              <td className="py-3 px-4 font-medium">{request.title}</td>
+                              <td className="py-3 px-4">{getCategoryBadge(request.category)}</td>
+                              <td className="py-3 px-4">{getUrgencyBadge(request.urgency)}</td>
+                              <td className="py-3 px-4">{getRequestStatusBadge(request.status)}</td>
+                              <td className="py-3 px-4 text-gray-500">{formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}</td>
+                              <td className="py-3 px-4 text-gray-500 capitalize">{request.createdBy}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-md border">
+                    <div className="p-6 text-center">
+                      <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                      <h3 className="text-lg font-medium">No admin requests found</h3>
                       <p className="mt-2 text-sm text-gray-500">
-                        This feature is currently in development. Check back later.
+                        Admin requests submitted via Discord or web will appear here.
                       </p>
                     </div>
                   </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
