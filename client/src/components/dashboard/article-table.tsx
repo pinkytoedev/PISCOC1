@@ -364,9 +364,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
     } else if (sort === 'chronological') {
       // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
       const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 
-                  (a.publishedAt ? new Date(a.publishedAt).getTime() : 0);
+                  (a.Dare ? new Date(a.Date).getTime() : 0);
       const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() : 
-                  (b.publishedAt ? new Date(b.publishedAt).getTime() : 0);
+                  (b.Date ? new Date(b.Date).getTime() : 0);
       
       // If both have dates, sort by those dates
       if (dateA && dateB) {
