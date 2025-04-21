@@ -12,7 +12,7 @@ import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
 import * as path from "path";
-import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema } from "@shared/schema";
+import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema, insertAdminRequestSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
 // Middleware for validating if user is authenticated
@@ -430,6 +430,172 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(quotes);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch quotes by carousel" });
+    }
+  });
+
+  // Admin requests routes
+  app.get("/api/admin-requests", async (req, res) => {
+    try {
+      // Check if we need to filter by status, category or urgency
+      const { status, category, urgency } = req.query;
+      
+      let requests;
+      
+      if (status) {
+        requests = await storage.getAdminRequestsByStatus(status as string);
+      } else if (category) {
+        requests = await storage.getAdminRequestsByCategory(category as string);
+      } else if (urgency) {
+        requests = await storage.getAdminRequestsByUrgency(urgency as string);
+      } else {
+        requests = await storage.getAdminRequests();
+      }
+      
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching admin requests", error);
+      res.status(500).json({ message: "Failed to fetch admin requests" });
+    }
+  });
+
+  app.get("/api/admin-requests/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+      
+      const request = await storage.getAdminRequest(id);
+      
+      if (!request) {
+        return res.status(404).json({ message: "Admin request not found" });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      console.error(`Error fetching admin request with ID ${req.params.id}`, error);
+      res.status(500).json({ message: "Failed to fetch admin request" });
+    }
+  });
+
+  app.post("/api/admin-requests", isAuthenticated, async (req, res) => {
+    try {
+      // Basic validation
+      const { title, description, category, urgency } = req.body;
+      
+      if (!title || !description || !category || !urgency) {
+        return res.status(400).json({ 
+          message: "Missing required fields (title, description, category, urgency)" 
+        });
+      }
+      
+      // Create admin request
+      const request = await storage.createAdminRequest({
+        title,
+        description,
+        category,
+        urgency,
+        status: 'open',
+        createdBy: 'web',
+        ...(req.user ? { userId: req.user.id } : {})
+      });
+      
+      // Log activity
+      await storage.createActivityLog({
+        userId: req.user?.id || null,
+        action: 'create',
+        resourceType: 'admin_request',
+        resourceId: request.id.toString(),
+        details: {
+          title,
+          category,
+          urgency
+        }
+      });
+      
+      res.status(201).json(request);
+    } catch (error) {
+      console.error("Error creating admin request", error);
+      res.status(500).json({ message: "Failed to create admin request" });
+    }
+  });
+
+  app.patch("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+      
+      // Get current admin request
+      const currentRequest = await storage.getAdminRequest(id);
+      
+      if (!currentRequest) {
+        return res.status(404).json({ message: "Admin request not found" });
+      }
+      
+      // Update the request
+      const updatedRequest = await storage.updateAdminRequest(id, req.body);
+      
+      // Log activity
+      await storage.createActivityLog({
+        userId: req.user?.id || null,
+        action: 'update',
+        resourceType: 'admin_request',
+        resourceId: id.toString(),
+        details: {
+          changes: req.body,
+          previousStatus: currentRequest.status
+        }
+      });
+      
+      res.json(updatedRequest);
+    } catch (error) {
+      console.error(`Error updating admin request with ID ${req.params.id}`, error);
+      res.status(500).json({ message: "Failed to update admin request" });
+    }
+  });
+
+  app.delete("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      
+      if (isNaN(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+      
+      // Get current admin request for logging
+      const request = await storage.getAdminRequest(id);
+      
+      if (!request) {
+        return res.status(404).json({ message: "Admin request not found" });
+      }
+      
+      // Delete the request
+      const deleted = await storage.deleteAdminRequest(id);
+      
+      if (!deleted) {
+        return res.status(500).json({ message: "Failed to delete admin request" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        userId: req.user?.id || null,
+        action: 'delete',
+        resourceType: 'admin_request',
+        resourceId: id.toString(),
+        details: {
+          title: request.title,
+          category: request.category
+        }
+      });
+      
+      res.status(204).send();
+    } catch (error) {
+      console.error(`Error deleting admin request with ID ${req.params.id}`, error);
+      res.status(500).json({ message: "Failed to delete admin request" });
     }
   });
 

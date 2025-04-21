@@ -383,6 +383,68 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return newLog;
   }
+  
+  // Admin request operations
+  async getAdminRequests(): Promise<AdminRequest[]> {
+    return await db.select().from(adminRequests);
+  }
+
+  async getAdminRequest(id: number): Promise<AdminRequest | undefined> {
+    const [request] = await db.select().from(adminRequests).where(eq(adminRequests.id, id));
+    return request;
+  }
+
+  async createAdminRequest(request: InsertAdminRequest): Promise<AdminRequest> {
+    const [newRequest] = await db
+      .insert(adminRequests)
+      .values({
+        ...request,
+        createdAt: new Date()
+      })
+      .returning();
+    return newRequest;
+  }
+
+  async updateAdminRequest(id: number, request: Partial<InsertAdminRequest>): Promise<AdminRequest | undefined> {
+    const [updatedRequest] = await db
+      .update(adminRequests)
+      .set({
+        ...request,
+        updatedAt: new Date()
+      })
+      .where(eq(adminRequests.id, id))
+      .returning();
+    return updatedRequest;
+  }
+
+  async deleteAdminRequest(id: number): Promise<boolean> {
+    const deleted = await db
+      .delete(adminRequests)
+      .where(eq(adminRequests.id, id))
+      .returning();
+    return deleted.length > 0;
+  }
+  
+  async getAdminRequestsByStatus(status: string): Promise<AdminRequest[]> {
+    return await db
+      .select()
+      .from(adminRequests)
+      .where(eq(adminRequests.status, status));
+  }
+  
+  async getAdminRequestsByCategory(category: string): Promise<AdminRequest[]> {
+    return await db
+      .select()
+      .from(adminRequests)
+      .where(eq(adminRequests.category, category));
+  }
+  
+  async getAdminRequestsByUrgency(urgency: string): Promise<AdminRequest[]> {
+    return await db
+      .select()
+      .from(adminRequests)
+      .where(eq(adminRequests.urgency, urgency));
+  }
 }
 
 export const storage = new DatabaseStorage();
