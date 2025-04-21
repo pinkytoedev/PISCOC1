@@ -347,12 +347,20 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete }: Article
   
   // Then sort articles based on sort parameter
   const sortedArticles = filteredArticles ? [...filteredArticles].sort((a, b) => {
+    // Helper function to get the most relevant date for an article
+    const getRelevantDate = (article) => {
+      // Prioritize Scheduled field from Airtable, then publishedAt, then createdAt
+      if (article.Scheduled) return new Date(article.Scheduled).getTime();
+      if (article.publishedAt) return new Date(article.publishedAt).getTime();
+      return new Date(article.createdAt || '').getTime();
+    };
+    
     if (!sort || sort === 'newest') {
-      // Sort by newest first (created/updated date)
-      return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
+      // Sort by newest first, prioritizing Scheduled field
+      return getRelevantDate(b) - getRelevantDate(a);
     } else if (sort === 'oldest') {
-      // Sort by oldest first
-      return new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime();
+      // Sort by oldest first, prioritizing Scheduled field
+      return getRelevantDate(a) - getRelevantDate(b);
     } else if (sort === 'chronological') {
       // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
       const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 
