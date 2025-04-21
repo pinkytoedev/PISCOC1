@@ -24,7 +24,6 @@ import InstagramPage from "@/pages/integrations/instagram-page";
 import UploadsPage from "@/pages/uploads";
 
 import ImgBBPage from "@/pages/integrations/imgbb-page";
-import DocsPage from "@/pages/docs-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TestPage from "@/pages/test-page";
 import NotFound from "@/pages/not-found";
@@ -52,7 +51,13 @@ function Router() {
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
       <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
-      <ProtectedRoute path="/docs" component={DocsPage} />
+      {/* Redirect Documentation to Debug Center */}
+      <Route path="/docs">
+        {() => {
+          window.location.href = '/debug-center';
+          return null;
+        }}
+      </Route>
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
       <Route component={NotFound} />
