@@ -26,7 +26,7 @@ import {
 } from 'discord.js';
 import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
-import { Article, InsertArticle } from '@shared/schema';
+import { Article, InsertArticle, InsertAdminRequest } from '@shared/schema';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
 import path from 'path';
@@ -2156,7 +2156,42 @@ const commands = [
     
   new SlashCommandBuilder()
     .setName('upload_content')
-    .setDescription('Upload an HTML, RTF, or plain text (.txt) file as article content')
+    .setDescription('Upload an HTML, RTF, or plain text (.txt) file as article content'),
+    
+  new SlashCommandBuilder()
+    .setName('webreq')
+    .setDescription('Submit an administrative request')
+    .addStringOption(option => 
+      option.setName('title')
+        .setDescription('Title of the request')
+        .setRequired(true)
+    )
+    .addStringOption(option => 
+      option.setName('description')
+        .setDescription('Detailed description of the request')
+        .setRequired(true)
+    )
+    .addStringOption(option => 
+      option.setName('category')
+        .setDescription('Category of the request')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Pinkytoe', value: 'pinkytoe' },
+          { name: 'PISCOC', value: 'piscoc' },
+          { name: 'Misc', value: 'misc' }
+        )
+    )
+    .addStringOption(option => 
+      option.setName('urgency')
+        .setDescription('Urgency level of the request')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Low', value: 'low' },
+          { name: 'Medium', value: 'medium' },
+          { name: 'High', value: 'high' },
+          { name: 'Critical', value: 'critical' }
+        )
+    )
 ];
 
 /**
@@ -2250,6 +2285,11 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
           // Upload HTML/RTF content command
           else if (interaction.commandName === 'upload_content') {
             await handleContentUploadCommand(interaction);
+          }
+          
+          // Admin request command
+          else if (interaction.commandName === 'webreq') {
+            await handleWebRequestCommand(interaction);
           }
         }
       } catch (error) {
