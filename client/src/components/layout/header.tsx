@@ -37,8 +37,9 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
             variant="ghost" 
             size="icon" 
             onClick={onMobileMenuToggle} 
-            className="md:hidden mr-1"
+            className="md:hidden mr-1 touch-manipulation"
             aria-label="Toggle mobile menu"
+            type="button"
           >
             <Menu className="h-5 w-5" />
           </Button>
