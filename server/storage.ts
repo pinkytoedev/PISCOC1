@@ -1,12 +1,13 @@
 import { 
   users, teamMembers, articles, carouselQuotes, 
-  imageAssets, integrationSettings, activityLogs 
+  imageAssets, integrationSettings, activityLogs, adminRequests
 } from "@shared/schema";
 import type { 
   User, InsertUser, TeamMember, InsertTeamMember, 
   Article, InsertArticle, CarouselQuote, InsertCarouselQuote, 
   ImageAsset, InsertImageAsset, IntegrationSetting, 
-  InsertIntegrationSetting, ActivityLog, InsertActivityLog 
+  InsertIntegrationSetting, ActivityLog, InsertActivityLog,
+  AdminRequest, InsertAdminRequest
 } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -51,6 +52,16 @@ export interface IStorage {
   updateCarouselQuote(id: number, quote: Partial<InsertCarouselQuote>): Promise<CarouselQuote | undefined>;
   deleteCarouselQuote(id: number): Promise<boolean>;
   getQuotesByCarousel(carousel: string): Promise<CarouselQuote[]>;
+  
+  // Admin request operations
+  getAdminRequests(): Promise<AdminRequest[]>;
+  getAdminRequest(id: number): Promise<AdminRequest | undefined>;
+  createAdminRequest(request: InsertAdminRequest): Promise<AdminRequest>;
+  updateAdminRequest(id: number, request: Partial<InsertAdminRequest>): Promise<AdminRequest | undefined>;
+  deleteAdminRequest(id: number): Promise<boolean>;
+  getAdminRequestsByStatus(status: string): Promise<AdminRequest[]>;
+  getAdminRequestsByCategory(category: string): Promise<AdminRequest[]>;
+  getAdminRequestsByUrgency(urgency: string): Promise<AdminRequest[]>;
   
   // Image asset operations
   getImageAssets(): Promise<ImageAsset[]>;
