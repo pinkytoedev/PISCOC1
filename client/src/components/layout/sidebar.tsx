@@ -254,21 +254,31 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
         </div>
       </aside>
 
-      {/* Mobile Sidebar */}
+      {/* Mobile Sidebar - Show based on mobileOpen state */}
       {mobileOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50 touch-auto">
+        <div 
+          className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50 touch-auto"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            // Close the sidebar when clicking the overlay (outside the sidebar)
+            if (e.target === e.currentTarget && onMobileClose) {
+              onMobileClose();
+            }
+          }}
+        >
           <aside className="bg-[#2F3136] text-white w-64 h-full flex flex-col overflow-hidden">
             <div className="p-4 flex items-center justify-between border-b border-gray-700">
               <h2 className="text-lg font-semibold">Dashboard</h2>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={onMobileClose}
-                className="text-gray-400 hover:text-white touch-manipulation"
+                className="text-gray-400 hover:text-white touch-manipulation p-2"
                 type="button"
                 aria-label="Close menu"
               >
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               </Button>
             </div>
 
