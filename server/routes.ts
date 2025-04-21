@@ -625,6 +625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const allArticles = await storage.getArticles();
       const pendingArticles = await storage.getArticlesByStatus("pending");
+      const draftArticles = await storage.getArticlesByStatus("draft");
       
       // Published today
       const today = new Date();
@@ -655,6 +656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const metrics = {
         totalArticles,
         pendingArticles: pendingArticles.length,
+        draftArticles: draftArticles.length,
         publishedToday: publishedToday.length,
         articleGrowth: `${articleGrowth}%`,
         migration: migrationProgress

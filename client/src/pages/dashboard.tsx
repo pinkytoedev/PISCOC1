@@ -12,6 +12,7 @@ import { Article } from "@shared/schema";
 interface DashboardMetrics {
   totalArticles: number;
   pendingArticles: number;
+  draftArticles: number;
   publishedToday: number;
   articleGrowth: string;
 }
@@ -61,7 +62,7 @@ export default function Dashboard() {
       // Use the scheduled date field (from Airtable's "Scheduled" field) for sorting
       // If not available, fall back to publishedAt or createdAt
       const getDateValue = (article: Article) => {
-        if (article.scheduled) return new Date(article.scheduled).getTime();
+        if (article.Scheduled) return new Date(article.Scheduled).getTime();
         if (article.publishedAt) return new Date(article.publishedAt).getTime();
         if (article.createdAt) return new Date(article.createdAt).getTime();
         return 0;
@@ -110,6 +111,13 @@ export default function Dashboard() {
                   Overview of your content and integration status
                 </p>
               </div>
+              <div className="flex gap-2">
+                <Link href="/articles/new">
+                  <Button>
+                    Create Article
+                  </Button>
+                </Link>
+              </div>
             </div>
 
             {/* Status Cards */}
@@ -137,10 +145,9 @@ export default function Dashboard() {
                     note="from last month"
                   />
                   
-                  {/* Using pendingArticles count for now, backend needs update later */}
                   <StatusCard
                     title="Drafts"
-                    value={metrics?.pendingArticles || 0}
+                    value={metrics?.draftArticles || 0}
                     icon={<Clock />}
                     iconBgColor="bg-yellow-100"
                     iconColor="text-yellow-600"
