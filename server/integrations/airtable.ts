@@ -194,7 +194,7 @@ async function airtableRequestWithPagination(
   let pageCount = 0;
   
   // Clone the query parameters to avoid modifying the original
-  const params = { ...queryParams } || {};
+  const params = queryParams ? { ...queryParams } : {};
   
   // Airtable has a maximum limit of 100 records per request
   // If no limit is specified, we use the maximum
@@ -319,10 +319,14 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     Body: article.content,
     Description: article.description || "",
     Featured: article.featured === "yes",
-    Finished: article.finished || article.status === "published", // Use either finished field or derive from status
+    // Always set Finished to true if status is "published" regardless of the finished field value
+    Finished: article.status === "published" ? true : (article.finished === true),
     Hashtags: article.hashtags || "",
     message_sent: article.status === "published" // If the article is published, assume it was sent
   };
+  
+  // Log for debugging
+  console.log("Finished status:", airtableData.Finished, "Article status:", article.status);
   
   // Add _updatedTime to track when this article was last updated
   airtableData._updatedTime = new Date().toISOString();
