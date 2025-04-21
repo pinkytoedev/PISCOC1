@@ -9,6 +9,7 @@ import { storage } from '../storage';
 import * as util from 'util';
 import { exec } from 'child_process';
 import { uploadImageToImgBB, UploadedFileInfo, ImgBBUploadResponse } from './imgbbUploader';
+import { InsertImageAsset } from '../../shared/schema';
 
 // Promisify exec
 const execPromise = util.promisify(exec);
@@ -137,7 +138,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           console.log(`Uploaded image ${relativePath} to ImgBB: ${uploadResult.display_url}`);
           
           // Also store the image in our database
-          await storage.createImageAsset({
+          const imageAsset: InsertImageAsset = {
             originalFilename: path.basename(imagePath),
             storagePath: uploadResult.url,
             mimeType: fileInfo.mimetype,
@@ -151,7 +152,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
               displayUrl: uploadResult.display_url,
               imgbbData: uploadResult
             }
-          });
+          };
+          await storage.createImageAsset(imageAsset);
         } else {
           console.warn(`Failed to upload image: ${relativePath}`);
         }
@@ -243,7 +245,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     
     return {
       success: true,
-      message: 'HTML content extracted and set as article content'
+      message: `HTML content extracted and set as article content. ${Object.keys(imageMapping).length} images processed and uploaded to ImgBB.`
     };
     
   } catch (error) {
