@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
 import { Header } from "@/components/layout/header";
@@ -22,12 +22,31 @@ export default function ArticlesPage() {
   const searchParams = new URLSearchParams(search);
   const statusFilter = searchParams.get('status');
   const sortParam = searchParams.get('sort');
+  const articleIdParam = searchParams.get('id');
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editArticle, setEditArticle] = useState<Article | null>(null);
   const [viewArticle, setViewArticle] = useState<Article | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [sortBy, setSortBy] = useState<string>(sortParam || "newest");
+  const [highlightedArticleId, setHighlightedArticleId] = useState<number | null>(null);
+  
+  // Parse article ID from URL if present (for Discord bot links)
+  useEffect(() => {
+    if (articleIdParam) {
+      const parsedId = parseInt(articleIdParam, 10);
+      if (!isNaN(parsedId)) {
+        setHighlightedArticleId(parsedId);
+        
+        // Clear the highlight after 10 seconds
+        const timer = setTimeout(() => {
+          setHighlightedArticleId(null);
+        }, 10000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [articleIdParam]);
   
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
