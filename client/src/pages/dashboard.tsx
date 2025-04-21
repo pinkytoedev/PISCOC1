@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
@@ -17,6 +17,13 @@ interface DashboardMetrics {
 }
 
 export default function Dashboard() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const toggleMobileMenu = () => {
+    console.log("Mobile menu toggled on dashboard");
+    setMobileMenuOpen(prevState => !prevState);
+  };
+  
   // Fetch metrics for the dashboard
   const { data: metrics, isLoading: isLoadingMetrics } = useQuery<DashboardMetrics>({
     queryKey: ['/api/metrics'],

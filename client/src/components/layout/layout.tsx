@@ -11,6 +11,11 @@ interface LayoutProps {
 export function Layout({ children, title = "Content Management System" }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(prevState => !prevState);
+    console.log("Mobile menu toggled, new state:", !mobileMenuOpen);
+  };
+  
   return (
     <div className="flex h-screen bg-background">
       <Sidebar 
@@ -22,7 +27,7 @@ export function Layout({ children, title = "Content Management System" }: Layout
         {/* Header with mobile menu toggle */}
         <Header 
           title={title} 
-          onMobileMenuToggle={() => setMobileMenuOpen(true)} 
+          onMobileMenuToggle={toggleMobileMenu} 
         />
         
         {/* Main content area */}
