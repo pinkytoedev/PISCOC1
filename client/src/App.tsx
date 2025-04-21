@@ -35,12 +35,11 @@ function Router() {
       <ProtectedRoute path="/articles/planner" component={ArticlesPlannerPage} />
       <ProtectedRoute path="/team-members" component={TeamMembersPage} />
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
-      <ProtectedRoute path="/users" component={UserManagementPage} />
-      <ProtectedRoute path="/integrations/discord" component={DiscordPage} />
-      <ProtectedRoute path="/integrations/airtable" component={AirtablePage} />
-      <ProtectedRoute path="/integrations/instagram" component={InstagramPage} />
-
-      <ProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
+      <AdminProtectedRoute path="/users" component={UserManagementPage} />
+      <AdminProtectedRoute path="/integrations/discord" component={DiscordPage} />
+      <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
+      <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
+      <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
       <ProtectedRoute path="/docs" component={DocsPage} />
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
