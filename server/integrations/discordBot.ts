@@ -866,39 +866,6 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       }
       
       await interaction.deferUpdate();
-      
-      // Get the article details to confirm
-      const article = await storage.getArticle(articleId);
-      
-      if (!article) {
-        await interaction.followUp({
-          content: `No article found with ID ${articleId}. It may have been deleted.`,
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // Create buttons for different options
-      const uploadButton = new ButtonBuilder()
-        .setCustomId(`upload_content_${articleId}`)
-        .setLabel('Upload via Bot')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('📄');
-      
-      const dashboardButton = new ButtonBuilder()
-        .setLabel('Open in Dashboard')
-        .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`)
-        .setEmoji('🔗');
-      
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(dashboardButton, uploadButton);
-      
-      // Confirm selection and provide options
-      await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading content:\n\n1. Use the "Upload via Bot" button to attach an HTML, RTF, or plain text (.txt) file directly through Discord\n2. Use the dashboard link to edit through the website`,
-        components: [buttonRow]
-      });
     }
     
     // Handle article selection for zip file upload
@@ -1955,6 +1922,201 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         await interaction.editReply({
           content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
         });
+      }
+    }
+    // Handle Writers command "Edit Article" button
+    else if (interaction.customId === 'writers_edit') {
+      await interaction.deferUpdate();
+      
+      try {
+        // Call the existing edit article functionality
+        await handleEditArticleCommand(interaction);
+      } catch (error) {
+        console.error('Error handling writers edit option:', error);
+        try {
+          await interaction.followUp({
+            content: 'Sorry, there was an error setting up the article editor. Please try again later.',
+            ephemeral: true
+          });
+        } catch (followUpError) {
+          console.error('Error sending error message:', followUpError);
+        }
+      }
+    }
+    // Handle Writers command "Upload Zipped HTML" button
+    else if (interaction.customId === 'writers_upload_zip') {
+      await interaction.deferUpdate();
+      
+      try {
+        // Create a select menu for article selection
+        const articleSelect = await createArticleSelectMenu();
+        
+        // If no articles available
+        if (articleSelect.options[0].data.value === '0') {
+          await interaction.followUp({
+            content: 'No unpublished articles found. Create a new article using `/create_article` or use the website to create draft articles first.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Create a custom ID that indicates this is for ZIP upload
+        articleSelect.setCustomId('select_article_for_zip_upload');
+        
+        // Create an action row with the article select menu
+        const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(articleSelect);
+        
+        // Show the selection menu to the user
+        await interaction.followUp({
+          content: 'Please select an article to upload ZIP content for:',
+          components: [row],
+          ephemeral: true
+        });
+      } catch (error) {
+        console.error('Error handling writers upload option:', error);
+        await interaction.followUp({
+          content: 'Sorry, there was an error preparing the article selection. Please try again later.',
+          ephemeral: true
+        });
+      }
+    }
+    // Handle Upload ZIP button for a selected article
+    else if (interaction.customId.startsWith('upload_zip_')) {
+      // Extract the article ID from the button customId (upload_zip_123 => 123)
+      const articleId = parseInt(interaction.customId.replace('upload_zip_', ''), 10);
+      
+      if (isNaN(articleId)) {
+        await interaction.reply({
+          content: 'Error: Invalid article ID',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      await interaction.deferUpdate();
+      
+      // Get the article to confirm it exists
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.followUp({
+          content: `No article found with ID ${articleId}. It may have been deleted.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Prompt the user to upload a ZIP file
+      await interaction.followUp({
+        content: `Please upload a ZIP file containing HTML content for article: **${article.title}**\n\nThe upload should be a reply to this message and contain a single .zip file. The file will be processed and the HTML content will be extracted and set as the article's body content.`,
+        ephemeral: true
+      });
+      
+      // Set up a message collector to wait for the user to upload a file
+      const filter = (m: Message) => {
+        // Message should be from the same user who clicked the button
+        return m.author.id === interaction.user.id && 
+               // Message should have attachments
+               m.attachments.size > 0 && 
+               // At least one attachment should be a zip file
+               m.attachments.some(attachment => 
+                 attachment.name.toLowerCase().endsWith('.zip')
+               );
+      };
+      
+      // Get the channel from the client
+      const channel = interaction.channel;
+      if (!channel) {
+        await interaction.followUp({
+          content: 'Error: Could not find the channel for file upload.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      try {
+        // Use awaitMessages to wait for a file upload
+        const collected = await channel.awaitMessages({
+          filter,
+          max: 1,
+          time: 300000, // 5 minute timeout
+          errors: ['time']
+        });
+        
+        // Get the first collected message
+        const message = collected.first();
+        if (!message) {
+          await interaction.followUp({
+            content: 'No valid file was uploaded within the time limit.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Get the zip attachment
+        const zipAttachment = message.attachments.find(attachment => 
+          attachment.name.toLowerCase().endsWith('.zip')
+        );
+        
+        if (!zipAttachment) {
+          await interaction.followUp({
+            content: 'No ZIP file was found in your message.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Process the zip file
+        await interaction.followUp({
+          content: `Processing ZIP file: **${zipAttachment.name}**. Please wait...`,
+          ephemeral: true
+        });
+        
+        const result = await processZipFile(zipAttachment, articleId);
+        
+        // Delete the uploaded message to keep the channel clean
+        try {
+          await message.delete();
+          console.log('Deleted ZIP file message to keep channel clean');
+        } catch (deleteError) {
+          console.error('Could not delete upload message:', deleteError);
+        }
+        
+        // Display the result
+        if (result.success) {
+          // Create a view in dashboard button
+          const viewInDashboardButton = new ButtonBuilder()
+            .setLabel('View in Dashboard')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
+          
+          const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(viewInDashboardButton);
+          
+          await interaction.followUp({
+            content: `✅ **Success!** ${result.message}`,
+            components: [buttonRow],
+            ephemeral: true
+          });
+        } else {
+          await interaction.followUp({
+            content: `❌ **Error!** ${result.message}`,
+            ephemeral: true
+          });
+        }
+      } catch (collectionError) {
+        if (collectionError instanceof Error && collectionError.message === 'time') {
+          await interaction.followUp({
+            content: 'Time limit reached. No ZIP file was uploaded within 5 minutes.',
+            ephemeral: true
+          });
+        } else {
+          console.error('Error collecting message:', collectionError);
+          await interaction.followUp({
+            content: 'An error occurred while waiting for the file upload.',
+            ephemeral: true
+          });
+        }
       }
     }
   } catch (error) {
