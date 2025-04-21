@@ -177,7 +177,7 @@ export default function Dashboard() {
                   Push to Airtable
                 </Button>
                 
-                <Link href="/articles/new">
+                <Link href="/articles?action=create">
                   <Button>
                     Create Article
                   </Button>
@@ -300,7 +300,7 @@ export default function Dashboard() {
                   ) : (
                     <div className="p-8 text-center">
                       <p className="text-gray-500">No recently published articles</p>
-                      <Link href="/articles/new">
+                      <Link href="/articles?action=create">
                         <Button variant="outline" size="sm" className="mt-4">
                           Create your first article
                         </Button>

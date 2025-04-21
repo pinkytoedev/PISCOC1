@@ -48,6 +48,23 @@ export default function ArticlesPage() {
     }
   }, [articleIdParam]);
   
+  // Check for action=create in URL and open create modal
+  useEffect(() => {
+    const actionParam = searchParams.get('action');
+    if (actionParam === 'create') {
+      setIsCreateModalOpen(true);
+      
+      // Remove the action parameter after opening the modal
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('action');
+      const newSearch = newParams.toString();
+      const newPath = newSearch ? `${location.split('?')[0]}?${newSearch}` : location.split('?')[0];
+      
+      // Use history API to replace the URL without causing a navigation
+      window.history.replaceState(null, '', newPath);
+    }
+  }, [search, location]);
+  
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
   });
