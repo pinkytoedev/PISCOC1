@@ -29,11 +29,12 @@ import { storage } from '../storage';
 import { Article, InsertArticle } from '@shared/schema';
 import fetch from 'node-fetch';
 import FormData from 'form-data';
-import fs from 'fs';
 import path from 'path';
+import fs from 'fs-extra';
 import { uploadImageToImgBB, uploadImageUrlToImgBB } from '../utils/imgbbUploader';
 import { uploadImageToAirtable, uploadImageUrlToAirtable } from '../utils/imageUploader';
 import { marked } from 'marked';
+import extract from 'extract-zip';
 
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
@@ -372,6 +373,51 @@ async function handleEditArticleCommand(interaction: any) {
   } catch (error) {
     console.error('Error handling edit article command:', error);
     await interaction.editReply('Sorry, there was an error fetching articles. Please try again later.');
+  }
+}
+
+/**
+ * Handler for the /writers command
+ * Provides a UI for writers to edit articles or upload zipped HTML content
+ */
+async function handleWritersCommand(interaction: any) {
+  await interaction.deferReply({ ephemeral: true });
+  
+  try {
+    // Create a select menu for article selection
+    const articleSelect = await createArticleSelectMenu();
+    
+    // If no articles available
+    if (articleSelect.options[0].data.value === '0') {
+      await interaction.editReply('No unpublished articles found. Create a new article using `/create_article` or use the website to create draft articles first.');
+      return;
+    }
+    
+    // Show options to the user
+    const editButton = new ButtonBuilder()
+      .setCustomId('writers_edit')
+      .setLabel('Edit Article')
+      .setStyle(ButtonStyle.Primary)
+      .setEmoji('✏️');
+    
+    const uploadButton = new ButtonBuilder()
+      .setCustomId('writers_upload_zip')
+      .setLabel('Upload Zipped HTML')
+      .setStyle(ButtonStyle.Success)
+      .setEmoji('📁');
+    
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+      .addComponents(editButton, uploadButton);
+    
+    // Show the selection menu to the user
+    await interaction.editReply({
+      content: '**Writer Tools**\n\nChoose an option:\n• **Edit Article** - Edit an article\'s content directly through Discord\n• **Upload Zipped HTML** - Upload a zipped HTML file containing your article content',
+      components: [buttonRow]
+    });
+    
+  } catch (error) {
+    console.error('Error handling writers command:', error);
+    await interaction.editReply('Sorry, there was an error initializing the writers tools. Please try again later.');
   }
 }
 
@@ -844,6 +890,65 @@ async function handleStringSelectMenuInteraction(interaction: any) {
       });
     }
     
+    // Handle article selection for zip file upload
+    else if (interaction.customId === 'select_article_for_zip_upload') {
+      await interaction.deferUpdate();
+      
+      // Get the selected article ID
+      const articleId = parseInt(interaction.values[0], 10);
+      
+      if (isNaN(articleId) || articleId === 0) {
+        await interaction.followUp({
+          content: 'No valid article was selected.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Get the article to make sure it exists
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.followUp({
+          content: `No article found with ID ${articleId}. It may have been deleted.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Check if the article is already published
+      if (article.status === 'published') {
+        await interaction.followUp({
+          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Create buttons for different options
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_zip_${articleId}`)
+        .setLabel('Upload Zipped HTML')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('📁');
+      
+      const dashboardButton = new ButtonBuilder()
+        .setLabel('Open in Dashboard')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`)
+        .setEmoji('🔗');
+      
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(dashboardButton, uploadButton);
+      
+      // Confirm selection and provide options
+      await interaction.followUp({
+        content: `Selected article: **${article.title}**\n\nOptions for uploading zipped HTML content:\n\n1. Use the "Upload Zipped HTML" button to attach a .zip file containing HTML and related assets\n2. Use the dashboard link to edit through the website`,
+        components: [buttonRow],
+        ephemeral: true
+      });
+    }
+    
     // Handle author selection dropdown
     else if (interaction.customId === 'author_select') {
       await interaction.deferUpdate();
@@ -956,6 +1061,84 @@ async function handleStringSelectMenuInteraction(interaction: any) {
 /**
  * Handler for button interactions
  */
+/**
+ * Handle the Edit Article option from the Writers command
+ */
+async function handleWritersEditOption(interaction: MessageComponentInteraction) {
+  await interaction.deferUpdate();
+  
+  try {
+    // Create a select menu for article selection
+    const articleSelect = await createArticleSelectMenu();
+    
+    // If no articles available to edit
+    if (articleSelect.options[0].data.value === '0') {
+      await interaction.followUp({
+        content: 'No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.',
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Create an action row with the article select menu
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(articleSelect);
+    
+    // Show the selection menu to the user
+    await interaction.followUp({
+      content: 'Please select an article to edit:',
+      components: [row],
+      ephemeral: true
+    });
+  } catch (error) {
+    console.error('Error handling writers edit option:', error);
+    await interaction.followUp({
+      content: 'Sorry, there was an error fetching articles. Please try again later.',
+      ephemeral: true
+    });
+  }
+}
+
+/**
+ * Handle the Upload Zipped HTML option from the Writers command
+ */
+async function handleWritersUploadOption(interaction: MessageComponentInteraction) {
+  await interaction.deferUpdate();
+  
+  try {
+    // Create a select menu for article selection
+    const articleSelect = await createArticleSelectMenu();
+    
+    // If no articles available to edit
+    if (articleSelect.options[0].data.value === '0') {
+      await interaction.followUp({
+        content: 'No unpublished articles found to upload content to. Create a new article using `/create_article` or use the website to create draft articles first.',
+        ephemeral: true
+      });
+      return;
+    }
+    
+    // Customize the select menu for file upload context
+    articleSelect.setCustomId('select_article_for_zip_upload');
+    articleSelect.setPlaceholder('Select an article to upload zipped HTML to');
+    
+    // Create an action row with the article select menu
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(articleSelect);
+    
+    // Show the selection menu to the user
+    await interaction.followUp({
+      content: '**Upload Zipped HTML Content**\n\nPlease select the article you want to upload zipped HTML content for:',
+      components: [row],
+      ephemeral: true
+    });
+  } catch (error) {
+    console.error('Error handling writers upload option:', error);
+    await interaction.followUp({
+      content: 'Sorry, there was an error fetching articles. Please try again later.',
+      ephemeral: true
+    });
+  }
+}
+
 async function handleButtonInteraction(interaction: MessageComponentInteraction) {
   try {
     // Handle Create Article button
@@ -964,7 +1147,7 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       const modal = new ModalBuilder()
         .setCustomId('create_article_modal')
         .setTitle('Create New Article');
-
+        
       // Add input fields that match Airtable field names
       const titleInput = new TextInputBuilder()
         .setCustomId('title')
@@ -1018,6 +1201,159 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
       
       // Show the modal
       await interaction.showModal(modal);
+    }
+    // Writers tool - edit article option
+    else if (interaction.customId === 'writers_edit') {
+      await handleWritersEditOption(interaction);
+    }
+    // Writers tool - upload zipped HTML option
+    else if (interaction.customId === 'writers_upload_zip') {
+      await handleWritersUploadOption(interaction);
+    }
+    
+    // Handle zip file upload for article
+    else if (interaction.customId.startsWith('upload_zip_')) {
+      // Extract article ID from the custom ID
+      const fullId = interaction.customId;
+      const idPart = fullId.split('_').pop() || '';
+      console.log('Zip upload - full ID:', fullId);
+      console.log('Zip upload - extracted ID part:', idPart);
+      const articleId = parseInt(idPart, 10);
+      
+      if (isNaN(articleId)) {
+        await interaction.reply({
+          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Get the article to verify it exists and is not published
+      const article = await storage.getArticle(articleId);
+      
+      if (!article) {
+        await interaction.reply({
+          content: 'Article not found. It may have been deleted.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      if (article.status === 'published') {
+        await interaction.reply({
+          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
+          ephemeral: true
+        });
+        return;
+      }
+      
+      // Create a unique identifier for this upload request
+      const uploadId = `zip_${articleId}_${Date.now()}`;
+      
+      // Tell the user to upload a zip file
+      await interaction.reply({
+        content: `Please upload a ZIP file containing HTML content for article **${article.title}**.\n\n**Instructions:**\n• Upload the ZIP file as an attachment to your next message in this channel\n• The ZIP should contain an index.html file as the main entry point\n• Any CSS, JS, or images in the ZIP will be extracted and the HTML content will be used\n• The upload will time out after 5 minutes if no file is received`,
+        ephemeral: true
+      });
+      
+      // Listen for messages from this user that contain attachments
+      try {
+        console.log(`Waiting for ZIP file upload for article ID ${articleId}`);
+        
+        // Set up a collector to watch for the next message from this user with an attachment
+        const filter = (m: Message) => {
+          const hasAttachment = m.author.id === interaction.user.id && m.attachments.size > 0;
+          console.log(`Message received, user: ${m.author.tag}, has attachments: ${m.attachments.size > 0}`);
+          return hasAttachment;
+        };
+          
+        // Get the channel
+        const channel = interaction.channel;
+        
+        // Wait for a message with an attachment
+        const message = await collectImageMessage(channel, filter, 300000); // 5 minute timeout
+        
+        if (!message) {
+          console.log('File upload timed out');
+          await interaction.followUp({
+            content: 'ZIP file upload timed out. Please try again when you have a file ready.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Get the first attachment
+        const attachment = message.attachments.first();
+        
+        if (!attachment) {
+          console.error('No attachment found despite collector saying there was one');
+          await interaction.followUp({
+            content: 'No valid attachment found. Please try again with a valid ZIP file.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        console.log('ZIP attachment received for article:', {
+          articleId,
+          fileName: attachment.name,
+          contentType: attachment.contentType || 'unknown',
+          size: attachment.size,
+          url: attachment.url
+        });
+        
+        // Validate the attachment is a ZIP file
+        if (!attachment.name?.toLowerCase().endsWith('.zip')) {
+          await interaction.followUp({
+            content: 'Invalid file type. Please upload a ZIP file.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Process the ZIP attachment
+        const result = await processZipFile(attachment, articleId);
+        console.log('processZipFile result:', result);
+        
+        // Delete the uploaded message to keep the channel clean
+        try {
+          await message.delete();
+          console.log('Deleted zip file message to keep channel clean');
+        } catch (deleteError) {
+          console.error('Could not delete upload message:', deleteError);
+        }
+        
+        // Confirm the upload with the result message
+        if (result.success) {
+          // Create a view in dashboard button
+          const viewInDashboardButton = new ButtonBuilder()
+            .setLabel('View in Dashboard')
+            .setStyle(ButtonStyle.Link)
+            .setURL(`${process.env.BASE_URL || 'http://localhost:5000'}/articles?id=${articleId}`);
+          
+          const buttonRow = new ActionRowBuilder<ButtonBuilder>()
+            .addComponents(viewInDashboardButton);
+          
+          // Send confirmation message
+          await interaction.followUp({
+            content: `✅ **Success!** ${result.message}\n\nThe article content has been updated with the HTML from your ZIP file. You can view or further edit the article in the dashboard.`,
+            components: [buttonRow],
+            ephemeral: true
+          });
+        } else {
+          // Send error message
+          await interaction.followUp({
+            content: `❌ **Error:** ${result.message}\n\nPlease try again with a valid ZIP file containing HTML content.`,
+            ephemeral: true
+          });
+        }
+      } catch (error) {
+        console.error('Error processing zip file upload:', error);
+        await interaction.followUp({
+          content: `An error occurred while processing your file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          ephemeral: true
+        });
+      }
     }
     // Handle Instagram image upload button
     else if (interaction.customId.startsWith('upload_insta_image_')) {
@@ -1634,8 +1970,8 @@ const commands = [
     .setDescription('Create a new article draft'),
     
   new SlashCommandBuilder()
-    .setName('edit_article')
-    .setDescription('Edit an existing draft article'),
+    .setName('writers')
+    .setDescription('Writer tools: edit or upload articles'),
     
   new SlashCommandBuilder()
     .setName('insta')
@@ -1723,9 +2059,9 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
             await handleCreateArticleCommand(interaction);
           }
           
-          // Edit article command
-          else if (interaction.commandName === 'edit_article') {
-            await handleEditArticleCommand(interaction);
+          // Writers command - combined edit/upload functionality
+          else if (interaction.commandName === 'writers') {
+            await handleWritersCommand(interaction);
           }
           
           // Instagram image upload command
