@@ -264,18 +264,29 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
             // Close the sidebar when clicking the overlay (outside the sidebar)
             if (e.target === e.currentTarget && onMobileClose) {
               e.preventDefault(); // Prevent other events from firing
+              e.stopPropagation(); // Stop event from bubbling up
               onMobileClose();
               console.log("Mobile sidebar overlay clicked, closing sidebar");
             }
           }}
         >
-          <aside className="bg-[#2F3136] text-white w-64 h-full flex flex-col overflow-hidden">
+          <aside 
+            className="bg-[#2F3136] text-white w-64 h-full flex flex-col overflow-hidden"
+            onClick={(e) => {
+              // Stop clicks inside the sidebar from bubbling to the overlay
+              e.stopPropagation();
+            }}
+          >
             <div className="p-4 flex items-center justify-between border-b border-gray-700">
               <h2 className="text-lg font-semibold">Dashboard</h2>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onMobileClose}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (onMobileClose) onMobileClose();
+                }}
                 className="text-gray-400 hover:text-white touch-manipulation p-2"
                 type="button"
                 aria-label="Close menu"
@@ -304,7 +315,10 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                                   ? "bg-[#202225] text-white"
                                   : "text-gray-300 hover:bg-[#202225] hover:text-white",
                               )}
-                              onClick={() => {
+                              onClick={(e) => {
+                                // Stop event bubbling
+                                e.stopPropagation();
+                                
                                 // On mobile, close the sidebar when a link is clicked
                                 if (mobileOpen && onMobileClose) {
                                   onMobileClose();
