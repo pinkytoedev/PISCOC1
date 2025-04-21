@@ -34,16 +34,41 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     console.log(`Extracting ZIP file to ${tempDir}...`);
     await execPromise(`unzip -o "${filePath}" -d "${tempDir}"`);
     
-    // Check for index.html
-    const indexPath = path.join(tempDir, 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      throw new Error('index.html file not found in ZIP archive');
+    // Look for HTML files recursively
+    const findHtmlFiles = (dir: string): string[] => {
+      let results: string[] = [];
+      const items = fs.readdirSync(dir);
+      
+      for (const item of items) {
+        const itemPath = path.join(dir, item);
+        const stat = fs.statSync(itemPath);
+        
+        if (stat.isDirectory()) {
+          // Recursively search subdirectories
+          results = results.concat(findHtmlFiles(itemPath));
+        } else if (item.endsWith('.html')) {
+          results.push(itemPath);
+        }
+      }
+      
+      return results;
+    };
+    
+    // Find all HTML files in the extracted ZIP
+    const htmlFiles = findHtmlFiles(tempDir);
+    
+    if (htmlFiles.length === 0) {
+      throw new Error('No HTML files found in ZIP archive');
     }
     
+    // Prioritize index.html if it exists, otherwise use the first HTML file
+    let mainHtmlFile = htmlFiles.find(file => path.basename(file).toLowerCase() === 'index.html') || htmlFiles[0];
+    console.log(`Using HTML file: ${mainHtmlFile}`);
+    
     // Read HTML content
-    const htmlContent = fs.readFileSync(indexPath, 'utf-8');
+    const htmlContent = fs.readFileSync(mainHtmlFile, 'utf-8');
     if (!htmlContent) {
-      throw new Error('index.html file is empty');
+      throw new Error(`HTML file is empty: ${path.basename(mainHtmlFile)}`);
     }
     
     // Update article content
