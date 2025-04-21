@@ -354,17 +354,8 @@ export function setupDirectUploadRoutes(app: Express) {
       
       console.log(`Processing direct ZIP upload for article: ${article.title} (ID: ${articleId})`);
       
-      // Create a mock attachment object that's compatible with the existing processZipFile function
-      const attachment = {
-        url: req.file.path,
-        name: req.file.originalname,
-        size: req.file.size,
-        // This is needed because we're using the file path directly instead of downloading from a URL
-        isLocalFile: true
-      };
-      
       // Process the ZIP file
-      const result = await extractHTMLFromZip(attachment, articleId);
+      const result = await processZipFile(req.file.path, articleId);
       
       // Log activity regardless of success
       await storage.createActivityLog({
