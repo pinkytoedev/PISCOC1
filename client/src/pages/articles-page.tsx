@@ -205,6 +205,7 @@ export default function ArticlesPage() {
               sort={sortBy}
               onEdit={handleEditClick}
               onView={handleViewClick}
+              highlightedArticleId={highlightedArticleId}
             />
             
             {/* Create/Edit Article Modal */}
