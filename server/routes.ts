@@ -46,11 +46,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.sendFile(path.join(process.cwd(), "client/public/privacy.html"));
   });
 
-  // Config routes - expose environment variables safely to the frontend
+  // Config routes - provide configuration status to the frontend
   app.get("/api/config/facebook", (req, res) => {
-    // Send the Facebook App ID to the client
-    const facebookAppId = process.env.FACEBOOK_APP_ID || '';
-    res.json({ appId: facebookAppId });
+    // Only confirm if Facebook is configured without exposing the actual App ID
+    const isFacebookConfigured = !!process.env.FACEBOOK_APP_ID;
+    res.json({ 
+      status: 'success',
+      configured: isFacebookConfigured,
+      // For backward compatibility, providing a placeholder value
+      // that will be replaced on the client side with the environment variable
+      appId: isFacebookConfigured ? 'CONFIGURED' : ''
+    });
   });
 
   // Team member routes

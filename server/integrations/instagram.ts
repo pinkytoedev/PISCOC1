@@ -4,9 +4,9 @@ import { log } from '../vite';
 import { storage } from '../storage';
 
 // Constants
-const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'ieatpissandpoop123';
-const APP_SECRET = process.env.FACEBOOK_APP_SECRET || '';
-const APP_ID = process.env.FACEBOOK_APP_ID || '';
+const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
+const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+const APP_ID = process.env.FACEBOOK_APP_ID;
 
 // Helper to get Instagram media fields
 const INSTAGRAM_MEDIA_FIELDS = 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username,children{id,media_type,media_url,thumbnail_url}';
@@ -453,7 +453,7 @@ async function handleMessageRead(messagingEvent: any) {
 export async function subscribeToWebhook(
   fields: string[],
   callbackUrl: string,
-  verifyToken: string = WEBHOOK_VERIFY_TOKEN
+  verifyToken: string = WEBHOOK_VERIFY_TOKEN || crypto.randomUUID()
 ) {
   try {
     log(`Subscribing to Instagram webhook: fields=${fields.join(',')}, callback=${callbackUrl}`, 'instagram');

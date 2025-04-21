@@ -89,14 +89,22 @@ function App() {
         });
       })
       .then(data => {
-        if (data.status === 'success' && data.appId) {
-          setFacebookAppId(data.appId);
+        if (data.configured && data.status === 'success') {
+          // If the server indicates Facebook is configured, use the environment variable
+          // This prevents exposing the actual App ID in API responses
+          const appId = import.meta.env.VITE_FACEBOOK_APP_ID || '';
+          setFacebookAppId(appId);
+        } else if (data.appId === 'CONFIGURED') {
+          // For backward compatibility with our new secure response format
+          const appId = import.meta.env.VITE_FACEBOOK_APP_ID || '';
+          setFacebookAppId(appId);
         } else if (data.appId) {
-          // Legacy support for old API format
+          // Legacy support for old API format - should no longer be used
+          console.warn('Using legacy API response format, should update implementation');
           setFacebookAppId(data.appId);
         } else {
           // Fallback to the environment variable if the API doesn't return a value
-          console.warn('Facebook App ID not provided in API response, using environment variable');
+          console.warn('Facebook configuration status not provided in API response');
           setFacebookAppId(import.meta.env.VITE_FACEBOOK_APP_ID || '');
         }
       })
