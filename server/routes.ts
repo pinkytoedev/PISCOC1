@@ -522,6 +522,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  
   app.patch("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
