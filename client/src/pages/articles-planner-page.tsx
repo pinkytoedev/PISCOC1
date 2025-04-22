@@ -193,7 +193,10 @@ export default function ArticlesPlannerPage() {
             {/* Calendar View */}
             <div className="bg-white rounded-lg shadow-md border border-gray-200 p-4 overflow-hidden" 
                 style={{ 
-                  height: viewType === 'timeGridDay' ? 'calc(100vh - 180px)' : 'calc(100vh - 240px)',
+                  minHeight: '500px', // Minimum height ensures visibility on all screens
+                  height: viewType === 'timeGridDay' 
+                    ? 'min(calc(100vh - 180px), 800px)' 
+                    : 'min(calc(100vh - 240px), 800px)',
                 }}>
               {isLoading ? (
                 <div className="flex justify-center items-center h-full">
@@ -213,8 +216,9 @@ export default function ArticlesPlannerPage() {
                   events={calendarEvents as EventSourceInput}
                   eventClick={handleEventClick}
                   themeSystem="standard"
-                  aspectRatio={1.8}
+                  height="100%"
                   contentHeight="auto"
+                  handleWindowResize={true}
                   buttonText={{
                     today: 'Today',
                     month: 'Month',
@@ -325,7 +329,6 @@ export default function ArticlesPlannerPage() {
                       </Popover>
                     );
                   }}
-                  height="100%"
                   dayMaxEvents={3}
                 />
                 </div>
