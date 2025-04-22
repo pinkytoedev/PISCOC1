@@ -17,10 +17,12 @@ import {
   List, 
   MessageSquare, 
   FileText, 
-  AlertTriangle
+  AlertTriangle,
+  Eye
 } from "lucide-react";
 import { ActivityLog } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
+import { AdminRequestModal } from "@/components/modals/admin-request-modal";
 
 interface ApiStatus {
   name: string;
