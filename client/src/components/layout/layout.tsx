@@ -31,8 +31,8 @@ export function Layout({ children, title = "Content Management System" }: Layout
         />
         
         {/* Main content area with pink style */}
-        <main className="flex-1 overflow-auto p-4">
-          <div className="bg-pink-translucent shadow-pink rounded-lg border border-pink p-4 h-full">
+        <main className="flex-1 overflow-auto">
+          <div className="bg-pink-translucent shadow-pink border-pink p-4 min-h-screen">
             {children}
           </div>
         </main>
