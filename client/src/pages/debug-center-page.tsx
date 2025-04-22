@@ -103,6 +103,8 @@ const patchNotes: PatchNote[] = [
 
 export default function DebugCenterPage() {
   const { toast } = useToast();
+  const [selectedAdminRequest, setSelectedAdminRequest] = useState<AdminRequest | null>(null);
+  const [adminRequestModalOpen, setAdminRequestModalOpen] = useState(false);
 
   // Fetch API status
   const { 
@@ -139,6 +141,12 @@ export default function DebugCenterPage() {
     queryKey: ['/api/admin-requests'],
     refetchInterval: 60000, // Refetch every minute
   });
+  
+  // Handle opening an admin request
+  const handleViewAdminRequest = (request: AdminRequest) => {
+    setSelectedAdminRequest(request);
+    setAdminRequestModalOpen(true);
+  };
 
   useEffect(() => {
     if (statusError) {
@@ -451,17 +459,34 @@ export default function DebugCenterPage() {
                             <th className="py-3 px-4 text-left font-medium">Status</th>
                             <th className="py-3 px-4 text-left font-medium">Created</th>
                             <th className="py-3 px-4 text-left font-medium">Source</th>
+                            <th className="py-3 px-4 text-right font-medium">Action</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {adminRequests.map((request) => (
-                            <tr key={request.id} className="hover:bg-muted/50">
+                            <tr 
+                              key={request.id} 
+                              className="hover:bg-muted/50 cursor-pointer" 
+                              onClick={() => handleViewAdminRequest(request)}
+                            >
                               <td className="py-3 px-4 font-medium">{request.title}</td>
                               <td className="py-3 px-4">{getCategoryBadge(request.category)}</td>
                               <td className="py-3 px-4">{getUrgencyBadge(request.urgency)}</td>
                               <td className="py-3 px-4">{getRequestStatusBadge(request.status)}</td>
                               <td className="py-3 px-4 text-gray-500">{formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}</td>
                               <td className="py-3 px-4 text-gray-500 capitalize">{request.createdBy}</td>
+                              <td className="py-3 px-4 text-right">
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleViewAdminRequest(request);
+                                  }}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -557,6 +582,13 @@ export default function DebugCenterPage() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* Admin Request Modal */}
+      <AdminRequestModal 
+        isOpen={adminRequestModalOpen} 
+        onClose={() => setAdminRequestModalOpen(false)} 
+        request={selectedAdminRequest}
+      />
     </Layout>
   );
 }

@@ -61,11 +61,15 @@ export function AdminRequestModal({ isOpen, onClose, request }: AdminRequestModa
     setIsUpdating(true);
     
     try {
-      await apiRequest(`/api/admin-requests/${request.id}`, 'PATCH', {
-        status,
-        notes,
-        updatedAt: new Date().toISOString()
-      });
+      await apiRequest(
+        'PATCH',
+        `/api/admin-requests/${request.id}`, 
+        {
+          status,
+          notes,
+          updatedAt: new Date().toISOString()
+        }
+      );
       
       // Invalidate queries to refetch data
       queryClient.invalidateQueries({ queryKey: ['/api/admin-requests'] });
