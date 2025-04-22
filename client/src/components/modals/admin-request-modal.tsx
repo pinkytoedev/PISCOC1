@@ -3,6 +3,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 interface AdminRequest {
@@ -41,8 +52,10 @@ interface AdminRequestModalProps {
 
 export function AdminRequestModal({ isOpen, onClose, request }: AdminRequestModalProps) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [status, setStatus] = useState<string>('open');
   const [notes, setNotes] = useState<string>('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -88,6 +101,39 @@ export function AdminRequestModal({ isOpen, onClose, request }: AdminRequestModa
       });
     } finally {
       setIsUpdating(false);
+    }
+  };
+  
+  const handleDelete = async () => {
+    if (!request) return;
+    
+    setIsDeleting(true);
+    
+    try {
+      await apiRequest(
+        'DELETE',
+        `/api/admin-requests/${request.id}`
+      );
+      
+      // Invalidate queries to refetch data
+      queryClient.invalidateQueries({ queryKey: ['/api/admin-requests'] });
+      
+      toast({
+        title: "Request deleted",
+        description: "The request has been permanently deleted.",
+      });
+      
+      setDeleteDialogOpen(false);
+      onClose();
+    } catch (error) {
+      console.error("Error deleting admin request", error);
+      toast({
+        title: "Delete failed",
+        description: "There was an error deleting the request. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -204,15 +250,48 @@ export function AdminRequestModal({ isOpen, onClose, request }: AdminRequestModa
               </div>
             </div>
             
-            <DialogFooter className="flex justify-between items-center">
-              <div>
+            <DialogFooter className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center">
+                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 flex items-center gap-1">
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Admin Request</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this admin request? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction 
+                        onClick={handleDelete}
+                        className="bg-red-500 hover:bg-red-600 text-white"
+                        disabled={isDeleting}
+                      >
+                        {isDeleting ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          "Delete"
+                        )}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 {request.updatedAt && (
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 ml-4">
                     Last updated: {formatDistanceToNow(new Date(request.updatedAt), { addSuffix: true })}
                   </p>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full sm:w-auto justify-end">
                 <Button variant="outline" onClick={onClose}>
                   Cancel
                 </Button>
