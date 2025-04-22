@@ -367,6 +367,48 @@ export default function DebugCenterPage() {
                 
                 <Card>
                   <CardHeader>
+                    <CardTitle>Closed Requests</CardTitle>
+                    <CardDescription>
+                      Admin requests that have been resolved or closed
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isAdminRequestsLoading ? (
+                      <div className="flex items-center justify-center p-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : adminRequests && adminRequests.filter(r => r.status === 'resolved' || r.status === 'closed').length > 0 ? (
+                      <div className="space-y-4">
+                        {adminRequests
+                          .filter(request => request.status === 'resolved' || request.status === 'closed')
+                          .map((request) => (
+                            <div 
+                              key={request.id} 
+                              className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-4 last:border-0 hover:bg-muted/50 cursor-pointer p-2 rounded-md"
+                              onClick={() => handleViewAdminRequest(request)}
+                            >
+                              <div>
+                                <h3 className="font-medium">{request.title}</h3>
+                                <p className="text-sm text-gray-500">
+                                  {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })} • 
+                                  {request.updatedAt && `Updated ${formatDistanceToNow(new Date(request.updatedAt), { addSuffix: true })}`}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                                {getCategoryBadge(request.category)}
+                                {getRequestStatusBadge(request.status)}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-gray-500 py-4">No closed requests found</p>
+                    )}
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
                     <CardTitle>Recent Activity Logs</CardTitle>
                     <CardDescription>
                       System activity and potential error indicators
