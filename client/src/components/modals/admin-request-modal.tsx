@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -41,19 +41,18 @@ interface AdminRequestModalProps {
 
 export function AdminRequestModal({ isOpen, onClose, request }: AdminRequestModalProps) {
   const [isUpdating, setIsUpdating] = useState(false);
-  const [status, setStatus] = useState<string>(request?.status || 'open');
-  const [notes, setNotes] = useState<string>(request?.notes || '');
+  const [status, setStatus] = useState<string>('open');
+  const [notes, setNotes] = useState<string>('');
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Reset form when a new request is loaded
-  if (request && request.status !== status) {
-    setStatus(request.status);
-  }
-  
-  if (request && request.notes !== notes) {
-    setNotes(request.notes || '');
-  }
+  useEffect(() => {
+    if (request) {
+      setStatus(request.status);
+      setNotes(request.notes || '');
+    }
+  }, [request]);
 
   const handleSubmit = async () => {
     if (!request) return;
