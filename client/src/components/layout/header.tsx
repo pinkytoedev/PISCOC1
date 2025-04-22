@@ -42,6 +42,7 @@ interface Notification {
 export function Header({ title = "Discord-Airtable Integration", onMobileMenuToggle }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [lastSeenTimestamp, setLastSeenTimestamp] = useState<Date | null>(null);
   
   // Fetch activity logs
   const { data: activityLogs } = useQuery<ActivityLog[]>({
@@ -50,14 +51,25 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
     refetchInterval: 30000, // Refetch every 30 seconds
   });
   
+  // Handle dismissing all notifications
+  const handleDismissAll = () => {
+    setLastSeenTimestamp(new Date());
+  };
+  
   // Convert activity logs to notifications
   useEffect(() => {
     if (activityLogs && activityLogs.length > 0) {
       const newNotifications = activityLogs
-        .filter(log => 
+        .filter(log => {
           // Filter for specific actionable activity types
-          ['create', 'update', 'delete', 'upload', 'sync', 'publish', 'resolve'].includes(log.action)
-        )
+          const isActionable = ['create', 'update', 'delete', 'upload', 'sync', 'publish', 'resolve'].includes(log.action);
+          
+          // If we have a lastSeenTimestamp, only show notifications newer than that
+          const timestamp = new Date(log.timestamp);
+          const isRecent = !lastSeenTimestamp || timestamp > lastSeenTimestamp;
+          
+          return isActionable && isRecent;
+        })
         .slice(0, 10) // Only take the 10 most recent
         .map(log => {
           const timestamp = new Date(log.timestamp);
@@ -128,7 +140,7 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
       
       setNotifications(newNotifications);
     }
-  }, [activityLogs]);
+  }, [activityLogs, lastSeenTimestamp]);
   
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -214,7 +226,19 @@ export function Header({ title = "Discord-Airtable Integration", onMobileMenuTog
                 ))
               )}
               
-              <div className="px-4 py-3 text-center text-xs">
+              {notifications.length > 0 && (
+                <div className="px-4 py-3 text-center">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full text-xs bg-transparent border-pink-200 text-pink-600 hover:bg-pink-50" 
+                    onClick={handleDismissAll}
+                  >
+                    Dismiss All
+                  </Button>
+                </div>
+              )}
+              <div className="px-4 py-3 text-center text-xs border-t border-gray-100">
                 <Link href="/notifications" className="text-[#FF69B4] hover:underline block py-2 touch-manipulation">
                   View all notifications
                 </Link>
