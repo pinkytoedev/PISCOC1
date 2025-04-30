@@ -31,9 +31,13 @@ export default function ArticlesPage() {
   const [sortBy, setSortBy] = useState<string>(sortParam || "newest");
   const [highlightedArticleId, setHighlightedArticleId] = useState<number | null>(null);
   
+  const { data: articles, isLoading } = useQuery<Article[]>({
+    queryKey: ['/api/articles'],
+  });
+  
   // Parse article ID from URL if present
   useEffect(() => {
-    if (articleIdParam) {
+    if (articleIdParam && articles) {
       const parsedId = parseInt(articleIdParam, 10);
       if (!isNaN(parsedId)) {
         setHighlightedArticleId(parsedId);
@@ -44,12 +48,10 @@ export default function ArticlesPage() {
         }, 10000);
         
         // Auto-open the view modal if article ID is specified in the URL
-        if (articles) {
-          const article = articles.find(a => a.id === parsedId);
-          if (article) {
-            setViewArticle(article);
-            setIsViewModalOpen(true);
-          }
+        const article = articles.find(a => a.id === parsedId);
+        if (article) {
+          setViewArticle(article);
+          setIsViewModalOpen(true);
         }
         
         return () => clearTimeout(timer);
@@ -73,10 +75,6 @@ export default function ArticlesPage() {
       window.history.replaceState(null, '', newPath);
     }
   }, [search, location]);
-  
-  const { data: articles, isLoading } = useQuery<Article[]>({
-    queryKey: ['/api/articles'],
-  });
   
   const handleCreateClick = () => {
     setEditArticle(null);
