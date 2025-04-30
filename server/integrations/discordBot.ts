@@ -892,8 +892,8 @@ async function handleStringSelectMenuInteraction(interaction: any) {
           const maxUses = 3;
           
           // Generate unique token
-          const token = await generateUniqueToken(async (token) => {
-            const existingToken = await storage.getUploadTokenByToken(token);
+          const token = await generateUniqueToken(async (tokenToCheck: string) => {
+            const existingToken = await storage.getUploadTokenByToken(tokenToCheck);
             return !!existingToken;
           });
           
@@ -1009,8 +1009,8 @@ async function handleStringSelectMenuInteraction(interaction: any) {
           const maxUses = 5;
           
           // Generate unique token using the helper function
-          const token = await generateUniqueToken(async (token) => {
-            const existingToken = await storage.getUploadTokenByToken(token);
+          const token = await generateUniqueToken(async (tokenToCheck: string) => {
+            const existingToken = await storage.getUploadTokenByToken(tokenToCheck);
             return !!existingToken;
           });
           
@@ -1455,8 +1455,8 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
               const maxUses = 5;
               
               // Generate unique token
-              const token = await generateUniqueToken(async (token) => {
-                const existingToken = await storage.getUploadTokenByToken(token);
+              const token = await generateUniqueToken(async (tokenToCheck: string) => {
+                const existingToken = await storage.getUploadTokenByToken(tokenToCheck);
                 return !!existingToken;
               });
               
@@ -3015,7 +3015,7 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
  * @returns Status of the operation with a message
  */
 async function processContentFile(
-  attachment: any,
+  attachment: { url: string; contentType?: string; name?: string; size: number },
   articleId: number
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
@@ -3247,7 +3247,7 @@ async function processContentFile(
 }
 
 async function processDiscordAttachment(
-  attachment: any,
+  attachment: { url: string; contentType?: string; name?: string; size: number },
   articleId: number,
   fieldName: 'MainImage' | 'instaPhoto'
 ): Promise<{ success: boolean; message: string; url?: string }> {
@@ -3788,7 +3788,7 @@ async function handleContentUploadCommand(interaction: any) {
  * @returns Status of the operation with a message
  */
 async function processZipFile(
-  attachment: any,
+  attachment: { url: string; contentType?: string; name: string; size: number },
   articleId: number
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
