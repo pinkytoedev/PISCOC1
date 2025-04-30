@@ -1,9 +1,9 @@
-import { 
-  Client, 
-  Events, 
-  GatewayIntentBits, 
-  REST, 
-  Routes, 
+import {
+  Client,
+  Events,
+  GatewayIntentBits,
+  REST,
+  Routes,
   SlashCommandBuilder,
   EmbedBuilder,
   ActionRowBuilder,
@@ -22,27 +22,38 @@ import {
   TextBasedChannel,
   DMChannel,
   NewsChannel,
-  TextChannel
-} from 'discord.js';
-import type { Express, Request, Response } from 'express';
-import { storage } from '../storage';
-import { Article, InsertArticle, InsertAdminRequest } from '@shared/schema';
-import fetch from 'node-fetch';
-import { generateUniqueToken, calculateExpirationDate } from '../utils/tokenGenerator';
-import FormData from 'form-data';
-import path from 'path';
-import fs from 'fs-extra';
-import { uploadImageToImgBB, uploadImageUrlToImgBB } from '../utils/imgbbUploader';
-import { uploadImageToAirtable, uploadImageUrlToAirtable } from '../utils/imageUploader';
-import { marked } from 'marked';
-import extract from 'extract-zip';
+  TextChannel,
+} from "discord.js";
+import type { Express, Request, Response } from "express";
+import { storage } from "../storage";
+import { Article, InsertArticle, InsertAdminRequest } from "@shared/schema";
+import fetch from "node-fetch";
+import {
+  generateUniqueToken,
+  calculateExpirationDate,
+} from "../utils/tokenGenerator";
+import FormData from "form-data";
+import path from "path";
+import fs from "fs-extra";
+import {
+  uploadImageToImgBB,
+  uploadImageUrlToImgBB,
+} from "../utils/imgbbUploader";
+import {
+  uploadImageToAirtable,
+  uploadImageUrlToAirtable,
+} from "../utils/imageUploader";
+import { marked } from "marked";
+import extract from "extract-zip";
 
 // Store bot instance for the application lifecycle
 let client: Client | null = null;
 
 // Export the Discord bot for use in other modules
 export const discordBot = {
-  get client() { return client; }
+  get client() {
+    return client;
+  },
 };
 
 // Temporary storage for admin requests in progress
@@ -77,12 +88,12 @@ interface WebhookInfo {
 
 let botStatus = {
   connected: false,
-  status: 'Not initialized',
-  username: '',
-  id: '',
+  status: "Not initialized",
+  username: "",
+  id: "",
   guilds: 0,
   guildsList: [] as GuildInfo[],
-  webhooks: [] as WebhookInfo[]
+  webhooks: [] as WebhookInfo[],
 };
 
 /**
@@ -91,72 +102,80 @@ let botStatus = {
  */
 async function handleListArticlesCommand(interaction: any) {
   await interaction.deferReply();
-  
+
   try {
     // Get non-published articles
     const allArticles = await storage.getArticles();
-    const nonPublishedArticles = allArticles.filter(article => article.status !== 'published');
-    
+    const nonPublishedArticles = allArticles.filter(
+      (article) => article.status !== "published",
+    );
+
     if (nonPublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found. You can create a new article with `/create_article`.');
+      await interaction.editReply(
+        "No unpublished articles found. You can create a new article with `/create_article`.",
+      );
       return;
     }
-    
+
     // Create an embed to display the articles
     const embed = new EmbedBuilder()
-      .setTitle('📝 Unpublished Articles')
-      .setDescription('Here are the articles that have not been published yet.')
-      .setColor('#5865F2');
-    
+      .setTitle("📝 Unpublished Articles")
+      .setDescription("Here are the articles that have not been published yet.")
+      .setColor("#5865F2");
+
     // Add fields for each article (up to 10)
     const articlesToShow = nonPublishedArticles.slice(0, 10);
-    
+
     articlesToShow.forEach((article, index) => {
       // Map the fields to Airtable field names
-      const title = article.title || 'Untitled';       // Maps to Airtable's "Name" field
-      const status = article.status || 'draft';
-      const date = article.createdAt 
-        ? new Date(article.createdAt).toLocaleDateString() 
-        : 'No date';
-      
+      const title = article.title || "Untitled"; // Maps to Airtable's "Name" field
+      const status = article.status || "draft";
+      const date = article.createdAt
+        ? new Date(article.createdAt).toLocaleDateString()
+        : "No date";
+
       // Show author information when available
-      const authorInfo = article.author ? 
-        (typeof article.author === 'string' ? `\nAuthor: ${article.author}` : '\nAuthor: Unknown') : '';
-        
+      const authorInfo = article.author
+        ? typeof article.author === "string"
+          ? `\nAuthor: ${article.author}`
+          : "\nAuthor: Unknown"
+        : "";
+
       embed.addFields({
         name: `${index + 1}. ${title}`,
-        value: `Status: **${status}**\nLast updated: ${date}${authorInfo}\nID: ${article.id}`
+        value: `Status: **${status}**\nLast updated: ${date}${authorInfo}\nID: ${article.id}`,
       });
     });
-    
+
     // If there are more articles, indicate this
     if (nonPublishedArticles.length > 10) {
       embed.setFooter({
-        text: `Showing 10 of ${nonPublishedArticles.length} unpublished articles.`
+        text: `Showing 10 of ${nonPublishedArticles.length} unpublished articles.`,
       });
     } else {
       embed.setFooter({
-        text: 'Articles submitted through Discord will be synced to Airtable through the website'
+        text: "Articles submitted through Discord will be synced to Airtable through the website",
       });
     }
-    
+
     // Add button to create new article
-    const row = new ActionRowBuilder<ButtonBuilder>()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId('create_article')
-          .setLabel('Create New Article')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('✏️')
-      );
-    
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("create_article")
+        .setLabel("Create New Article")
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji("✏️"),
+    );
+
     await interaction.editReply({
       embeds: [embed],
-      components: [row]
+      components: [row],
     });
   } catch (error) {
-    console.error('Error fetching unpublished articles:', error);
-    await interaction.editReply('Sorry, there was an error fetching the unpublished articles.');
+    console.error("Error fetching unpublished articles:", error);
+    await interaction.editReply(
+      "Sorry, there was an error fetching the unpublished articles.",
+    );
   }
 }
 
@@ -168,7 +187,7 @@ async function getTeamMembers() {
   try {
     return await storage.getTeamMembers();
   } catch (error) {
-    console.error('Error fetching team members:', error);
+    console.error("Error fetching team members:", error);
     return [];
   }
 }
@@ -180,35 +199,37 @@ async function getTeamMembers() {
 async function createAuthorSelectMenu() {
   // Get all team members for author options
   let teamMembers = await getTeamMembers();
-  
+
   // Sort by name for consistency
   teamMembers = teamMembers.sort((a, b) => a.name.localeCompare(b.name));
-  
+
   // Limit to 24 members to leave room for the "Custom" option (Discord limit is 25 options total)
   // If there are more than 24 members, we'll take the first 24 alphabetically
   if (teamMembers.length > 24) {
-    console.log(`Warning: Limiting team members dropdown to 24 options (+ custom) from ${teamMembers.length} total members`);
+    console.log(
+      `Warning: Limiting team members dropdown to 24 options (+ custom) from ${teamMembers.length} total members`,
+    );
     teamMembers = teamMembers.slice(0, 24);
   }
-  
+
   // Create options from limited team members
-  const options = teamMembers.map(member => ({
+  const options = teamMembers.map((member) => ({
     label: member.name,
     value: member.id.toString(), // We'll use the ID as the value for proper referencing
-    description: member.role?.substring(0, 50) || 'Team Member' // Limit description to 50 chars for safety
+    description: member.role?.substring(0, 50) || "Team Member", // Limit description to 50 chars for safety
   }));
-  
+
   // Add a "Manual Entry" option
   options.push({
     label: "Enter Custom Author",
     value: "custom",
-    description: "Enter a custom author name not in the list"
+    description: "Enter a custom author name not in the list",
   });
-  
+
   // Return the select menu
   return new StringSelectMenuBuilder()
-    .setCustomId('author_select')
-    .setPlaceholder('Select an author from team members')
+    .setCustomId("author_select")
+    .setPlaceholder("Select an author from team members")
     .addOptions(options);
 }
 
@@ -220,69 +241,77 @@ async function handleCreateArticleCommand(interaction: any) {
   try {
     // Create modal for article creation
     const modal = new ModalBuilder()
-      .setCustomId('create_article_modal')
-      .setTitle('Create New Article');
+      .setCustomId("create_article_modal")
+      .setTitle("Create New Article");
 
     // Add input fields that match our Airtable field names
     const titleInput = new TextInputBuilder()
-      .setCustomId('title')
-      .setLabel('Title')  // Maps to Airtable's "Name" field
+      .setCustomId("title")
+      .setLabel("Title") // Maps to Airtable's "Name" field
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Enter article title')
+      .setPlaceholder("Enter article title")
       .setRequired(true)
       .setMaxLength(100);
-    
+
     const descriptionInput = new TextInputBuilder()
-      .setCustomId('description')
-      .setLabel('Description')  // Maps to Airtable's "Description" field
+      .setCustomId("description")
+      .setLabel("Description") // Maps to Airtable's "Description" field
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter a brief description (optional)')
+      .setPlaceholder("Enter a brief description (optional)")
       .setRequired(false)
       .setMaxLength(500);
-    
+
     const bodyInput = new TextInputBuilder()
-      .setCustomId('body')
-      .setLabel('Body')  // Maps to Airtable's "Body" field
+      .setCustomId("body")
+      .setLabel("Body") // Maps to Airtable's "Body" field
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter the article content (optional)')
+      .setPlaceholder("Enter the article content (optional)")
       .setRequired(false)
       .setMaxLength(4000);
-      
+
     const scheduledInput = new TextInputBuilder()
-      .setCustomId('scheduled')
-      .setLabel('Scheduled Date (YYYY-MM-DD HH:MM)')  // Maps to Airtable's "Scheduled" field
+      .setCustomId("scheduled")
+      .setLabel("Scheduled Date (YYYY-MM-DD HH:MM)") // Maps to Airtable's "Scheduled" field
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('e.g., 2025-05-15 14:30 (optional)')
+      .setPlaceholder("e.g., 2025-05-15 14:30 (optional)")
       .setRequired(false)
       .setMaxLength(20);
-    
+
     // Create action rows (each input needs its own row)
-    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
-    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
-    const scheduledRow = new ActionRowBuilder<TextInputBuilder>().addComponents(scheduledInput);
-    
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      titleInput,
+    );
+    const descriptionRow =
+      new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      bodyInput,
+    );
+    const scheduledRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      scheduledInput,
+    );
+
     // Add inputs to the modal
     modal.addComponents(titleRow, descriptionRow, bodyRow, scheduledRow);
-    
+
     // Show the modal with info about field mapping
     await interaction.showModal(modal);
-    
+
     // Add a follow-up message about Airtable mapping
     try {
       await interaction.followUp({
-        content: "**Important:** The fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Scheduled Date → Scheduled. Articles will be created with default values for author and featured fields. The Description and Body fields are optional.",
-        ephemeral: true
+        content:
+          "**Important:** The fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Scheduled Date → Scheduled. Articles will be created with default values for author and featured fields. The Description and Body fields are optional.",
+        ephemeral: true,
       });
     } catch (error) {
       // Ignore follow-up errors as the modal still works
       console.log("Couldn't send follow-up about field mapping:", error);
     }
   } catch (error) {
-    console.error('Error showing article creation modal:', error);
-    await interaction.reply({ 
-      content: 'Sorry, there was an error creating the article form.', 
-      ephemeral: true 
+    console.error("Error showing article creation modal:", error);
+    await interaction.reply({
+      content: "Sorry, there was an error creating the article form.",
+      ephemeral: true,
     });
   }
 }
@@ -300,82 +329,96 @@ async function handleCreateArticleCommand(interaction: any) {
  */
 async function createArticleSelectMenu() {
   // Get all draft and pending articles
-  const draftArticles = await storage.getArticlesByStatus('draft');
-  const pendingArticles = await storage.getArticlesByStatus('pending');
-  
+  const draftArticles = await storage.getArticlesByStatus("draft");
+  const pendingArticles = await storage.getArticlesByStatus("pending");
+
   // Combine them and sort by creation date (newest first)
-  const unpublishedArticles = [...draftArticles, ...pendingArticles].sort((a, b) => {
-    // Convert dates to numbers for comparison, fallback to 0 if null/undefined
-    const dateA = a.createdAt ? new Date(a.createdAt.toString()).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt.toString()).getTime() : 0;
-    return dateB - dateA; // Newest first
-  });
-  
+  const unpublishedArticles = [...draftArticles, ...pendingArticles].sort(
+    (a, b) => {
+      // Convert dates to numbers for comparison, fallback to 0 if null/undefined
+      const dateA = a.createdAt
+        ? new Date(a.createdAt.toString()).getTime()
+        : 0;
+      const dateB = b.createdAt
+        ? new Date(b.createdAt.toString()).getTime()
+        : 0;
+      return dateB - dateA; // Newest first
+    },
+  );
+
   // Create options for the select menu (max 25 options allowed by Discord)
-  const options = unpublishedArticles.slice(0, 25).map(article => {
+  const options = unpublishedArticles.slice(0, 25).map((article) => {
     // Format title with status
-    const statusIcon = article.status === 'draft' ? '📝' : '⏳';
+    const statusIcon = article.status === "draft" ? "📝" : "⏳";
     // Safely handle title, provide a fallback if missing
-    const title = article.title || 'Untitled Article';
+    const title = article.title || "Untitled Article";
     let optionLabel = `${statusIcon} ${title}`;
-    
+
     // Truncate if needed (Discord max length is 100 chars)
     if (optionLabel.length > 95) {
-      optionLabel = optionLabel.substring(0, 95) + '...';
+      optionLabel = optionLabel.substring(0, 95) + "...";
     }
-    
-    const authorText = article.author ? 
-      (typeof article.author === 'string' ? article.author.substring(0, 30) : 'Unknown') : 'Unknown';
-    
+
+    const authorText = article.author
+      ? typeof article.author === "string"
+        ? article.author.substring(0, 30)
+        : "Unknown"
+      : "Unknown";
+
     return {
       label: optionLabel,
       value: article.id.toString(),
-      description: `ID: ${article.id} | Author: ${authorText}`
+      description: `ID: ${article.id} | Author: ${authorText}`,
     };
   });
-  
+
   // If no unpublished articles, add a placeholder option
   if (options.length === 0) {
     options.push({
-      label: 'No unpublished articles found',
-      value: '0',
-      description: 'Create a new article or publish some from the website first'
+      label: "No unpublished articles found",
+      value: "0",
+      description:
+        "Create a new article or publish some from the website first",
     });
   }
-  
+
   // Return the select menu
   return new StringSelectMenuBuilder()
-    .setCustomId('article_select')
-    .setPlaceholder('Select an article to edit')
+    .setCustomId("article_select")
+    .setPlaceholder("Select an article to edit")
     .addOptions(options);
 }
 
 async function handleEditArticleCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
-  
+
   try {
     // Create a select menu for article selection
     const articleSelect = await createArticleSelectMenu();
-    
+
     // If no articles available to edit
-    if (articleSelect.options[0].data.value === '0') {
-      await interaction.editReply('No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.');
+    if (articleSelect.options[0].data.value === "0") {
+      await interaction.editReply(
+        "No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.",
+      );
       return;
     }
-    
+
     // Create an action row with the article select menu
     const row = new ActionRowBuilder().addComponents(articleSelect);
-    
+
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to edit:',
-      components: [row]
+      content: "Please select an article to edit:",
+      components: [row],
     });
-    
+
     // We'll handle the article editing in the string select menu interaction handler
   } catch (error) {
-    console.error('Error handling edit article command:', error);
-    await interaction.editReply('Sorry, there was an error fetching articles. Please try again later.');
+    console.error("Error handling edit article command:", error);
+    await interaction.editReply(
+      "Sorry, there was an error fetching articles. Please try again later.",
+    );
   }
 }
 
@@ -385,36 +428,41 @@ async function handleEditArticleCommand(interaction: any) {
  */
 async function handleWritersCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
-  
+
   try {
     // Create a select menu for article selection
     const articleSelect = await createArticleSelectMenu();
-    
+
     // If no articles available
-    if (articleSelect.options[0].data.value === '0') {
-      await interaction.editReply('No unpublished articles found. Create a new article using `/create_article` or use the website to create draft articles first.');
+    if (articleSelect.options[0].data.value === "0") {
+      await interaction.editReply(
+        "No unpublished articles found. Create a new article using `/create_article` or use the website to create draft articles first.",
+      );
       return;
     }
-    
+
     // Show only the upload option to the user
     const uploadButton = new ButtonBuilder()
-      .setCustomId('writers_upload_zip')
-      .setLabel('Upload Zipped HTML')
+      .setCustomId("writers_upload_zip")
+      .setLabel("Upload Zipped HTML")
       .setStyle(ButtonStyle.Success)
-      .setEmoji('📁');
-    
-    const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-      .addComponents(uploadButton);
-    
+      .setEmoji("📁");
+
+    const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      uploadButton,
+    );
+
     // Show the selection menu to the user
     await interaction.editReply({
-      content: '**Writer Tools**\n\nChoose an option:\n• **Upload Zipped HTML** - Upload a zipped HTML file containing your article content',
-      components: [buttonRow]
+      content:
+        "**Writer Tools**\n\nChoose an option:\n• **Upload Zipped HTML** - Upload a zipped HTML file containing your article content",
+      components: [buttonRow],
     });
-    
   } catch (error) {
-    console.error('Error handling writers command:', error);
-    await interaction.editReply('Sorry, there was an error initializing the writers tools. Please try again later.');
+    console.error("Error handling writers command:", error);
+    await interaction.editReply(
+      "Sorry, there was an error initializing the writers tools. Please try again later.",
+    );
   }
 }
 
@@ -425,108 +473,129 @@ async function openArticleEditModal(interaction: any, articleId: number) {
   try {
     // Get the article from the database
     const article = await storage.getArticle(articleId);
-    
+
     if (!article) {
       await interaction.followUp({
         content: `No article found with ID ${articleId}. It may have been deleted.`,
-        ephemeral: true
+        ephemeral: true,
       });
       return;
     }
-    
+
     // Verify the article is not published
-    if (article.status === 'published') {
+    if (article.status === "published") {
       await interaction.followUp({
-        content: 'This article has already been published and cannot be edited through the bot. Please use the website admin interface to edit published articles.',
-        ephemeral: true
+        content:
+          "This article has already been published and cannot be edited through the bot. Please use the website admin interface to edit published articles.",
+        ephemeral: true,
       });
       return;
     }
-    
+
     // Create modal for article editing with pre-filled values
-    const title = article.title || 'Untitled Article';
+    const title = article.title || "Untitled Article";
     const modal = new ModalBuilder()
       .setCustomId(`edit_article_modal_${articleId}`) // Include the article ID in the custom ID
-      .setTitle(`Edit Article: ${title.substring(0, 30)}${title.length > 30 ? '...' : ''}`);
+      .setTitle(
+        `Edit Article: ${title.substring(0, 30)}${title.length > 30 ? "..." : ""}`,
+      );
 
     // Add input fields that match our Airtable field names, with pre-filled values
     const titleInput = new TextInputBuilder()
-      .setCustomId('title')
-      .setLabel('Title')  // Maps to Airtable's "Name" field
+      .setCustomId("title")
+      .setLabel("Title") // Maps to Airtable's "Name" field
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Enter article title')
-      .setValue(article.title || '')
+      .setPlaceholder("Enter article title")
+      .setValue(article.title || "")
       .setRequired(true)
       .setMaxLength(100);
-    
+
     const descriptionInput = new TextInputBuilder()
-      .setCustomId('description')
-      .setLabel('Description')  // Maps to Airtable's "Description" field
+      .setCustomId("description")
+      .setLabel("Description") // Maps to Airtable's "Description" field
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter a brief description')
-      .setValue(article.description || '')
+      .setPlaceholder("Enter a brief description")
+      .setValue(article.description || "")
       .setRequired(true)
       .setMaxLength(500);
-    
+
     // The Body field may contain HTML which can be quite large
     // Discord has a 4000 character limit, so we need to truncate if needed
-    let contentValue = article.content || '';
+    let contentValue = article.content || "";
     if (contentValue.length > 3900) {
-      contentValue = contentValue.substring(0, 3900) + '\n...(content truncated - too large for Discord. Use Upload Zipped HTML to update)';
+      contentValue =
+        contentValue.substring(0, 3900) +
+        "\n...(content truncated - too large for Discord. Use Upload Zipped HTML to update)";
     }
-    
+
     const bodyInput = new TextInputBuilder()
-      .setCustomId('body')
-      .setLabel('Body')  // Maps to Airtable's "Body" field
+      .setCustomId("body")
+      .setLabel("Body") // Maps to Airtable's "Body" field
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter the article content')
+      .setPlaceholder("Enter the article content")
       .setValue(contentValue)
       .setRequired(true)
       .setMaxLength(4000);
-    
+
     const authorInput = new TextInputBuilder()
-      .setCustomId('author')
-      .setLabel('Author (read-only)')  // Maps to Airtable's "Author" field
+      .setCustomId("author")
+      .setLabel("Author (read-only)") // Maps to Airtable's "Author" field
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Current author (cannot be modified here)')
-      .setValue(article.author || 'No author assigned')
+      .setPlaceholder("Current author (cannot be modified here)")
+      .setValue(article.author || "No author assigned")
       .setRequired(false) // Not required as it's read-only
       .setMaxLength(100);
-    
+
     const featuredInput = new TextInputBuilder()
-      .setCustomId('featured')
-      .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
+      .setCustomId("featured")
+      .setLabel("Featured (yes/no)") // Maps to Airtable's "Featured" field
       .setStyle(TextInputStyle.Short)
       .setPlaceholder('Type "yes" to mark as featured')
-      .setValue(article.featured === 'yes' ? 'yes' : 'no')
+      .setValue(article.featured === "yes" ? "yes" : "no")
       .setRequired(false)
       .setMaxLength(3);
-    
+
     // Create action rows (each input needs its own row)
-    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
-    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
-    const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
-    const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
-    
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      titleInput,
+    );
+    const descriptionRow =
+      new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+    const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      bodyInput,
+    );
+    const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      authorInput,
+    );
+    const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      featuredInput,
+    );
+
     // Add inputs to the modal
-    modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
-    
-    // Show the modal directly 
+    modal.addComponents(
+      titleRow,
+      descriptionRow,
+      bodyRow,
+      authorRow,
+      featuredRow,
+    );
+
+    // Show the modal directly
     // When showing a modal, no further interactions can happen until the modal is submitted
     // We will show the author selection dropdown after the modal is submitted instead
     await interaction.showModal(modal);
   } catch (error) {
-    console.error('Error handling edit article command:', error);
-    
+    console.error("Error handling edit article command:", error);
+
     // Check if we can use followUp instead of editReply
     try {
       await interaction.followUp({
-        content: 'Sorry, there was an error editing the article. Please try again later.',
-        ephemeral: true
+        content:
+          "Sorry, there was an error editing the article. Please try again later.",
+        ephemeral: true,
       });
     } catch (followUpError) {
-      console.error('Error sending error follow-up:', followUpError);
+      console.error("Error sending error follow-up:", followUpError);
     }
   }
 }
@@ -537,218 +606,268 @@ async function openArticleEditModal(interaction: any, articleId: number) {
 async function handleModalSubmission(interaction: ModalSubmitInteraction) {
   try {
     // Handle admin request modal submission
-    if (interaction.customId === 'admin_request_modal') {
+    if (interaction.customId === "admin_request_modal") {
       await handleAdminRequestModalSubmit(interaction);
     }
     // Handle article creation
-    else if (interaction.customId === 'create_article_modal') {
+    else if (interaction.customId === "create_article_modal") {
       await interaction.deferReply({ ephemeral: true });
-      
+
       // Get form input values
-      const title = interaction.fields.getTextInputValue('title');
-      const description = interaction.fields.getTextInputValue('description') || '';
-      const body = interaction.fields.getTextInputValue('body') || '';
-      
+      const title = interaction.fields.getTextInputValue("title");
+      const description =
+        interaction.fields.getTextInputValue("description") || "";
+      const body = interaction.fields.getTextInputValue("body") || "";
+
       // Try to get scheduled date, validate and parse it
       let scheduledDate: Date | null = null;
       try {
-        const scheduledInput = interaction.fields.getTextInputValue('scheduled');
+        const scheduledInput =
+          interaction.fields.getTextInputValue("scheduled");
         if (scheduledInput && scheduledInput.trim()) {
           // Try to parse the date - expects format YYYY-MM-DD HH:MM
-          const dateMatch = scheduledInput.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/);
+          const dateMatch = scheduledInput.match(
+            /^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/,
+          );
           if (dateMatch) {
             const year = parseInt(dateMatch[1], 10);
             const month = parseInt(dateMatch[2], 10) - 1; // Month is 0-indexed in JS Date
             const day = parseInt(dateMatch[3], 10);
             const hour = dateMatch[4] ? parseInt(dateMatch[4], 10) : 0;
             const minute = dateMatch[5] ? parseInt(dateMatch[5], 10) : 0;
-            
+
             scheduledDate = new Date(year, month, day, hour, minute);
-            
+
             // Validate the date is in the future
             if (scheduledDate <= new Date()) {
               await interaction.followUp({
-                content: "⚠️ Warning: The scheduled date must be in the future. The article was created but scheduling was ignored.",
-                ephemeral: true
+                content:
+                  "⚠️ Warning: The scheduled date must be in the future. The article was created but scheduling was ignored.",
+                ephemeral: true,
               });
               scheduledDate = null;
             }
           } else {
             await interaction.followUp({
-              content: "⚠️ Warning: Invalid date format. Expected YYYY-MM-DD HH:MM. The article was created but scheduling was ignored.",
-              ephemeral: true
+              content:
+                "⚠️ Warning: Invalid date format. Expected YYYY-MM-DD HH:MM. The article was created but scheduling was ignored.",
+              ephemeral: true,
             });
           }
         }
       } catch (error) {
-        console.error('Error parsing scheduled date:', error);
+        console.error("Error parsing scheduled date:", error);
         await interaction.followUp({
-          content: "⚠️ Warning: There was an error processing the scheduled date. The article was created but scheduling was ignored.",
-          ephemeral: true
+          content:
+            "⚠️ Warning: There was an error processing the scheduled date. The article was created but scheduling was ignored.",
+          ephemeral: true,
         });
       }
-      
+
       // Set default values for removed fields
-      const author = "Unknown"; // Default author 
-      const featured = false;   // Default to not featured
-      
+      const author = "Unknown"; // Default author
+      const featured = false; // Default to not featured
+
       // Create article data - map to fields in our system
       // Note: These field names are later mapped to Airtable's fields by the website,
       // We're not directly modifying Airtable here
       const articleData: InsertArticle = {
-        title,                    // Maps to Airtable's "Name" field
-        description,              // Maps to Airtable's "Description" field
-        content: body,            // Maps to Airtable's "Body" field
-        author,                   // Maps to Airtable's "Author" field - using default
-        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field - using default
-        status: 'draft',          // Article status in our system
-        imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder image
-        imageType: 'url',
-        contentFormat: 'plaintext',
-        source: 'discord',        // Identifies the article as coming from Discord
+        title, // Maps to Airtable's "Name" field
+        description, // Maps to Airtable's "Description" field
+        content: body, // Maps to Airtable's "Body" field
+        author, // Maps to Airtable's "Author" field - using default
+        featured: featured ? "yes" : "no", // Maps to Airtable's "Featured" field - using default
+        status: "draft", // Article status in our system
+        imageUrl: "https://placehold.co/600x400?text=No+Image", // Default placeholder image
+        imageType: "url",
+        contentFormat: "plaintext",
+        source: "discord", // Identifies the article as coming from Discord
         externalId: `discord-${interaction.user.id}-${Date.now()}`,
-        Scheduled: scheduledDate ? scheduledDate.toISOString() : undefined // Add the scheduled date if it exists
+        Scheduled: scheduledDate ? scheduledDate.toISOString() : undefined, // Add the scheduled date if it exists
       };
-      
+
       // Create the article via our API - Discord bot only modifies our website's data
       const article = await storage.createArticle(articleData);
-      
+
       // Send confirmation
       const embed = new EmbedBuilder()
-        .setTitle('✅ Article Created Successfully')
-        .setDescription(`Your article "${title}" has been created as a draft on the website.`)
-        .setColor('#22A559')
+        .setTitle("✅ Article Created Successfully")
+        .setDescription(
+          `Your article "${title}" has been created as a draft on the website.`,
+        )
+        .setColor("#22A559")
         .addFields(
-          { name: 'Name', value: title },
-          { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
-          { name: 'Author', value: author },
-          { name: 'Status', value: 'Draft' },
-          { name: 'Featured', value: featured ? 'Yes' : 'No' }
+          { name: "Name", value: title },
+          {
+            name: "Description",
+            value:
+              description.substring(0, 100) +
+              (description.length > 100 ? "..." : ""),
+          },
+          { name: "Author", value: author },
+          { name: "Status", value: "Draft" },
+          { name: "Featured", value: featured ? "Yes" : "No" },
         );
-        
+
       // Add scheduled publish date if it exists
       if (scheduledDate) {
-        embed.addFields({ 
-          name: 'Scheduled Publish Date', 
-          value: scheduledDate.toLocaleString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
+        embed.addFields({
+          name: "Scheduled Publish Date",
+          value: scheduledDate.toLocaleString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
         });
       }
-      
-      embed.setFooter({ text: 'The article will be synced to Airtable through the website' });
-      
+
+      embed.setFooter({
+        text: "The article will be synced to Airtable through the website",
+      });
+
       // Create button to view article in dashboard
       const viewInDashboardButton = new ButtonBuilder()
-        .setLabel('View in Dashboard')
+        .setLabel("View in Dashboard")
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${article.id}`)
-        .setEmoji('🔗');
-        
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(viewInDashboardButton);
-      
-      await interaction.editReply({ 
+        .setURL(
+          `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${article.id}`,
+        )
+        .setEmoji("🔗");
+
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        viewInDashboardButton,
+      );
+
+      await interaction.editReply({
         embeds: [embed],
-        components: [buttonRow]
+        components: [buttonRow],
       });
-      
+
       // Add a simple success confirmation message
       try {
         await interaction.followUp({
           content: "Your article has been created successfully!",
-          ephemeral: true
+          ephemeral: true,
         });
       } catch (followUpError) {
         console.error("Couldn't send follow-up message:", followUpError);
       }
     }
     // Handle article editing (check if customId starts with edit_article_modal_)
-    else if (interaction.customId.startsWith('edit_article_modal_')) {
+    else if (interaction.customId.startsWith("edit_article_modal_")) {
       await interaction.deferReply({ ephemeral: true });
-      
+
       // Extract the article ID from the customId (edit_article_modal_123 => 123)
-      const articleId = parseInt(interaction.customId.replace('edit_article_modal_', ''), 10);
-      
+      const articleId = parseInt(
+        interaction.customId.replace("edit_article_modal_", ""),
+        10,
+      );
+
       if (isNaN(articleId)) {
-        await interaction.editReply('Error: Invalid article ID');
+        await interaction.editReply("Error: Invalid article ID");
         return;
       }
-      
+
       // Get the existing article to verify it exists
       const existingArticle = await storage.getArticle(articleId);
-      
+
       if (!existingArticle) {
-        await interaction.editReply(`Error: Article with ID ${articleId} not found.`);
+        await interaction.editReply(
+          `Error: Article with ID ${articleId} not found.`,
+        );
         return;
       }
-      
+
       // Get form input values
-      const title = interaction.fields.getTextInputValue('title');
-      const description = interaction.fields.getTextInputValue('description');
-      const body = interaction.fields.getTextInputValue('body');
-      const author = interaction.fields.getTextInputValue('author');
-      const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
-      const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
-      
+      const title = interaction.fields.getTextInputValue("title");
+      const description = interaction.fields.getTextInputValue("description");
+      const body = interaction.fields.getTextInputValue("body");
+      const author = interaction.fields.getTextInputValue("author");
+      const featuredInput = interaction.fields
+        .getTextInputValue("featured")
+        .toLowerCase();
+      const featured =
+        featuredInput === "yes" ||
+        featuredInput === "y" ||
+        featuredInput === "true";
+
       // Update article data - don't update the author field (it's read-only)
       const articleData = {
-        title,                     // Maps to Airtable's "Name" field
-        description,               // Maps to Airtable's "Description" field
-        content: body,             // Maps to Airtable's "Body" field
+        title, // Maps to Airtable's "Name" field
+        description, // Maps to Airtable's "Description" field
+        content: body, // Maps to Airtable's "Body" field
         // author field is intentionally omitted - keep existing author
-        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
+        featured: featured ? "yes" : "no", // Maps to Airtable's "Featured" field
         // Don't change the status of the article
         // Don't change image or other fields (keep them as is)
       };
-      
+
       // Update the article via our API
-      const updatedArticle = await storage.updateArticle(articleId, articleData);
-      
+      const updatedArticle = await storage.updateArticle(
+        articleId,
+        articleData,
+      );
+
       if (!updatedArticle) {
-        await interaction.editReply(`Error: Failed to update article with ID ${articleId}.`);
+        await interaction.editReply(
+          `Error: Failed to update article with ID ${articleId}.`,
+        );
         return;
       }
-      
+
       // Send confirmation
       const embed = new EmbedBuilder()
-        .setTitle('✅ Article Updated Successfully')
-        .setDescription(`Your article "${title}" has been updated on the website.`)
-        .setColor('#22A559')
-        .addFields(
-          { name: 'Name', value: title },
-          { name: 'Description', value: description.substring(0, 100) + (description.length > 100 ? '...' : '') },
-          { name: 'Author', value: existingArticle.author || 'No author assigned' }, // Display the existing author
-          { name: 'Status', value: updatedArticle.status },
-          { name: 'Featured', value: featured ? 'Yes' : 'No' }
+        .setTitle("✅ Article Updated Successfully")
+        .setDescription(
+          `Your article "${title}" has been updated on the website.`,
         )
-        .setFooter({ text: 'The updated article will be synced to Airtable through the website' });
-      
+        .setColor("#22A559")
+        .addFields(
+          { name: "Name", value: title },
+          {
+            name: "Description",
+            value:
+              description.substring(0, 100) +
+              (description.length > 100 ? "..." : ""),
+          },
+          {
+            name: "Author",
+            value: existingArticle.author || "No author assigned",
+          }, // Display the existing author
+          { name: "Status", value: updatedArticle.status },
+          { name: "Featured", value: featured ? "Yes" : "No" },
+        )
+        .setFooter({
+          text: "The updated article will be synced to Airtable through the website",
+        });
+
       // Add information about the author being read-only
-      await interaction.editReply({ 
+      await interaction.editReply({
         embeds: [embed],
         // Add a follow-up message explaining that the author field is read-only
-        content: "**Note:** The author field is read-only when editing articles. To change an article's author, please use the website interface."
+        content:
+          "**Note:** The author field is read-only when editing articles. To change an article's author, please use the website interface.",
       });
     }
   } catch (error) {
-    console.error('Error handling modal submission:', error);
+    console.error("Error handling modal submission:", error);
     try {
       // Check if we need to use reply or editReply based on the interaction state
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
-          content: 'Sorry, there was an error processing your article. Please try again later.',
-          ephemeral: true
+          content:
+            "Sorry, there was an error processing your article. Please try again later.",
+          ephemeral: true,
         });
       } else {
-        await interaction.editReply('Sorry, there was an error processing your article. Please try again later.');
+        await interaction.editReply(
+          "Sorry, there was an error processing your article. Please try again later.",
+        );
       }
     } catch (replyError) {
-      console.error('Error sending error message:', replyError);
+      console.error("Error sending error message:", replyError);
     }
   }
 }
@@ -759,380 +878,413 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
 async function handleStringSelectMenuInteraction(interaction: any) {
   try {
     // Handle admin request category selection
-    if (interaction.customId === 'admin_request_category') {
+    if (interaction.customId === "admin_request_category") {
       const category = interaction.values[0];
       await finalizeAdminRequest(interaction, interaction.user.id, category);
     }
     // Handle admin request urgency selection
-    else if (interaction.customId === 'admin_request_urgency') {
+    else if (interaction.customId === "admin_request_urgency") {
       const urgency = interaction.values[0];
-      await finalizeAdminRequest(interaction, interaction.user.id, undefined, urgency);
+      await finalizeAdminRequest(
+        interaction,
+        interaction.user.id,
+        undefined,
+        urgency,
+      );
     }
     // Handle article selection dropdown
-    else if (interaction.customId === 'article_select') {
+    else if (interaction.customId === "article_select") {
       // Get the selected article ID before deferring
       const articleId = parseInt(interaction.values[0], 10);
-      
+
       if (isNaN(articleId) || articleId === 0) {
         // For error messages, we can defer first
         await interaction.deferUpdate();
         await interaction.followUp({
-          content: 'No valid article was selected.',
-          ephemeral: true
+          content: "No valid article was selected.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // We don't defer update here because we need to show a modal
       // and modals cannot be shown after deferUpdate
-      
+
       // Open the edit modal for the selected article
       try {
         // Directly show the modal without deferring first
         await openArticleEditModal(interaction, articleId);
       } catch (error) {
-        console.error('Error showing edit modal:', error);
-        
+        console.error("Error showing edit modal:", error);
+
         // If modal fails, try to let the user know
         try {
           await interaction.deferUpdate();
           await interaction.followUp({
-            content: 'Error opening the edit modal. Please try again later.',
-            ephemeral: true
+            content: "Error opening the edit modal. Please try again later.",
+            ephemeral: true,
           });
         } catch (replyError) {
-          console.error('Error sending error notification:', replyError);
+          console.error("Error sending error notification:", replyError);
         }
       }
     }
     // Handle article selection for Instagram image upload
-    else if (interaction.customId === 'select_article_for_insta_image') {
+    else if (interaction.customId === "select_article_for_insta_image") {
       // Get the selected article ID
       const articleId = parseInt(interaction.values[0], 10);
-      
+
       if (isNaN(articleId) || articleId === 0) {
         await interaction.deferUpdate();
         await interaction.followUp({
-          content: 'No valid article was selected.',
-          ephemeral: true
+          content: "No valid article was selected.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       await interaction.deferUpdate();
-      
+
       // Get the article details to confirm
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.followUp({
           content: `No article found with ID ${articleId}. It may have been deleted.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_insta_image_${articleId}`)
-        .setLabel('Upload via Bot')
+        .setLabel("Upload via Bot")
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('📸');
-      
+        .setEmoji("📸");
+
       const dashboardButton = new ButtonBuilder()
-        .setLabel('Open in Dashboard')
+        .setLabel("Open in Dashboard")
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinnkytoepaper'}/articles?id=${articleId}`)
-        .setEmoji('🔗');
-      
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(dashboardButton, uploadButton);
-      
+        .setURL(
+          `${process.env.BASE_URL || "http://piscoc.pinnkytoepaper"}/articles?id=${articleId}`,
+        )
+        .setEmoji("🔗");
+
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        dashboardButton,
+        uploadButton,
+      );
+
       // Confirm selection and provide options
       await interaction.editReply({
         content: `Selected article: **${article.title}**\n\nOptions for uploading an Instagram image:\n\n1. Use the "Upload via Bot" button to attach an image directly through Discord\n2. Use the dashboard link to upload through the website`,
-        components: [buttonRow]
+        components: [buttonRow],
       });
     }
     // Handle article selection for Web image upload
-    else if (interaction.customId === 'select_article_for_web_image') {
+    else if (interaction.customId === "select_article_for_web_image") {
       // Get the selected article ID
       const articleId = parseInt(interaction.values[0], 10);
-      
+
       if (isNaN(articleId) || articleId === 0) {
         await interaction.deferUpdate();
         await interaction.followUp({
-          content: 'No valid article was selected.',
-          ephemeral: true
+          content: "No valid article was selected.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       await interaction.deferUpdate();
-      
+
       // Get the article details to confirm
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.followUp({
           content: `No article found with ID ${articleId}. It may have been deleted.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Generate a public upload token for image upload
       const generateImageToken = async () => {
         try {
           // Import token generation functions if needed at the top of this file
-          const { generateUniqueToken, calculateExpirationDate } = await import('../utils/tokenGenerator');
-          
+          const { generateUniqueToken, calculateExpirationDate } = await import(
+            "../utils/tokenGenerator"
+          );
+
           // Create a token valid for 7 days with 3 max uses
           const expirationDays = 7;
           const maxUses = 3;
-          
+
           // Generate unique token
-          const token = await generateUniqueToken(async (tokenToCheck: string) => {
-            const existingToken = await storage.getUploadTokenByToken(tokenToCheck);
-            return !!existingToken;
-          });
-          
+          const token = await generateUniqueToken(
+            async (tokenToCheck: string) => {
+              const existingToken =
+                await storage.getUploadTokenByToken(tokenToCheck);
+              return !!existingToken;
+            },
+          );
+
           // Calculate expiration date
           const expiresAt = calculateExpirationDate(expirationDays);
-          
+
           // Create token record with discord user in the name
           const uploadToken = await storage.createUploadToken({
             token,
             articleId: article.id,
-            uploadType: 'image',
+            uploadType: "image",
             createdById: null, // No user ID since this is from Discord
             expiresAt,
             maxUses,
             active: true,
             name: `Discord: ${interaction.user.username}'s Image Upload`,
-            notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`
+            notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`,
           });
-          
+
           // Return the token URL
           return {
             token: uploadToken.token,
-            url: `${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/public-upload/image/${uploadToken.token}`
+            // Use REPLIT_SLUG for development environments, fall back to configured BASE_URL or production URL
+            url: `${process.env.REPLIT_SLUG ? 
+                  `https://${process.env.REPLIT_SLUG}.replit.dev` : 
+                  (process.env.BASE_URL || "http://piscoc.pinkytoepaper.com")}/public-upload/image/${uploadToken.token}`,
           };
         } catch (error) {
-          console.error('Error generating image upload token:', error);
+          console.error("Error generating image upload token:", error);
           throw error;
         }
       };
-      
+
       // Generate token and create buttons
       const tokenData = await generateImageToken();
-      
+
       // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_web_image_${articleId}`)
-        .setLabel('Upload via Discord')
+        .setLabel("Upload via Discord")
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('🖼️');
-      
+        .setEmoji("🖼️");
+
       const publicUploadButton = new ButtonBuilder()
-        .setLabel('Upload via Browser')
+        .setLabel("Upload via Browser")
         .setStyle(ButtonStyle.Link)
         .setURL(tokenData.url)
-        .setEmoji('🔗');
-      
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(publicUploadButton, uploadButton);
-      
+        .setEmoji("🔗");
+
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        publicUploadButton,
+        uploadButton,
+      );
+
       // Confirm selection and provide options
       await interaction.editReply({
         content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required)\n2. Use the "Upload via Discord" button to upload directly through Discord`,
-        components: [buttonRow]
+        components: [buttonRow],
       });
     }
     // Handle article selection for content upload
-    else if (interaction.customId === 'select_article_for_content_upload') {
+    else if (interaction.customId === "select_article_for_content_upload") {
       // Get the selected article ID
       const articleId = parseInt(interaction.values[0], 10);
-      
+
       if (isNaN(articleId) || articleId === 0) {
         await interaction.deferUpdate();
         await interaction.followUp({
-          content: 'No valid article was selected.',
-          ephemeral: true
+          content: "No valid article was selected.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       await interaction.deferUpdate();
     }
-    
+
     // Handle article selection for zip file upload
-    else if (interaction.customId === 'select_article_for_zip_upload') {
+    else if (interaction.customId === "select_article_for_zip_upload") {
       await interaction.deferUpdate();
-      
+
       // Get the selected article ID
       const articleId = parseInt(interaction.values[0], 10);
-      
+
       if (isNaN(articleId) || articleId === 0) {
         await interaction.followUp({
-          content: 'No valid article was selected.',
-          ephemeral: true
+          content: "No valid article was selected.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Get the article to make sure it exists
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.followUp({
           content: `No article found with ID ${articleId}. It may have been deleted.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Check if the article is already published
-      if (article.status === 'published') {
+      if (article.status === "published") {
         await interaction.followUp({
-          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Content uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Generate a public upload token for HTML zip
       const generateToken = async () => {
         try {
           // Create a token valid for 7 days with 5 max uses
           const expirationDays = 7;
           const maxUses = 5;
-          
+
           // Generate unique token using the helper function
-          const token = await generateUniqueToken(async (tokenToCheck: string) => {
-            const existingToken = await storage.getUploadTokenByToken(tokenToCheck);
-            return !!existingToken;
-          });
-          
+          const token = await generateUniqueToken(
+            async (tokenToCheck: string) => {
+              const existingToken =
+                await storage.getUploadTokenByToken(tokenToCheck);
+              return !!existingToken;
+            },
+          );
+
           // Calculate expiration date
           const expiresAt = calculateExpirationDate(expirationDays);
-          
+
           // Create token record with discord user in the name
           const uploadToken = await storage.createUploadToken({
             token,
             articleId: article.id,
-            uploadType: 'html-zip',
+            uploadType: "html-zip",
             createdById: null, // No user ID since this is from Discord
             expiresAt,
             maxUses,
             active: true,
             name: `Discord: ${interaction.user.username}'s HTML Upload`,
-            notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`
+            notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`,
           });
-          
+
           // Return the token URL
           return {
             token: uploadToken.token,
-            url: `${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/public-upload/html-zip/${uploadToken.token}`
+            url: `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/public-upload/html-zip/${uploadToken.token}`,
           };
         } catch (error) {
-          console.error('Error generating upload token:', error);
+          console.error("Error generating upload token:", error);
           throw error;
         }
       };
-      
+
       // Generate token and create buttons
       const tokenData = await generateToken();
-      
+
       // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_zip_${articleId}`)
-        .setLabel('Upload via Discord')
+        .setLabel("Upload via Discord")
         .setStyle(ButtonStyle.Primary)
-        .setEmoji('📁');
-      
+        .setEmoji("📁");
+
       const publicUploadButton = new ButtonBuilder()
-        .setLabel('Upload via Browser')
+        .setLabel("Upload via Browser")
         .setStyle(ButtonStyle.Link)
         .setURL(tokenData.url)
-        .setEmoji('🔗');
-      
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(publicUploadButton, uploadButton);
-      
+        .setEmoji("🔗");
+
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        publicUploadButton,
+        uploadButton,
+      );
+
       // Confirm selection and provide options
       await interaction.followUp({
         content: `Selected article: **${article.title}**\n\nOptions for uploading zipped HTML content:\n\n1. Use the "Upload via Browser" button to upload your zip file using a web browser (no login required)\n2. Use the "Upload via Discord" button to upload directly through Discord`,
         components: [buttonRow],
-        ephemeral: true
+        ephemeral: true,
       });
     }
-    
+
     // Handle author selection dropdown
-    else if (interaction.customId === 'author_select') {
+    else if (interaction.customId === "author_select") {
       await interaction.deferUpdate();
-      
+
       // Get the selected team member ID
       const selectedValue = interaction.values[0];
       if (!selectedValue) {
         await interaction.followUp({
-          content: 'No author was selected.',
-          ephemeral: true
+          content: "No author was selected.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Check if the user selected "custom" option
-      if (selectedValue === 'custom') {
+      if (selectedValue === "custom") {
         await interaction.followUp({
-          content: '✅ You chose to enter a custom author name. Please make sure you entered it in the article form.',
-          ephemeral: true
+          content:
+            "✅ You chose to enter a custom author name. Please make sure you entered it in the article form.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Get the team member info from our database
-      const teamMember = await storage.getTeamMember(parseInt(selectedValue, 10));
-      
+      const teamMember = await storage.getTeamMember(
+        parseInt(selectedValue, 10),
+      );
+
       if (!teamMember) {
         await interaction.followUp({
-          content: 'Could not find the selected team member.',
-          ephemeral: true
+          content: "Could not find the selected team member.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Try to find the article ID from recent interactions
       // This is a simplistic approach - we're assuming this menu is shown after a modal submission
       // In a more robust implementation, you'd include article ID in the menu's custom ID
-      
+
       // First, try to find a recent created article
-      const recentArticles = await storage.getArticlesByStatus('draft');
+      const recentArticles = await storage.getArticlesByStatus("draft");
       const TWO_MINUTES_MS = 2 * 60 * 1000;
 
-      let targetArticle = recentArticles.find(article => {
+      let targetArticle = recentArticles.find((article) => {
         // Check if it's from discord and created by this user
-        if (!article.source || article.source !== 'discord' || !article.externalId?.includes(interaction.user.id)) {
+        if (
+          !article.source ||
+          article.source !== "discord" ||
+          !article.externalId?.includes(interaction.user.id)
+        ) {
           return false;
         }
-        
+
         // If createdAt exists, check if it was created in the last 2 minutes
         if (article.createdAt) {
           try {
             // Ensure we're working with a string
-            const createdAtString = typeof article.createdAt === 'object' 
-              ? article.createdAt.toISOString() 
-              : String(article.createdAt);
-              
+            const createdAtString =
+              typeof article.createdAt === "object"
+                ? article.createdAt.toISOString()
+                : String(article.createdAt);
+
             const createdTime = new Date(createdAtString).getTime();
-            return (Date.now() - createdTime < TWO_MINUTES_MS);
+            return Date.now() - createdTime < TWO_MINUTES_MS;
           } catch (err) {
             return false;
           }
         }
         return false;
       });
-      
+
       if (targetArticle) {
         // Update the article with the team member's name
         // We'll store the author name since that's what our schema has
@@ -1140,39 +1292,39 @@ async function handleStringSelectMenuInteraction(interaction: any) {
           author: teamMember.name,
           // Store the externalId of the team member in a way that Airtable can reference it
           // This could be improved by adding a proper author reference field to the schema
-          photo: teamMember.externalId || `ref_${teamMember.id}`
+          photo: teamMember.externalId || `ref_${teamMember.id}`,
         });
-        
+
         if (updatedArticle) {
           await interaction.followUp({
             content: `✅ Selected author: **${teamMember.name}**\n\nYour draft article has been updated with this author. This will properly reference the team member in Airtable when the article is synced.`,
-            ephemeral: true
+            ephemeral: true,
           });
         } else {
           await interaction.followUp({
             content: `✅ Selected author: **${teamMember.name}**\n\nCouldn't automatically update your article. Please make sure to manually set this author in your article.`,
-            ephemeral: true
+            ephemeral: true,
           });
         }
       } else {
         // If we can't find a recent article, just confirm the selection
         await interaction.followUp({
           content: `✅ Selected author: **${teamMember.name}**\n\nThis author will be used for your article. When creating or editing articles, please enter this name to ensure proper Airtable reference.`,
-          ephemeral: true
+          ephemeral: true,
         });
       }
     }
   } catch (error) {
-    console.error('Error handling string select menu interaction:', error);
+    console.error("Error handling string select menu interaction:", error);
     try {
       if (!interaction.replied) {
-        await interaction.followUp({ 
-          content: 'An error occurred while processing your selection.', 
-          ephemeral: true 
+        await interaction.followUp({
+          content: "An error occurred while processing your selection.",
+          ephemeral: true,
         });
       }
     } catch (followUpError) {
-      console.error('Error sending error follow-up:', followUpError);
+      console.error("Error sending error follow-up:", followUpError);
     }
   }
 }
@@ -1183,36 +1335,42 @@ async function handleStringSelectMenuInteraction(interaction: any) {
 /**
  * Handle the Edit Article option from the Writers command
  */
-async function handleWritersEditOption(interaction: MessageComponentInteraction) {
+async function handleWritersEditOption(
+  interaction: MessageComponentInteraction,
+) {
   await interaction.deferUpdate();
-  
+
   try {
     // Create a select menu for article selection
     const articleSelect = await createArticleSelectMenu();
-    
+
     // If no articles available to edit
-    if (articleSelect.options[0].data.value === '0') {
+    if (articleSelect.options[0].data.value === "0") {
       await interaction.followUp({
-        content: 'No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.',
-        ephemeral: true
+        content:
+          "No unpublished articles found to edit. Create a new article using `/create_article` or use the website to create draft articles first.",
+        ephemeral: true,
       });
       return;
     }
-    
+
     // Create an action row with the article select menu
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(articleSelect);
-    
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      articleSelect,
+    );
+
     // Show the selection menu to the user
     await interaction.followUp({
-      content: 'Please select an article to edit:',
+      content: "Please select an article to edit:",
       components: [row],
-      ephemeral: true
+      ephemeral: true,
     });
   } catch (error) {
-    console.error('Error handling writers edit option:', error);
+    console.error("Error handling writers edit option:", error);
     await interaction.followUp({
-      content: 'Sorry, there was an error fetching articles. Please try again later.',
-      ephemeral: true
+      content:
+        "Sorry, there was an error fetching articles. Please try again later.",
+      ephemeral: true,
     });
   }
 }
@@ -1220,955 +1378,1056 @@ async function handleWritersEditOption(interaction: MessageComponentInteraction)
 /**
  * Handle the Upload Zipped HTML option from the Writers command
  */
-async function handleWritersUploadOption(interaction: MessageComponentInteraction) {
+async function handleWritersUploadOption(
+  interaction: MessageComponentInteraction,
+) {
   await interaction.deferUpdate();
-  
+
   try {
     // Create a select menu for article selection
     const articleSelect = await createArticleSelectMenu();
-    
+
     // If no articles available to edit
-    if (articleSelect.options[0].data.value === '0') {
+    if (articleSelect.options[0].data.value === "0") {
       await interaction.followUp({
-        content: 'No unpublished articles found to upload content to. Create a new article using `/create_article` or use the website to create draft articles first.',
-        ephemeral: true
+        content:
+          "No unpublished articles found to upload content to. Create a new article using `/create_article` or use the website to create draft articles first.",
+        ephemeral: true,
       });
       return;
     }
-    
+
     // Customize the select menu for file upload context
-    articleSelect.setCustomId('select_article_for_zip_upload');
-    articleSelect.setPlaceholder('Select an article to upload zipped HTML to');
-    
+    articleSelect.setCustomId("select_article_for_zip_upload");
+    articleSelect.setPlaceholder("Select an article to upload zipped HTML to");
+
     // Create an action row with the article select menu
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(articleSelect);
-    
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      articleSelect,
+    );
+
     // Show the selection menu to the user
     await interaction.followUp({
-      content: '**Upload Zipped HTML Content**\n\nPlease select the article you want to upload zipped HTML content for:',
+      content:
+        "**Upload Zipped HTML Content**\n\nPlease select the article you want to upload zipped HTML content for:",
       components: [row],
-      ephemeral: true
+      ephemeral: true,
     });
   } catch (error) {
-    console.error('Error handling writers upload option:', error);
+    console.error("Error handling writers upload option:", error);
     await interaction.followUp({
-      content: 'Sorry, there was an error fetching articles. Please try again later.',
-      ephemeral: true
+      content:
+        "Sorry, there was an error fetching articles. Please try again later.",
+      ephemeral: true,
     });
   }
 }
 
-async function handleButtonInteraction(interaction: MessageComponentInteraction) {
+async function handleButtonInteraction(
+  interaction: MessageComponentInteraction,
+) {
   try {
     // Handle Create Article button
-    if (interaction.customId === 'create_article') {
+    if (interaction.customId === "create_article") {
       // Show the article creation modal
       const modal = new ModalBuilder()
-        .setCustomId('create_article_modal')
-        .setTitle('Create New Article');
-        
+        .setCustomId("create_article_modal")
+        .setTitle("Create New Article");
+
       // Add input fields that match Airtable field names
       const titleInput = new TextInputBuilder()
-        .setCustomId('title')
-        .setLabel('Title')  // Maps to Airtable's "Name" field
+        .setCustomId("title")
+        .setLabel("Title") // Maps to Airtable's "Name" field
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Enter article title')
+        .setPlaceholder("Enter article title")
         .setRequired(true)
         .setMaxLength(100);
-      
+
       const descriptionInput = new TextInputBuilder()
-        .setCustomId('description')
-        .setLabel('Description')  // Maps to Airtable's "Description" field
+        .setCustomId("description")
+        .setLabel("Description") // Maps to Airtable's "Description" field
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Enter a brief description')
+        .setPlaceholder("Enter a brief description")
         .setRequired(true)
         .setMaxLength(500);
-      
+
       const bodyInput = new TextInputBuilder()
-        .setCustomId('body')
-        .setLabel('Body')  // Maps to Airtable's "Body" field
+        .setCustomId("body")
+        .setLabel("Body") // Maps to Airtable's "Body" field
         .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder('Enter the article content')
+        .setPlaceholder("Enter the article content")
         .setRequired(true)
         .setMaxLength(4000);
-      
+
       const authorInput = new TextInputBuilder()
-        .setCustomId('author')
-        .setLabel('Author')  // Maps to Airtable's "Author" field
+        .setCustomId("author")
+        .setLabel("Author") // Maps to Airtable's "Author" field
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('Enter author name')
+        .setPlaceholder("Enter author name")
         .setRequired(true)
         .setMaxLength(100);
-      
+
       const featuredInput = new TextInputBuilder()
-        .setCustomId('featured')
-        .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
+        .setCustomId("featured")
+        .setLabel("Featured (yes/no)") // Maps to Airtable's "Featured" field
         .setStyle(TextInputStyle.Short)
         .setPlaceholder('Type "yes" to mark as featured')
         .setRequired(false)
         .setMaxLength(3);
-      
+
       // Create action rows
-      const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
-      const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-      const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
-      const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
-      const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
-      
+      const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+        titleInput,
+      );
+      const descriptionRow =
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          descriptionInput,
+        );
+      const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+        bodyInput,
+      );
+      const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+        authorInput,
+      );
+      const featuredRow =
+        new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
+
       // Add inputs to the modal
-      modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
-      
+      modal.addComponents(
+        titleRow,
+        descriptionRow,
+        bodyRow,
+        authorRow,
+        featuredRow,
+      );
+
       // Show the modal
       await interaction.showModal(modal);
     }
     // Writers tool - edit article option
-    else if (interaction.customId === 'writers_edit') {
+    else if (interaction.customId === "writers_edit") {
       await handleWritersEditOption(interaction);
     }
     // Writers tool - upload zipped HTML option
-    else if (interaction.customId === 'writers_upload_zip') {
+    else if (interaction.customId === "writers_upload_zip") {
       await handleWritersUploadOption(interaction);
     }
-    
+
     // Handle zip file upload for article
-    else if (interaction.customId.startsWith('upload_zip_')) {
+    else if (interaction.customId.startsWith("upload_zip_")) {
       // Extract article ID from the custom ID
       const fullId = interaction.customId;
-      const idPart = fullId.split('_').pop() || '';
-      console.log('Zip upload - full ID:', fullId);
-      console.log('Zip upload - extracted ID part:', idPart);
+      const idPart = fullId.split("_").pop() || "";
+      console.log("Zip upload - full ID:", fullId);
+      console.log("Zip upload - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
-      
+
       if (isNaN(articleId)) {
         await interaction.reply({
           content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Get the article to verify it exists and is not published
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.reply({
-          content: 'Article not found. It may have been deleted.',
-          ephemeral: true
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
         return;
       }
-      
-      if (article.status === 'published') {
+
+      if (article.status === "published") {
         await interaction.reply({
-          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Content uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Create a unique identifier for this upload request
       const uploadId = `zip_${articleId}_${Date.now()}`;
-      
+
       // Tell the user to upload a zip file
       await interaction.reply({
         content: `Please upload a ZIP file containing HTML content for article **${article.title}**.\n\n**Instructions:**\n• Upload the ZIP file as an attachment to your next message in this channel\n• The ZIP should contain an index.html file as the main entry point\n• Any CSS, JS, or images in the ZIP will be extracted and the HTML content will be used\n• The upload will time out after 5 minutes if no file is received`,
-        ephemeral: true
+        ephemeral: true,
       });
-      
+
       // Listen for messages from this user that contain attachments
       try {
         console.log(`Waiting for ZIP file upload for article ID ${articleId}`);
-        
+
         // Set up a collector to watch for the next message from this user with an attachment
         const filter = (m: Message) => {
-          const hasAttachment = m.author.id === interaction.user.id && m.attachments.size > 0;
-          console.log(`Message received, user: ${m.author.tag}, has attachments: ${m.attachments.size > 0}`);
+          const hasAttachment =
+            m.author.id === interaction.user.id && m.attachments.size > 0;
+          console.log(
+            `Message received, user: ${m.author.tag}, has attachments: ${m.attachments.size > 0}`,
+          );
           return hasAttachment;
         };
-          
+
         // Get the channel
         const channel = interaction.channel;
-        
+
         // Wait for a message with an attachment
         const message = await collectImageMessage(channel, filter, 300000); // 5 minute timeout
-        
+
         if (!message) {
-          console.log('File upload timed out');
+          console.log("File upload timed out");
           await interaction.followUp({
-            content: 'ZIP file upload timed out. Please try again when you have a file ready.',
-            ephemeral: true
+            content:
+              "ZIP file upload timed out. Please try again when you have a file ready.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Get the first attachment
         const attachment = message.attachments.first();
-        
+
         if (!attachment) {
-          console.error('No attachment found despite collector saying there was one');
+          console.error(
+            "No attachment found despite collector saying there was one",
+          );
           await interaction.followUp({
-            content: 'No valid attachment found. Please try again with a valid ZIP file.',
-            ephemeral: true
+            content:
+              "No valid attachment found. Please try again with a valid ZIP file.",
+            ephemeral: true,
           });
           return;
         }
-        
-        console.log('ZIP attachment received for article:', {
+
+        console.log("ZIP attachment received for article:", {
           articleId,
           fileName: attachment.name,
-          contentType: attachment.contentType || 'unknown',
+          contentType: attachment.contentType || "unknown",
           size: attachment.size,
-          url: attachment.url
+          url: attachment.url,
         });
-        
+
         // Validate the attachment is a ZIP file
-        if (!attachment.name?.toLowerCase().endsWith('.zip')) {
+        if (!attachment.name?.toLowerCase().endsWith(".zip")) {
           await interaction.followUp({
-            content: 'Invalid file type. Please upload a ZIP file.',
-            ephemeral: true
+            content: "Invalid file type. Please upload a ZIP file.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Process the ZIP attachment
         const result = await processZipFile(attachment, articleId);
-        console.log('processZipFile result:', result);
-        
+        console.log("processZipFile result:", result);
+
         // Delete the uploaded message to keep the channel clean
         try {
           await message.delete();
-          console.log('Deleted zip file message to keep channel clean');
+          console.log("Deleted zip file message to keep channel clean");
         } catch (deleteError) {
-          console.error('Could not delete upload message:', deleteError);
+          console.error("Could not delete upload message:", deleteError);
         }
-        
+
         // Confirm the upload with the result message
         if (result.success) {
           // Create a token for uploading additional content if needed
           const generateToken = async () => {
             try {
               // Import token generation functions if needed
-              const { generateUniqueToken, calculateExpirationDate } = await import('../utils/tokenGenerator');
-              
+              const { generateUniqueToken, calculateExpirationDate } =
+                await import("../utils/tokenGenerator");
+
               // Create a token valid for 7 days with 5 max uses
               const expirationDays = 7;
               const maxUses = 5;
-              
+
               // Generate unique token
-              const token = await generateUniqueToken(async (tokenToCheck: string) => {
-                const existingToken = await storage.getUploadTokenByToken(tokenToCheck);
-                return !!existingToken;
-              });
-              
+              const token = await generateUniqueToken(
+                async (tokenToCheck: string) => {
+                  const existingToken =
+                    await storage.getUploadTokenByToken(tokenToCheck);
+                  return !!existingToken;
+                },
+              );
+
               // Calculate expiration date
               const expiresAt = calculateExpirationDate(expirationDays);
-              
+
               // Create token record with discord user in the name
               const uploadToken = await storage.createUploadToken({
                 token,
                 articleId,
-                uploadType: 'html-zip',
+                uploadType: "html-zip",
                 createdById: null, // No user ID since this is from Discord
                 expiresAt,
                 maxUses,
                 active: true,
                 name: `Discord: ${interaction.user.username}'s Follow-up HTML Upload`,
-                notes: `Generated via Discord bot after successful upload by ${interaction.user.username} on ${new Date().toLocaleString()}`
+                notes: `Generated via Discord bot after successful upload by ${interaction.user.username} on ${new Date().toLocaleString()}`,
               });
-              
+
               // Return the token URL
               return {
                 token: uploadToken.token,
-                url: `${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/public-upload/html-zip/${uploadToken.token}`
+                url: `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/public-upload/html-zip/${uploadToken.token}`,
               };
             } catch (error) {
-              console.error('Error generating follow-up upload token:', error);
+              console.error("Error generating follow-up upload token:", error);
               throw error;
             }
           };
-          
+
           // Generate token and create buttons
           const tokenData = await generateToken();
-          
+
           // Create a view in dashboard button
           const viewInDashboardButton = new ButtonBuilder()
-            .setLabel('View in Dashboard')
+            .setLabel("View in Dashboard")
             .setStyle(ButtonStyle.Link)
-            .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`);
-          
+            .setURL(
+              `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+            );
+
           // Create a button for additional uploads
           const additionalUploadButton = new ButtonBuilder()
-            .setLabel('Upload More Files')
+            .setLabel("Upload More Files")
             .setStyle(ButtonStyle.Link)
             .setURL(tokenData.url);
-          
-          const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-            .addComponents(viewInDashboardButton, additionalUploadButton);
-          
+
+          const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            viewInDashboardButton,
+            additionalUploadButton,
+          );
+
           // Send confirmation message
           await interaction.followUp({
             content: `✅ **Success!** ${result.message}\n\nThe article content has been updated with the HTML from your ZIP file. You can use the buttons below to:\n\n• View the article in the dashboard\n• Upload additional files if needed (no login required)`,
             components: [buttonRow],
-            ephemeral: true
+            ephemeral: true,
           });
         } else {
           // Send error message
           await interaction.followUp({
             content: `❌ **Error:** ${result.message}\n\nPlease try again with a valid ZIP file containing HTML content.`,
-            ephemeral: true
+            ephemeral: true,
           });
         }
       } catch (error) {
-        console.error('Error processing zip file upload:', error);
+        console.error("Error processing zip file upload:", error);
         await interaction.followUp({
-          content: `An error occurred while processing your file: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          ephemeral: true
+          content: `An error occurred while processing your file: ${error instanceof Error ? error.message : "Unknown error"}`,
+          ephemeral: true,
         });
       }
     }
     // Handle Instagram image upload button
-    else if (interaction.customId.startsWith('upload_insta_image_')) {
+    else if (interaction.customId.startsWith("upload_insta_image_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.substring('upload_insta_image_'.length);
-      console.log('Instagram image upload - full ID:', fullId);
-      console.log('Instagram image upload - extracted ID part:', idPart);
+      const idPart = fullId.substring("upload_insta_image_".length);
+      console.log("Instagram image upload - full ID:", fullId);
+      console.log("Instagram image upload - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
-      
+
       if (isNaN(articleId)) {
         await interaction.reply({
           content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
-      console.log('Processing Instagram image upload for article ID:', articleId);
-      
+
+      console.log(
+        "Processing Instagram image upload for article ID:",
+        articleId,
+      );
+
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.reply({
-          content: 'Article not found. It may have been deleted.',
-          ephemeral: true
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
         return;
       }
-      
-      if (article.status === 'published') {
+
+      if (article.status === "published") {
         await interaction.reply({
-          content: 'This article is already published. Image uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Defer the reply since image upload may take time
       await interaction.deferReply({ ephemeral: true });
-      
+
       try {
         // Create a button that will take the user to the article in the dashboard
         const viewInDashboardButton = new ButtonBuilder()
-          .setLabel('View in Dashboard')
+          .setLabel("View in Dashboard")
           .setStyle(ButtonStyle.Link)
-          .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`);
-        
+          .setURL(
+            `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+          );
+
         // Create an "Upload Image" button for immediate attachment
         const uploadNowButton = new ButtonBuilder()
           .setCustomId(`upload_insta_image_now_${articleId}`)
-          .setLabel('Upload Image Now')
+          .setLabel("Upload Image Now")
           .setStyle(ButtonStyle.Primary)
-          .setEmoji('📸');
-          
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(viewInDashboardButton, uploadNowButton);
-        
+          .setEmoji("📸");
+
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          viewInDashboardButton,
+          uploadNowButton,
+        );
+
         await interaction.editReply({
-          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === 'airtable' ? ' and Airtable' : ''}.`,
-          components: [buttonRow]
+          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.`,
+          components: [buttonRow],
         });
-        
       } catch (error) {
-        console.error('Error processing Instagram image upload:', error);
+        console.error("Error processing Instagram image upload:", error);
         await interaction.editReply({
-          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
+          content: `Error uploading image: ${error instanceof Error ? error.message : "Unknown error"}\n\nPlease try again or use the website to upload images.`,
         });
       }
     }
     // Handle Instagram image upload now button
-    else if (interaction.customId.startsWith('upload_insta_image_now_')) {
+    else if (interaction.customId.startsWith("upload_insta_image_now_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.substring('upload_insta_image_now_'.length);
-      console.log('Instagram image upload NOW - full ID:', fullId);
-      console.log('Instagram image upload NOW - extracted ID part:', idPart);
+      const idPart = fullId.substring("upload_insta_image_now_".length);
+      console.log("Instagram image upload NOW - full ID:", fullId);
+      console.log("Instagram image upload NOW - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
-      
+
       if (isNaN(articleId)) {
         await interaction.reply({
           content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
-      console.log('Processing Instagram image upload NOW for article ID:', articleId);
-      
+
+      console.log(
+        "Processing Instagram image upload NOW for article ID:",
+        articleId,
+      );
+
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.reply({
-          content: 'Article not found. It may have been deleted.',
-          ephemeral: true
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
         return;
       }
-      
-      if (article.status === 'published') {
+
+      if (article.status === "published") {
         await interaction.reply({
-          content: 'This article is already published. Image uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Create a unique identifier for this upload request
       const uploadId = `insta_${articleId}_${Date.now()}`;
-      
+
       // Tell the user to upload an image
       await interaction.reply({
         content: `Please upload an image for Instagram for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
-        ephemeral: true
+        ephemeral: true,
       });
-      
+
       // Listen for messages from this user that contain attachments
       try {
         // Set up a collector to watch for the next message from this user with an attachment
-        const filter = (m: Message) => 
-          m.author.id === interaction.user.id && 
-          m.attachments.size > 0;
-          
+        const filter = (m: Message) =>
+          m.author.id === interaction.user.id && m.attachments.size > 0;
+
         // Get the channel
         const channel = interaction.channel;
-        
+
         // Wait for a message with an attachment
         const message = await collectImageMessage(channel, filter, 300000); // 5 minute timeout
-        
+
         if (!message) {
           await interaction.followUp({
-            content: 'Image upload timed out. Please try again when you have an image ready.',
-            ephemeral: true
+            content:
+              "Image upload timed out. Please try again when you have an image ready.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Get the first attachment
         const attachment = message.attachments.first();
-        
+
         if (!attachment) {
           await interaction.followUp({
-            content: 'No valid attachment found. Please try again with a valid image file.',
-            ephemeral: true
+            content:
+              "No valid attachment found. Please try again with a valid image file.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Process the attachment (uploads to Imgur and updates the article)
-        const result = await processDiscordAttachment(attachment, articleId, 'instaPhoto');
-        
+        const result = await processDiscordAttachment(
+          attachment,
+          articleId,
+          "instaPhoto",
+        );
+
         // Confirm the upload with the result message
         if (result.success) {
           // Create embed with the uploaded image
           const embed = new EmbedBuilder()
-            .setTitle(`Instagram image for article "${article.title}" uploaded successfully`)
+            .setTitle(
+              `Instagram image for article "${article.title}" uploaded successfully`,
+            )
             .setDescription(result.message)
-            .setImage(result.url || article.instagramImageUrl || 'https://placehold.co/600x400?text=Upload+Failed')
-            .setColor('#00C4B4')
+            .setImage(
+              result.url ||
+                article.instagramImageUrl ||
+                "https://placehold.co/600x400?text=Upload+Failed",
+            )
+            .setColor("#00C4B4")
             .setTimestamp();
-            
+
           await interaction.followUp({
             embeds: [embed],
-            ephemeral: true
+            ephemeral: true,
           });
-          
+
           // Delete the uploaded message to keep the channel clean if we have permission
           try {
             await message.delete();
           } catch (error) {
             // Ignore errors deleting message (we might not have permission)
-            console.log('Could not delete message with uploaded image:', error);
+            console.log("Could not delete message with uploaded image:", error);
           }
         } else {
           await interaction.followUp({
             content: `Error: ${result.message}`,
-            ephemeral: true
+            ephemeral: true,
           });
         }
       } catch (error) {
-        console.error('Error handling image upload:', error);
+        console.error("Error handling image upload:", error);
         await interaction.followUp({
-          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          ephemeral: true
+          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
+          ephemeral: true,
         });
       }
     }
     // Handle Web image upload now button
-    else if (interaction.customId.startsWith('upload_web_image_now_')) {
+    else if (interaction.customId.startsWith("upload_web_image_now_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.split('_').pop() || '';
-      console.log('Web image upload NOW - full ID:', fullId);
-      console.log('Web image upload NOW - extracted ID part:', idPart);
+      const idPart = fullId.split("_").pop() || "";
+      console.log("Web image upload NOW - full ID:", fullId);
+      console.log("Web image upload NOW - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
-      
+
       if (isNaN(articleId)) {
         await interaction.reply({
           content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.reply({
-          content: 'Article not found. It may have been deleted.',
-          ephemeral: true
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
         return;
       }
-      
-      if (article.status === 'published') {
+
+      if (article.status === "published") {
         await interaction.reply({
-          content: 'This article is already published. Image uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Create a unique identifier for this upload request
       const uploadId = `web_${articleId}_${Date.now()}`;
-      
+
       // Tell the user to upload an image
       await interaction.reply({
         content: `Please upload a main web image for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
-        ephemeral: true
+        ephemeral: true,
       });
-      
+
       // Listen for messages from this user that contain attachments
       try {
         // Set up a collector to watch for the next message from this user with an attachment
-        const filter = (m: Message) => 
-          m.author.id === interaction.user.id && 
-          m.attachments.size > 0;
-          
+        const filter = (m: Message) =>
+          m.author.id === interaction.user.id && m.attachments.size > 0;
+
         // Get the channel
         const channel = interaction.channel;
-        
+
         // Wait for a message with an attachment
         const message = await collectImageMessage(channel, filter, 300000); // 5 minute timeout
-        
+
         if (!message) {
           await interaction.followUp({
-            content: 'Image upload timed out. Please try again when you have an image ready.',
-            ephemeral: true
+            content:
+              "Image upload timed out. Please try again when you have an image ready.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Get the first attachment
         const attachment = message.attachments.first();
-        
+
         if (!attachment) {
           await interaction.followUp({
-            content: 'No valid attachment found. Please try again with a valid image file.',
-            ephemeral: true
+            content:
+              "No valid attachment found. Please try again with a valid image file.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Process the attachment (uploads to Imgur and updates the article)
-        const result = await processDiscordAttachment(attachment, articleId, 'MainImage');
-        
+        const result = await processDiscordAttachment(
+          attachment,
+          articleId,
+          "MainImage",
+        );
+
         // Confirm the upload with the result message
         if (result.success) {
           // Create embed with the uploaded image
           const embed = new EmbedBuilder()
-            .setTitle(`Main image for article "${article.title}" uploaded successfully`)
+            .setTitle(
+              `Main image for article "${article.title}" uploaded successfully`,
+            )
             .setDescription(result.message)
-            .setImage(result.url || article.imageUrl || 'https://placehold.co/600x400?text=Upload+Failed')
-            .setColor('#00C4B4')
+            .setImage(
+              result.url ||
+                article.imageUrl ||
+                "https://placehold.co/600x400?text=Upload+Failed",
+            )
+            .setColor("#00C4B4")
             .setTimestamp();
-            
+
           await interaction.followUp({
             embeds: [embed],
-            ephemeral: true
+            ephemeral: true,
           });
-          
+
           // Delete the uploaded message to keep the channel clean if we have permission
           try {
             await message.delete();
           } catch (error) {
             // Ignore errors deleting message (we might not have permission)
-            console.log('Could not delete message with uploaded image:', error);
+            console.log("Could not delete message with uploaded image:", error);
           }
         } else {
           await interaction.followUp({
             content: `Error: ${result.message}`,
-            ephemeral: true
+            ephemeral: true,
           });
         }
       } catch (error) {
-        console.error('Error handling image upload:', error);
+        console.error("Error handling image upload:", error);
         await interaction.followUp({
-          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          ephemeral: true
+          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
+          ephemeral: true,
         });
       }
     }
     // Handle content file upload button
-    else if (interaction.customId.startsWith('upload_content_')) {
+    else if (interaction.customId.startsWith("upload_content_")) {
       // Extract article ID from the custom ID
       const fullId = interaction.customId;
-      const idPart = fullId.split('_').pop() || '';
-      console.log('Content upload - full ID:', fullId);
-      console.log('Content upload - extracted ID part:', idPart);
+      const idPart = fullId.split("_").pop() || "";
+      console.log("Content upload - full ID:", fullId);
+      console.log("Content upload - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
-      
+
       if (isNaN(articleId)) {
         await interaction.reply({
           content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
-      console.log('Processing content upload for article ID:', articleId);
-      
+
+      console.log("Processing content upload for article ID:", articleId);
+
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.reply({
-          content: 'Article not found. It may have been deleted.',
-          ephemeral: true
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
         return;
       }
-      
-      if (article.status === 'published') {
+
+      if (article.status === "published") {
         await interaction.reply({
-          content: 'This article is already published. Content uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Content uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Defer the reply since file processing may take time
       await interaction.deferReply({ ephemeral: true });
-      
+
       try {
         // Create a button that will take the user to the article in the dashboard
         const viewInDashboardButton = new ButtonBuilder()
-          .setLabel('View in Dashboard')
+          .setLabel("View in Dashboard")
           .setStyle(ButtonStyle.Link)
-          .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`);
-        
+          .setURL(
+            `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+          );
+
         // Create an "Upload Content" button for immediate attachment
         const uploadNowButton = new ButtonBuilder()
           .setCustomId(`upload_content_now_${articleId}`)
-          .setLabel('Upload Content Now')
+          .setLabel("Upload Content Now")
           .setStyle(ButtonStyle.Primary)
-          .setEmoji('📄');
-          
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(viewInDashboardButton, uploadNowButton);
-        
+          .setEmoji("📄");
+
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          viewInDashboardButton,
+          uploadNowButton,
+        );
+
         await interaction.editReply({
           content: `Ready to upload HTML/RTF content for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Content Now" and attach an HTML or RTF file in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded content will be stored and linked to your article.`,
-          components: [buttonRow]
+          components: [buttonRow],
         });
-        
       } catch (error) {
-        console.error('Error processing content upload:', error);
+        console.error("Error processing content upload:", error);
         await interaction.editReply({
-          content: `Error preparing content upload: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload content.`
+          content: `Error preparing content upload: ${error instanceof Error ? error.message : "Unknown error"}\n\nPlease try again or use the website to upload content.`,
         });
       }
     }
     // Handle immediate content file upload
     // Handler for upload_content_now button removed as it's no longer needed
-    else if (interaction.customId.startsWith('upload_web_image_')) {
+    else if (interaction.customId.startsWith("upload_web_image_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.split('_').pop() || '';
-      console.log('Web image upload - full ID:', fullId);
-      console.log('Web image upload - extracted ID part:', idPart);
+      const idPart = fullId.split("_").pop() || "";
+      console.log("Web image upload - full ID:", fullId);
+      console.log("Web image upload - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
-      
+
       if (isNaN(articleId)) {
         await interaction.reply({
           content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Get the article to make sure it exists and is not published
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.reply({
-          content: 'Article not found. It may have been deleted.',
-          ephemeral: true
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
         return;
       }
-      
-      if (article.status === 'published') {
+
+      if (article.status === "published") {
         await interaction.reply({
-          content: 'This article is already published. Image uploads through the bot are only allowed for draft or pending articles.',
-          ephemeral: true
+          content:
+            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Defer the reply since image upload may take time
       await interaction.deferReply({ ephemeral: true });
-      
+
       try {
         // Create a button that will take the user to the article in the dashboard
         const viewInDashboardButton = new ButtonBuilder()
-          .setLabel('View in Dashboard')
+          .setLabel("View in Dashboard")
           .setStyle(ButtonStyle.Link)
-          .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`);
-        
+          .setURL(
+            `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+          );
+
         // Create an "Upload Image" button for immediate attachment
         const uploadNowButton = new ButtonBuilder()
           .setCustomId(`upload_web_image_now_${articleId}`)
-          .setLabel('Upload Image Now')
+          .setLabel("Upload Image Now")
           .setStyle(ButtonStyle.Primary)
-          .setEmoji('🖼️');
-          
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-          .addComponents(viewInDashboardButton, uploadNowButton);
-        
+          .setEmoji("🖼️");
+
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          viewInDashboardButton,
+          uploadNowButton,
+        );
+
         await interaction.editReply({
-          content: `Ready to upload a web (main) image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === 'airtable' ? ' and Airtable' : ''}.`,
-          components: [buttonRow]
+          content: `Ready to upload a web (main) image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.`,
+          components: [buttonRow],
         });
-        
       } catch (error) {
-        console.error('Error processing web image upload:', error);
+        console.error("Error processing web image upload:", error);
         await interaction.editReply({
-          content: `Error uploading image: ${error instanceof Error ? error.message : 'Unknown error'}\n\nPlease try again or use the website to upload images.`
+          content: `Error uploading image: ${error instanceof Error ? error.message : "Unknown error"}\n\nPlease try again or use the website to upload images.`,
         });
       }
     }
     // Handle Writers command "Edit Article" button
-    else if (interaction.customId === 'writers_edit') {
+    else if (interaction.customId === "writers_edit") {
       await interaction.deferUpdate();
-      
+
       try {
         // Call the existing edit article functionality
         await handleEditArticleCommand(interaction);
       } catch (error) {
-        console.error('Error handling writers edit option:', error);
+        console.error("Error handling writers edit option:", error);
         try {
           await interaction.followUp({
-            content: 'Sorry, there was an error setting up the article editor. Please try again later.',
-            ephemeral: true
+            content:
+              "Sorry, there was an error setting up the article editor. Please try again later.",
+            ephemeral: true,
           });
         } catch (followUpError) {
-          console.error('Error sending error message:', followUpError);
+          console.error("Error sending error message:", followUpError);
         }
       }
     }
     // Handle Writers command "Upload Zipped HTML" button
-    else if (interaction.customId === 'writers_upload_zip') {
+    else if (interaction.customId === "writers_upload_zip") {
       await interaction.deferUpdate();
-      
+
       try {
         // Create a select menu for article selection
         const articleSelect = await createArticleSelectMenu();
-        
+
         // If no articles available
-        if (articleSelect.options[0].data.value === '0') {
+        if (articleSelect.options[0].data.value === "0") {
           await interaction.followUp({
-            content: 'No unpublished articles found. Create a new article using `/create_article` or use the website to create draft articles first.',
-            ephemeral: true
+            content:
+              "No unpublished articles found. Create a new article using `/create_article` or use the website to create draft articles first.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Create a custom ID that indicates this is for ZIP upload
-        articleSelect.setCustomId('select_article_for_zip_upload');
-        
+        articleSelect.setCustomId("select_article_for_zip_upload");
+
         // Create an action row with the article select menu
-        const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(articleSelect);
-        
+        const row =
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            articleSelect,
+          );
+
         // Show the selection menu to the user
         await interaction.followUp({
-          content: 'Please select an article to upload ZIP content for:',
+          content: "Please select an article to upload ZIP content for:",
           components: [row],
-          ephemeral: true
+          ephemeral: true,
         });
       } catch (error) {
-        console.error('Error handling writers upload option:', error);
+        console.error("Error handling writers upload option:", error);
         await interaction.followUp({
-          content: 'Sorry, there was an error preparing the article selection. Please try again later.',
-          ephemeral: true
+          content:
+            "Sorry, there was an error preparing the article selection. Please try again later.",
+          ephemeral: true,
         });
       }
     }
     // Handle Upload ZIP button for a selected article
-    else if (interaction.customId.startsWith('upload_zip_')) {
+    else if (interaction.customId.startsWith("upload_zip_")) {
       // Extract the article ID from the button customId (upload_zip_123 => 123)
-      const articleId = parseInt(interaction.customId.replace('upload_zip_', ''), 10);
-      
+      const articleId = parseInt(
+        interaction.customId.replace("upload_zip_", ""),
+        10,
+      );
+
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: 'Error: Invalid article ID',
-          ephemeral: true
+          content: "Error: Invalid article ID",
+          ephemeral: true,
         });
         return;
       }
-      
+
       await interaction.deferUpdate();
-      
+
       // Get the article to confirm it exists
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         await interaction.followUp({
           content: `No article found with ID ${articleId}. It may have been deleted.`,
-          ephemeral: true
+          ephemeral: true,
         });
         return;
       }
-      
+
       // Prompt the user to upload a ZIP file
       await interaction.followUp({
         content: `Please upload a ZIP file containing HTML content for article: **${article.title}**\n\nThe upload should be a reply to this message and contain a single .zip file. The file will be processed and the HTML content will be extracted and set as the article's body content.`,
-        ephemeral: true
+        ephemeral: true,
       });
-      
+
       // Set up a message collector to wait for the user to upload a file
       const filter = (m: Message) => {
         // Message should be from the same user who clicked the button
-        return m.author.id === interaction.user.id && 
-               // Message should have attachments
-               m.attachments.size > 0 && 
-               // At least one attachment should be a zip file
-               m.attachments.some(attachment => 
-                 attachment.name.toLowerCase().endsWith('.zip')
-               );
+        return (
+          m.author.id === interaction.user.id &&
+          // Message should have attachments
+          m.attachments.size > 0 &&
+          // At least one attachment should be a zip file
+          m.attachments.some((attachment) =>
+            attachment.name.toLowerCase().endsWith(".zip"),
+          )
+        );
       };
-      
+
       // Get the channel from the client
       const channel = interaction.channel;
       if (!channel) {
         await interaction.followUp({
-          content: 'Error: Could not find the channel for file upload.',
-          ephemeral: true
+          content: "Error: Could not find the channel for file upload.",
+          ephemeral: true,
         });
         return;
       }
-      
+
       try {
         // Use awaitMessages to wait for a file upload
         const collected = await channel.awaitMessages({
           filter,
           max: 1,
           time: 300000, // 5 minute timeout
-          errors: ['time']
+          errors: ["time"],
         });
-        
+
         // Get the first collected message
         const message = collected.first();
         if (!message) {
           await interaction.followUp({
-            content: 'No valid file was uploaded within the time limit.',
-            ephemeral: true
+            content: "No valid file was uploaded within the time limit.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Get the zip attachment
-        const zipAttachment = message.attachments.find(attachment => 
-          attachment.name.toLowerCase().endsWith('.zip')
+        const zipAttachment = message.attachments.find((attachment) =>
+          attachment.name.toLowerCase().endsWith(".zip"),
         );
-        
+
         if (!zipAttachment) {
           await interaction.followUp({
-            content: 'No ZIP file was found in your message.',
-            ephemeral: true
+            content: "No ZIP file was found in your message.",
+            ephemeral: true,
           });
           return;
         }
-        
+
         // Process the zip file
         await interaction.followUp({
           content: `Processing ZIP file: **${zipAttachment.name}**. Please wait...`,
-          ephemeral: true
+          ephemeral: true,
         });
-        
+
         const result = await processZipFile(zipAttachment, articleId);
-        
+
         // Delete the uploaded message to keep the channel clean
         try {
           await message.delete();
-          console.log('Deleted ZIP file message to keep channel clean');
+          console.log("Deleted ZIP file message to keep channel clean");
         } catch (deleteError) {
-          console.error('Could not delete upload message:', deleteError);
+          console.error("Could not delete upload message:", deleteError);
         }
-        
+
         // Display the result
         if (result.success) {
           // Create a view in dashboard button
           const viewInDashboardButton = new ButtonBuilder()
-            .setLabel('View in Dashboard')
+            .setLabel("View in Dashboard")
             .setStyle(ButtonStyle.Link)
-            .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`);
-          
-          const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-            .addComponents(viewInDashboardButton);
-          
+            .setURL(
+              `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+            );
+
+          const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            viewInDashboardButton,
+          );
+
           await interaction.followUp({
             content: `✅ **Success!** ${result.message}`,
             components: [buttonRow],
-            ephemeral: true
+            ephemeral: true,
           });
         } else {
           await interaction.followUp({
             content: `❌ **Error!** ${result.message}`,
-            ephemeral: true
+            ephemeral: true,
           });
         }
       } catch (collectionError) {
-        if (collectionError instanceof Error && collectionError.message === 'time') {
+        if (
+          collectionError instanceof Error &&
+          collectionError.message === "time"
+        ) {
           await interaction.followUp({
-            content: 'Time limit reached. No ZIP file was uploaded within 5 minutes.',
-            ephemeral: true
+            content:
+              "Time limit reached. No ZIP file was uploaded within 5 minutes.",
+            ephemeral: true,
           });
         } else {
-          console.error('Error collecting message:', collectionError);
+          console.error("Error collecting message:", collectionError);
           await interaction.followUp({
-            content: 'An error occurred while waiting for the file upload.',
-            ephemeral: true
+            content: "An error occurred while waiting for the file upload.",
+            ephemeral: true,
           });
         }
       }
     }
   } catch (error) {
-    console.error('Error handling button interaction:', error);
+    console.error("Error handling button interaction:", error);
     await interaction.reply({
-      content: 'Sorry, there was an error processing your request.',
-      ephemeral: true
+      content: "Sorry, there was an error processing your request.",
+      ephemeral: true,
     });
   }
 }
@@ -2176,36 +2435,38 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
 // Commands configuration
 const commands = [
   new SlashCommandBuilder()
-    .setName('ping')
-    .setDescription('Replies with the bot latency'),
-  
+    .setName("ping")
+    .setDescription("Replies with the bot latency"),
+
   new SlashCommandBuilder()
-    .setName('list_articles')
-    .setDescription('List articles that have not been published yet'),
-  
+    .setName("list_articles")
+    .setDescription("List articles that have not been published yet"),
+
   new SlashCommandBuilder()
-    .setName('create_article')
-    .setDescription('Create a new article draft'),
-    
+    .setName("create_article")
+    .setDescription("Create a new article draft"),
+
   new SlashCommandBuilder()
-    .setName('writers')
-    .setDescription('Writer tools: edit or upload articles'),
-    
+    .setName("writers")
+    .setDescription("Writer tools: edit or upload articles"),
+
   new SlashCommandBuilder()
-    .setName('insta')
-    .setDescription('Upload an Instagram image to an unpublished article'),
-    
+    .setName("insta")
+    .setDescription("Upload an Instagram image to an unpublished article"),
+
   new SlashCommandBuilder()
-    .setName('web')
-    .setDescription('Upload a web (main) image to an unpublished article'),
-    
+    .setName("web")
+    .setDescription("Upload a web (main) image to an unpublished article"),
+
   new SlashCommandBuilder()
-    .setName('upload_content')
-    .setDescription('Upload an HTML, RTF, or plain text (.txt) file as article content'),
-    
+    .setName("upload_content")
+    .setDescription(
+      "Upload an HTML, RTF, or plain text (.txt) file as article content",
+    ),
+
   new SlashCommandBuilder()
-    .setName('webreq')
-    .setDescription('Submit an administrative request')
+    .setName("webreq")
+    .setDescription("Submit an administrative request"),
 ];
 
 /**
@@ -2227,26 +2488,26 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMessageReactions,
         GatewayIntentBits.DirectMessages,
-        GatewayIntentBits.MessageContent // Required for reading message attachments
-      ]
+        GatewayIntentBits.MessageContent, // Required for reading message attachments
+      ],
     });
 
     // Register event handlers
-    client.once(Events.ClientReady, c => {
+    client.once(Events.ClientReady, (c) => {
       botStatus = {
         connected: true,
-        status: 'Connected and ready',
+        status: "Connected and ready",
         username: c.user.username,
         id: c.user.id,
         guilds: c.guilds.cache.size,
         guildsList: [],
-        webhooks: []
+        webhooks: [],
       };
       console.log(`Ready! Logged in as ${c.user.tag}`);
     });
 
     // Register commands
-    client.on(Events.InteractionCreate, async interaction => {
+    client.on(Events.InteractionCreate, async (interaction) => {
       try {
         // Handle different types of interactions
         if (interaction.isButton()) {
@@ -2260,121 +2521,133 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
           await handleStringSelectMenuInteraction(interaction);
         } else if (interaction.isChatInputCommand()) {
           // Handle slash commands
-          
+
           // Ping command - simple latency check
-          if (interaction.commandName === 'ping') {
-            const sent = await interaction.reply({ 
-              content: 'Pinging...', 
-              fetchReply: true 
+          if (interaction.commandName === "ping") {
+            const sent = await interaction.reply({
+              content: "Pinging...",
+              fetchReply: true,
             });
-            const latency = sent.createdTimestamp - interaction.createdTimestamp;
-            await interaction.editReply(`Pong! Bot latency: ${latency}ms | API Latency: ${Math.round(client!.ws.ping)}ms`);
-          } 
-          
+            const latency =
+              sent.createdTimestamp - interaction.createdTimestamp;
+            await interaction.editReply(
+              `Pong! Bot latency: ${latency}ms | API Latency: ${Math.round(client!.ws.ping)}ms`,
+            );
+          }
+
           // List articles command
-          else if (interaction.commandName === 'list_articles') {
+          else if (interaction.commandName === "list_articles") {
             await handleListArticlesCommand(interaction);
           }
-          
+
           // Create article command
-          else if (interaction.commandName === 'create_article') {
+          else if (interaction.commandName === "create_article") {
             await handleCreateArticleCommand(interaction);
           }
-          
+
           // Writers command - combined edit/upload functionality
-          else if (interaction.commandName === 'writers') {
+          else if (interaction.commandName === "writers") {
             await handleWritersCommand(interaction);
           }
-          
+
           // Instagram image upload command
-          else if (interaction.commandName === 'insta') {
+          else if (interaction.commandName === "insta") {
             await handleInstaImageCommand(interaction);
           }
-          
+
           // Web (Main) image upload command
-          else if (interaction.commandName === 'web') {
+          else if (interaction.commandName === "web") {
             await handleWebImageCommand(interaction);
           }
-          
+
           // Upload HTML/RTF content command
-          else if (interaction.commandName === 'upload_content') {
+          else if (interaction.commandName === "upload_content") {
             await handleContentUploadCommand(interaction);
           }
-          
+
           // Admin request command
-          else if (interaction.commandName === 'webreq') {
+          else if (interaction.commandName === "webreq") {
             await handleWebRequestCommand(interaction);
           }
         }
       } catch (error) {
-        console.error('Error handling Discord interaction:', error);
+        console.error("Error handling Discord interaction:", error);
         try {
-          if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-            await interaction.reply({ 
-              content: 'An error occurred while processing this command.', 
-              ephemeral: true 
+          if (
+            interaction.isRepliable() &&
+            !interaction.replied &&
+            !interaction.deferred
+          ) {
+            await interaction.reply({
+              content: "An error occurred while processing this command.",
+              ephemeral: true,
             });
           } else if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.editReply('An error occurred while processing this command.');
+            await interaction.editReply(
+              "An error occurred while processing this command.",
+            );
           }
         } catch (replyError) {
-          console.error('Error sending error reply:', replyError);
+          console.error("Error sending error reply:", replyError);
         }
       }
     });
 
     // Register commands with Discord API
     const rest = new REST().setToken(token);
-    await rest.put(
-      Routes.applicationCommands(clientId),
-      { body: commands }
-    );
+    await rest.put(Routes.applicationCommands(clientId), { body: commands });
 
     // Store token and client ID in integration settings
-    const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
+    const tokenSetting = await storage.getIntegrationSettingByKey(
+      "discord",
+      "bot_token",
+    );
     if (!tokenSetting) {
       await storage.createIntegrationSetting({
-        service: 'discord',
-        key: 'bot_token',
+        service: "discord",
+        key: "bot_token",
         value: token,
-        enabled: true
+        enabled: true,
       });
     } else {
       await storage.updateIntegrationSetting(tokenSetting.id, {
         value: token,
-        enabled: true
+        enabled: true,
       });
     }
 
-    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
+    const clientIdSetting = await storage.getIntegrationSettingByKey(
+      "discord",
+      "bot_client_id",
+    );
     if (!clientIdSetting) {
       await storage.createIntegrationSetting({
-        service: 'discord',
-        key: 'bot_client_id',
+        service: "discord",
+        key: "bot_client_id",
         value: clientId,
-        enabled: true
+        enabled: true,
       });
     } else {
       await storage.updateIntegrationSetting(clientIdSetting.id, {
         value: clientId,
-        enabled: true
+        enabled: true,
       });
     }
 
-    botStatus.status = 'Initialized (not connected)';
-    return { success: true, message: 'Bot initialized successfully' };
+    botStatus.status = "Initialized (not connected)";
+    return { success: true, message: "Bot initialized successfully" };
   } catch (error) {
     botStatus = {
       connected: false,
       status: `Initialization error: ${error instanceof Error ? error.message : String(error)}`,
-      username: '',
-      id: '',
+      username: "",
+      id: "",
       guilds: 0,
       guildsList: [],
-      webhooks: []
+      webhooks: [],
     };
-    console.error('Error initializing Discord bot:', error);
-    return { success: false, message: 'Failed to initialize bot', error };
+    console.error("Error initializing Discord bot:", error);
+    return { success: false, message: "Failed to initialize bot", error };
   }
 };
 
@@ -2385,31 +2658,44 @@ export const startDiscordBot = async () => {
   try {
     if (!client) {
       // Try to load settings from storage and initialize
-      const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-      const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
-      
+      const tokenSetting = await storage.getIntegrationSettingByKey(
+        "discord",
+        "bot_token",
+      );
+      const clientIdSetting = await storage.getIntegrationSettingByKey(
+        "discord",
+        "bot_client_id",
+      );
+
       if (!tokenSetting || !clientIdSetting) {
-        return { success: false, message: 'Bot not initialized. Please set bot token and client ID first.' };
+        return {
+          success: false,
+          message:
+            "Bot not initialized. Please set bot token and client ID first.",
+        };
       }
-      
+
       await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
       if (!client) {
-        return { success: false, message: 'Failed to initialize bot with stored credentials.' };
+        return {
+          success: false,
+          message: "Failed to initialize bot with stored credentials.",
+        };
       }
     }
-    
-    botStatus.status = 'Connecting...';
+
+    botStatus.status = "Connecting...";
     await client.login(await getDiscordBotToken());
-    
-    return { success: true, message: 'Bot started successfully' };
+
+    return { success: true, message: "Bot started successfully" };
   } catch (error) {
     botStatus = {
       ...botStatus,
       connected: false,
-      status: `Start error: ${error instanceof Error ? error.message : String(error)}`
+      status: `Start error: ${error instanceof Error ? error.message : String(error)}`,
     };
-    console.error('Error starting Discord bot:', error);
-    return { success: false, message: 'Failed to start bot', error };
+    console.error("Error starting Discord bot:", error);
+    return { success: false, message: "Failed to start bot", error };
   }
 };
 
@@ -2419,24 +2705,24 @@ export const startDiscordBot = async () => {
 export const stopDiscordBot = async () => {
   try {
     if (!client) {
-      return { success: false, message: 'Bot not initialized' };
+      return { success: false, message: "Bot not initialized" };
     }
-    
+
     await client.destroy();
     botStatus = {
       connected: false,
-      status: 'Disconnected',
+      status: "Disconnected",
       username: botStatus.username,
       id: botStatus.id,
       guilds: 0,
       guildsList: [],
-      webhooks: []
+      webhooks: [],
     };
-    
-    return { success: true, message: 'Bot stopped successfully' };
+
+    return { success: true, message: "Bot stopped successfully" };
   } catch (error) {
-    console.error('Error stopping Discord bot:', error);
-    return { success: false, message: 'Failed to stop bot', error };
+    console.error("Error stopping Discord bot:", error);
+    return { success: false, message: "Failed to stop bot", error };
   }
 };
 
@@ -2447,60 +2733,68 @@ export const getDiscordBotStatus = async () => {
   if (client) {
     // Update the connected status based on client's readiness
     botStatus.connected = client.isReady();
-    
+
     // Update guild count and list if connected
     if (client.isReady()) {
       botStatus.guilds = client.guilds.cache.size;
-      
+
       // Get detailed information about each guild
-      botStatus.guildsList = client.guilds.cache.map(guild => ({
+      botStatus.guildsList = client.guilds.cache.map((guild) => ({
         id: guild.id,
         name: guild.name,
         memberCount: guild.memberCount,
         icon: guild.iconURL() || undefined,
-        owner: guild.members.me?.permissions.has('Administrator') || false
+        owner: guild.members.me?.permissions.has("Administrator") || false,
       }));
-      
+
       // Get webhook information from each guild where bot has necessary permissions
       botStatus.webhooks = [];
-      
+
       // Fetch webhooks from each guild if bot has permission
       const webhookPromises = client.guilds.cache.map(async (guild) => {
         // Check if bot has permission to manage webhooks in this guild
-        if (guild.members.me?.permissions.has('ManageWebhooks')) {
+        if (guild.members.me?.permissions.has("ManageWebhooks")) {
           try {
             const guildWebhooks = await guild.fetchWebhooks();
-            
+
             // Map to our webhook info format
-            const webhookInfos = guildWebhooks.map(webhook => {
-              if (webhook.type === 1) { // Only include standard webhooks
-                return {
-                  id: webhook.id,
-                  name: webhook.name,
-                  channelId: webhook.channelId,
-                  channelName: guild.channels.cache.get(webhook.channelId)?.name || 'unknown',
-                  guildId: guild.id,
-                  guildName: guild.name
-                };
-              }
-              return null;
-            }).filter(Boolean) as WebhookInfo[];
-            
+            const webhookInfos = guildWebhooks
+              .map((webhook) => {
+                if (webhook.type === 1) {
+                  // Only include standard webhooks
+                  return {
+                    id: webhook.id,
+                    name: webhook.name,
+                    channelId: webhook.channelId,
+                    channelName:
+                      guild.channels.cache.get(webhook.channelId)?.name ||
+                      "unknown",
+                    guildId: guild.id,
+                    guildName: guild.name,
+                  };
+                }
+                return null;
+              })
+              .filter(Boolean) as WebhookInfo[];
+
             return webhookInfos;
           } catch (error) {
-            console.error(`Error fetching webhooks for guild ${guild.name} (${guild.id}):`, error);
+            console.error(
+              `Error fetching webhooks for guild ${guild.name} (${guild.id}):`,
+              error,
+            );
             return [];
           }
         }
         return [];
       });
-      
+
       // Wait for all webhook fetch operations to complete
       const webhookResults = await Promise.all(webhookPromises);
       botStatus.webhooks = webhookResults.flat();
     }
   }
-  
+
   return botStatus;
 };
 
@@ -2508,12 +2802,15 @@ export const getDiscordBotStatus = async () => {
  * Helper function to get the Discord bot token from storage
  */
 async function getDiscordBotToken(): Promise<string> {
-  const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-  
+  const tokenSetting = await storage.getIntegrationSettingByKey(
+    "discord",
+    "bot_token",
+  );
+
   if (!tokenSetting || !tokenSetting.value) {
-    throw new Error('Discord bot token not found in settings');
+    throw new Error("Discord bot token not found in settings");
   }
-  
+
   return tokenSetting.value;
 }
 
@@ -2524,43 +2821,59 @@ async function getDiscordBotToken(): Promise<string> {
  * @param message The message content to send
  * @returns Success status and message details or error
  */
-export async function sendMessageToChannel(guildId: string, channelId: string, message: string): Promise<{ success: boolean; message: string; error?: any }> {
+export async function sendMessageToChannel(
+  guildId: string,
+  channelId: string,
+  message: string,
+): Promise<{ success: boolean; message: string; error?: any }> {
   try {
     if (!client || !client.isReady()) {
-      return { success: false, message: 'Bot is not connected. Please start the bot first.' };
+      return {
+        success: false,
+        message: "Bot is not connected. Please start the bot first.",
+      };
     }
-    
+
     // Try to get the guild (server)
     const guild = client.guilds.cache.get(guildId);
     if (!guild) {
-      return { success: false, message: `Could not find server with ID ${guildId}. The bot might not be a member of this server.` };
+      return {
+        success: false,
+        message: `Could not find server with ID ${guildId}. The bot might not be a member of this server.`,
+      };
     }
-    
+
     // Try to get the channel
     const channel = guild.channels.cache.get(channelId);
     if (!channel) {
-      return { success: false, message: `Could not find channel with ID ${channelId} in server ${guild.name}.` };
+      return {
+        success: false,
+        message: `Could not find channel with ID ${channelId} in server ${guild.name}.`,
+      };
     }
-    
+
     // Make sure the channel is a text channel
     if (!channel.isTextBased()) {
-      return { success: false, message: `Channel ${channel.name} is not a text channel.` };
+      return {
+        success: false,
+        message: `Channel ${channel.name} is not a text channel.`,
+      };
     }
-    
+
     // Send the message
     const textChannel = channel as TextChannel;
     await textChannel.send(message);
-    
-    return { 
-      success: true, 
-      message: `Message sent successfully to #${textChannel.name} in ${guild.name}.` 
+
+    return {
+      success: true,
+      message: `Message sent successfully to #${textChannel.name} in ${guild.name}.`,
     };
   } catch (error) {
-    console.error('Error sending message to Discord channel:', error);
-    return { 
-      success: false, 
-      message: 'Failed to send message to Discord channel.', 
-      error 
+    console.error("Error sending message to Discord channel:", error);
+    return {
+      success: false,
+      message: "Failed to send message to Discord channel.",
+      error,
     };
   }
 }
@@ -2570,54 +2883,57 @@ export async function sendMessageToChannel(guildId: string, channelId: string, m
  */
 export function setupDiscordBotRoutes(app: Express) {
   // Initialize the bot with token and client ID
-  app.post("/api/discord/bot/initialize", async (req: Request, res: Response) => {
-    try {
-      const { token, clientId } = req.body;
-      
-      if (!token || !clientId) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Bot token and client ID are required' 
+  app.post(
+    "/api/discord/bot/initialize",
+    async (req: Request, res: Response) => {
+      try {
+        const { token, clientId } = req.body;
+
+        if (!token || !clientId) {
+          return res.status(400).json({
+            success: false,
+            message: "Bot token and client ID are required",
+          });
+        }
+
+        const result = await initializeDiscordBot(token, clientId);
+
+        if (result.success) {
+          res.json({ success: true, message: result.message });
+        } else {
+          res.status(500).json({
+            success: false,
+            message: result.message,
+          });
+        }
+      } catch (error) {
+        console.error("Error initializing Discord bot:", error);
+        res.status(500).json({
+          success: false,
+          message: "An error occurred while initializing the Discord bot",
         });
       }
-      
-      const result = await initializeDiscordBot(token, clientId);
-      
-      if (result.success) {
-        res.json({ success: true, message: result.message });
-      } else {
-        res.status(500).json({ 
-          success: false, 
-          message: result.message 
-        });
-      }
-    } catch (error) {
-      console.error('Error initializing Discord bot:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while initializing the Discord bot' 
-      });
-    }
-  });
+    },
+  );
 
   // Start the bot
   app.post("/api/discord/bot/start", async (req: Request, res: Response) => {
     try {
       const result = await startDiscordBot();
-      
+
       if (result.success) {
         res.json({ success: true, message: result.message });
       } else {
-        res.status(500).json({ 
-          success: false, 
-          message: result.message 
+        res.status(500).json({
+          success: false,
+          message: result.message,
         });
       }
     } catch (error) {
-      console.error('Error starting Discord bot:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while starting the Discord bot' 
+      console.error("Error starting Discord bot:", error);
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while starting the Discord bot",
       });
     }
   });
@@ -2626,20 +2942,20 @@ export function setupDiscordBotRoutes(app: Express) {
   app.post("/api/discord/bot/stop", async (req: Request, res: Response) => {
     try {
       const result = await stopDiscordBot();
-      
+
       if (result.success) {
         res.json({ success: true, message: result.message });
       } else {
-        res.status(400).json({ 
-          success: false, 
-          message: result.message 
+        res.status(400).json({
+          success: false,
+          message: result.message,
         });
       }
     } catch (error) {
-      console.error('Error stopping Discord bot:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while stopping the Discord bot' 
+      console.error("Error stopping Discord bot:", error);
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while stopping the Discord bot",
       });
     }
   });
@@ -2650,224 +2966,251 @@ export function setupDiscordBotRoutes(app: Express) {
       const status = await getDiscordBotStatus();
       res.json(status);
     } catch (error) {
-      console.error('Error getting Discord bot status:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while getting Discord bot status' 
-      });
-    }
-  });
-  
-  // Get detailed information about Discord servers (guilds)
-  app.get("/api/discord/bot/servers", async (req: Request, res: Response) => {
-    try {
-      const status = await getDiscordBotStatus();
-      
-      res.json({
-        guilds: status.guildsList,
-        webhooks: status.webhooks
-      });
-    } catch (error) {
-      console.error('Error getting Discord server information:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while getting Discord server information' 
-      });
-    }
-  });
-  
-  // Get OAuth URL for adding the bot to a server
-  app.get("/api/discord/bot/invite-url", async (req: Request, res: Response) => {
-    try {
-      const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
-      
-      if (!clientIdSetting || !clientIdSetting.value) {
-        return res.status(400).json({
-          success: false,
-          message: 'Discord client ID not configured'
-        });
-      }
-      
-      // Calculate the permissions needed by the bot
-      // Using the Discord permission calculator values:
-      // - View Channels: 1024
-      // - Send Messages: 2048
-      // - Manage Webhooks: 536870912
-      // - Read Message History: 65536
-      // Summing these gives the permission integer: 536939520
-      const permissions = 536939520;
-      
-      // Create the OAuth URL with the necessary scopes (bot and applications.commands)
-      const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientIdSetting.value}&permissions=${permissions}&scope=bot%20applications.commands`;
-      
-      res.json({
-        success: true,
-        invite_url: inviteUrl
-      });
-    } catch (error) {
-      console.error('Error generating Discord bot invite URL:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while generating the Discord bot invite URL' 
-      });
-    }
-  });
-  
-  // Send a message to a specific channel in a Discord server
-  app.post("/api/discord/bot/send-channel-message", async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      
-      const { guildId, channelId, message } = req.body;
-      
-      if (!guildId || !channelId || !message) {
-        return res.status(400).json({
-          success: false, 
-          message: 'Server ID, channel ID, and message content are required'
-        });
-      }
-      
-      const result = await sendMessageToChannel(guildId, channelId, message);
-      
-      if (result.success) {
-        // Log the activity
-        await storage.createActivityLog({
-          userId: req.user?.id,
-          action: "send_channel_message",
-          resourceType: "discord_channel",
-          resourceId: channelId,
-          details: { 
-            guildId,
-            channelId,
-            messageContent: message.substring(0, 100) + (message.length > 100 ? '...' : '') // Log a truncated version
-          }
-        });
-        
-        res.json(result);
-      } else {
-        res.status(400).json(result);
-      }
-    } catch (error) {
-      console.error('Error sending message to Discord channel:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while sending message to Discord channel',
-        error: error instanceof Error ? error.message : 'Unknown error'
+      console.error("Error getting Discord bot status:", error);
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while getting Discord bot status",
       });
     }
   });
 
-  // Get available channels in a server where webhooks can be created
-  app.get("/api/discord/bot/server/:serverId/channels", async (req: Request, res: Response) => {
+  // Get detailed information about Discord servers (guilds)
+  app.get("/api/discord/bot/servers", async (req: Request, res: Response) => {
     try {
-      const { serverId } = req.params;
-      
-      if (!client || !client.isReady()) {
-        return res.status(400).json({
-          success: false,
-          message: 'Discord bot is not connected'
-        });
-      }
-      
-      // Try to fetch the guild
-      const guild = client.guilds.cache.get(serverId);
-      if (!guild) {
-        return res.status(404).json({
-          success: false,
-          message: 'Server not found or bot does not have access'
-        });
-      }
-      
-      // Check if the bot has permissions to manage webhooks in this guild
-      if (!guild.members.me || !guild.members.me.permissions.has('ManageWebhooks')) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bot does not have permission to manage webhooks in this server'
-        });
-      }
-      
-      // Get all text channels where webhooks can be created
-      // Filter for only text channels where the bot has VIEW_CHANNEL permission
-      const channels = guild.channels.cache
-        .filter(channel => 
-          channel.type === 0 && // 0 is GUILD_TEXT
-          guild.members.me && channel.permissionsFor(guild.members.me)?.has(['ViewChannel', 'ManageWebhooks'])
-        )
-        .map(channel => ({
-          id: channel.id,
-          name: channel.name,
-          type: 'text'
-        }));
-      
+      const status = await getDiscordBotStatus();
+
       res.json({
-        success: true,
-        serverId: guild.id,
-        serverName: guild.name,
-        channels
+        guilds: status.guildsList,
+        webhooks: status.webhooks,
       });
     } catch (error) {
-      console.error('Error getting server channels:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while fetching server channels' 
+      console.error("Error getting Discord server information:", error);
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while getting Discord server information",
       });
     }
   });
-  
+
+  // Get OAuth URL for adding the bot to a server
+  app.get(
+    "/api/discord/bot/invite-url",
+    async (req: Request, res: Response) => {
+      try {
+        const clientIdSetting = await storage.getIntegrationSettingByKey(
+          "discord",
+          "bot_client_id",
+        );
+
+        if (!clientIdSetting || !clientIdSetting.value) {
+          return res.status(400).json({
+            success: false,
+            message: "Discord client ID not configured",
+          });
+        }
+
+        // Calculate the permissions needed by the bot
+        // Using the Discord permission calculator values:
+        // - View Channels: 1024
+        // - Send Messages: 2048
+        // - Manage Webhooks: 536870912
+        // - Read Message History: 65536
+        // Summing these gives the permission integer: 536939520
+        const permissions = 536939520;
+
+        // Create the OAuth URL with the necessary scopes (bot and applications.commands)
+        const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientIdSetting.value}&permissions=${permissions}&scope=bot%20applications.commands`;
+
+        res.json({
+          success: true,
+          invite_url: inviteUrl,
+        });
+      } catch (error) {
+        console.error("Error generating Discord bot invite URL:", error);
+        res.status(500).json({
+          success: false,
+          message:
+            "An error occurred while generating the Discord bot invite URL",
+        });
+      }
+    },
+  );
+
+  // Send a message to a specific channel in a Discord server
+  app.post(
+    "/api/discord/bot/send-channel-message",
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.isAuthenticated()) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+
+        const { guildId, channelId, message } = req.body;
+
+        if (!guildId || !channelId || !message) {
+          return res.status(400).json({
+            success: false,
+            message: "Server ID, channel ID, and message content are required",
+          });
+        }
+
+        const result = await sendMessageToChannel(guildId, channelId, message);
+
+        if (result.success) {
+          // Log the activity
+          await storage.createActivityLog({
+            userId: req.user?.id,
+            action: "send_channel_message",
+            resourceType: "discord_channel",
+            resourceId: channelId,
+            details: {
+              guildId,
+              channelId,
+              messageContent:
+                message.substring(0, 100) + (message.length > 100 ? "..." : ""), // Log a truncated version
+            },
+          });
+
+          res.json(result);
+        } else {
+          res.status(400).json(result);
+        }
+      } catch (error) {
+        console.error("Error sending message to Discord channel:", error);
+        res.status(500).json({
+          success: false,
+          message: "An error occurred while sending message to Discord channel",
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    },
+  );
+
+  // Get available channels in a server where webhooks can be created
+  app.get(
+    "/api/discord/bot/server/:serverId/channels",
+    async (req: Request, res: Response) => {
+      try {
+        const { serverId } = req.params;
+
+        if (!client || !client.isReady()) {
+          return res.status(400).json({
+            success: false,
+            message: "Discord bot is not connected",
+          });
+        }
+
+        // Try to fetch the guild
+        const guild = client.guilds.cache.get(serverId);
+        if (!guild) {
+          return res.status(404).json({
+            success: false,
+            message: "Server not found or bot does not have access",
+          });
+        }
+
+        // Check if the bot has permissions to manage webhooks in this guild
+        if (
+          !guild.members.me ||
+          !guild.members.me.permissions.has("ManageWebhooks")
+        ) {
+          return res.status(403).json({
+            success: false,
+            message:
+              "Bot does not have permission to manage webhooks in this server",
+          });
+        }
+
+        // Get all text channels where webhooks can be created
+        // Filter for only text channels where the bot has VIEW_CHANNEL permission
+        const channels = guild.channels.cache
+          .filter(
+            (channel) =>
+              channel.type === 0 && // 0 is GUILD_TEXT
+              guild.members.me &&
+              channel
+                .permissionsFor(guild.members.me)
+                ?.has(["ViewChannel", "ManageWebhooks"]),
+          )
+          .map((channel) => ({
+            id: channel.id,
+            name: channel.name,
+            type: "text",
+          }));
+
+        res.json({
+          success: true,
+          serverId: guild.id,
+          serverName: guild.name,
+          channels,
+        });
+      } catch (error) {
+        console.error("Error getting server channels:", error);
+        res.status(500).json({
+          success: false,
+          message: "An error occurred while fetching server channels",
+        });
+      }
+    },
+  );
+
   // Create a new webhook in a server channel
   app.post("/api/discord/bot/webhook", async (req: Request, res: Response) => {
     try {
       const { serverId, channelId, name, avatarUrl } = req.body;
-      
+
       // Validate required fields
       if (!serverId || !channelId || !name) {
         return res.status(400).json({
           success: false,
-          message: 'Server ID, channel ID, and webhook name are required'
+          message: "Server ID, channel ID, and webhook name are required",
         });
       }
-      
+
       if (!client || !client.isReady()) {
         return res.status(400).json({
           success: false,
-          message: 'Discord bot is not connected'
+          message: "Discord bot is not connected",
         });
       }
-      
+
       // Try to fetch the guild
       const guild = client.guilds.cache.get(serverId);
       if (!guild) {
         return res.status(404).json({
           success: false,
-          message: 'Server not found or bot does not have access'
+          message: "Server not found or bot does not have access",
         });
       }
-      
+
       // Try to fetch the channel
       const channel = guild.channels.cache.get(channelId);
-      if (!channel || channel.type !== 0) { // 0 is GUILD_TEXT
+      if (!channel || channel.type !== 0) {
+        // 0 is GUILD_TEXT
         return res.status(404).json({
           success: false,
-          message: 'Channel not found or not a text channel'
+          message: "Channel not found or not a text channel",
         });
       }
-      
+
       // Check if the bot has permissions to manage webhooks in this channel
-      if (!guild.members.me || !channel.permissionsFor(guild.members.me)?.has('ManageWebhooks')) {
+      if (
+        !guild.members.me ||
+        !channel.permissionsFor(guild.members.me)?.has("ManageWebhooks")
+      ) {
         return res.status(403).json({
           success: false,
-          message: 'Bot does not have permission to manage webhooks in this channel'
+          message:
+            "Bot does not have permission to manage webhooks in this channel",
         });
       }
-      
+
       // Create the webhook
       const webhook = await (channel as any).createWebhook({
         name,
-        avatar: avatarUrl // Optional, will use default if not provided
+        avatar: avatarUrl, // Optional, will use default if not provided
       });
-      
+
       res.status(201).json({
         success: true,
         webhook: {
@@ -2878,15 +3221,15 @@ export function setupDiscordBotRoutes(app: Express) {
           channelId: webhook.channelId,
           channelName: channel.name,
           guildId: guild.id,
-          guildName: guild.name
-        }
+          guildName: guild.name,
+        },
       });
     } catch (error) {
-      console.error('Error creating webhook:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: 'An error occurred while creating the webhook',
-        error: error instanceof Error ? error.message : 'Unknown error'
+      console.error("Error creating webhook:", error);
+      res.status(500).json({
+        success: false,
+        message: "An error occurred while creating the webhook",
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   });
@@ -2898,46 +3241,52 @@ export function setupDiscordBotRoutes(app: Express) {
 export function setupArticleReceiveEndpoint(app: Express) {
   app.post("/api/discord/articles", async (req: Request, res: Response) => {
     try {
-      const { title, description, content, author, featured = false } = req.body;
-      
+      const {
+        title,
+        description,
+        content,
+        author,
+        featured = false,
+      } = req.body;
+
       // Validate required fields
       if (!title || !content) {
         return res.status(400).json({
           success: false,
-          message: 'Title and content are required'
+          message: "Title and content are required",
         });
       }
-      
+
       // Create article data - map to fields in our system
       // Note: These field names map to Airtable fields through the website
       const articleData: InsertArticle = {
-        title,                    // Maps to Airtable's "Name" field
-        description: description || '',   // Maps to Airtable's "Description" field
-        content,                  // Maps to Airtable's "Body" field
-        author: author || 'Discord User', // Maps to Airtable's "Author" field
-        featured: featured ? 'yes' : 'no', // Maps to Airtable's "Featured" field (as string)
-        status: 'draft',          // Article status in our system
-        imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder
-        imageType: 'url',         // Specifies that we're using a URL, not a file
-        contentFormat: 'plaintext', // Format of the content
-        source: 'discord',        // Identifies the article as coming from Discord
+        title, // Maps to Airtable's "Name" field
+        description: description || "", // Maps to Airtable's "Description" field
+        content, // Maps to Airtable's "Body" field
+        author: author || "Discord User", // Maps to Airtable's "Author" field
+        featured: featured ? "yes" : "no", // Maps to Airtable's "Featured" field (as string)
+        status: "draft", // Article status in our system
+        imageUrl: "https://placehold.co/600x400?text=No+Image", // Default placeholder
+        imageType: "url", // Specifies that we're using a URL, not a file
+        contentFormat: "plaintext", // Format of the content
+        source: "discord", // Identifies the article as coming from Discord
         externalId: `discord-api-${Date.now()}`, // Unique ID for tracking
       };
-      
+
       // Create the article through our website's storage system
       // This doesn't directly modify Airtable - that sync happens through the website
       const article = await storage.createArticle(articleData);
-      
+
       res.status(201).json({
         success: true,
-        message: 'Article created successfully in the website database',
-        article
+        message: "Article created successfully in the website database",
+        article,
       });
     } catch (error) {
-      console.error('Error creating article from Discord API:', error);
+      console.error("Error creating article from Discord API:", error);
       res.status(500).json({
         success: false,
-        message: 'An error occurred while creating the article'
+        message: "An error occurred while creating the article",
       });
     }
   });
@@ -2947,56 +3296,69 @@ export function setupArticleReceiveEndpoint(app: Express) {
  * Helper function to create a type-safe message collector
  * Used by both /insta and /web commands to collect image messages
  */
-async function collectImageMessage(channel: any, filter: (m: any) => boolean, timeoutMs: number = 300000): Promise<any | null> {
-  console.log('==== collectImageMessage STARTED ====');
-  console.log('Waiting for message with attachment, timeout:', timeoutMs, 'ms');
-  
+async function collectImageMessage(
+  channel: any,
+  filter: (m: any) => boolean,
+  timeoutMs: number = 300000,
+): Promise<any | null> {
+  console.log("==== collectImageMessage STARTED ====");
+  console.log("Waiting for message with attachment, timeout:", timeoutMs, "ms");
+
   // Create a collector that will listen for messages meeting the filter criteria
   const collector = channel.createMessageCollector({
     filter,
     max: 1,
-    time: timeoutMs
+    time: timeoutMs,
   });
-  
+
   // Return a promise that resolves when a message is collected or timeout occurs
-  return new Promise<any | null>(resolve => {
-    collector.on('collect', (message: any) => {
-      console.log('Message collected from user:', message.author.tag);
-      console.log('Message has attachments:', message.attachments.size);
-      
+  return new Promise<any | null>((resolve) => {
+    collector.on("collect", (message: any) => {
+      console.log("Message collected from user:", message.author.tag);
+      console.log("Message has attachments:", message.attachments.size);
+
       if (message.attachments.size > 0) {
         const attachment = message.attachments.first();
-        console.log('Attachment details:', {
+        console.log("Attachment details:", {
           name: attachment.name,
-          contentType: attachment.contentType || 'unknown',
+          contentType: attachment.contentType || "unknown",
           size: attachment.size,
-          url: attachment.url
+          url: attachment.url,
         });
-        
+
         // Special logging for text files to help debug issues
-        if (attachment.name && attachment.name.toLowerCase().endsWith('.txt')) {
-          console.log('TXT FILE DETECTED - will use special handling during processing');
-          
+        if (attachment.name && attachment.name.toLowerCase().endsWith(".txt")) {
+          console.log(
+            "TXT FILE DETECTED - will use special handling during processing",
+          );
+
           // Extra validation to ensure the attachment URL is accessible
           if (!attachment.url) {
-            console.error('ERROR: Missing attachment URL for text file!');
+            console.error("ERROR: Missing attachment URL for text file!");
           }
         }
       } else {
-        console.warn('Warning: Message has no attachments but passed the filter');
+        console.warn(
+          "Warning: Message has no attachments but passed the filter",
+        );
       }
-      
+
       resolve(message);
       collector.stop();
     });
-    
-    collector.on('end', (collected: any) => {
-      console.log('Message collector ended. Collected messages:', collected.size);
+
+    collector.on("end", (collected: any) => {
+      console.log(
+        "Message collector ended. Collected messages:",
+        collected.size,
+      );
       if (collected.size === 0) {
-        console.log('No messages collected within timeout period, returning null');
+        console.log(
+          "No messages collected within timeout period, returning null",
+        );
         resolve(null);
       }
-      console.log('==== collectImageMessage ENDED ====');
+      console.log("==== collectImageMessage ENDED ====");
     });
   });
 }
@@ -3015,331 +3377,418 @@ async function collectImageMessage(channel: any, filter: (m: any) => boolean, ti
  * @returns Status of the operation with a message
  */
 async function processContentFile(
-  attachment: { url: string; contentType?: string; name?: string; size: number },
-  articleId: number
+  attachment: {
+    url: string;
+    contentType?: string;
+    name?: string;
+    size: number;
+  },
+  articleId: number,
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
-    console.log('==== processContentFile STARTED ====');
-    console.log('Attachment details:', {
+    console.log("==== processContentFile STARTED ====");
+    console.log("Attachment details:", {
       name: attachment.name,
       contentType: attachment.contentType,
       url: attachment.url,
-      size: attachment.size
+      size: attachment.size,
     });
-    console.log('Processing for article ID:', articleId);
-    
+    console.log("Processing for article ID:", articleId);
+
     // Validate the attachment is an HTML, RTF, or TXT file
-    const validContentTypes = ['text/html', 'text/rtf', 'application/rtf', 'text/plain'];
-    const validExtensions = ['.html', '.rtf', '.txt'];
-    
+    const validContentTypes = [
+      "text/html",
+      "text/rtf",
+      "application/rtf",
+      "text/plain",
+    ];
+    const validExtensions = [".html", ".rtf", ".txt"];
+
     // Check if content type is valid or filename has valid extension
-    const hasValidContentType = attachment.contentType && validContentTypes.includes(attachment.contentType);
-    const hasValidExtension = validExtensions.some(ext => attachment.name.toLowerCase().endsWith(ext));
-    
-    console.log('Validation results:', {
+    const hasValidContentType =
+      attachment.contentType &&
+      validContentTypes.includes(attachment.contentType);
+    const hasValidExtension = validExtensions.some((ext) =>
+      attachment.name.toLowerCase().endsWith(ext),
+    );
+
+    console.log("Validation results:", {
       hasValidContentType,
       hasValidExtension,
-      contentType: attachment.contentType || 'unknown'
+      contentType: attachment.contentType || "unknown",
     });
-    
+
     if (!hasValidContentType && !hasValidExtension) {
-      console.log('Invalid file type rejected');
+      console.log("Invalid file type rejected");
       return {
         success: false,
-        message: `Invalid file type. Please upload an HTML, RTF, or TXT file. Received: ${attachment.contentType || 'unknown'} with filename ${attachment.name}`
+        message: `Invalid file type. Please upload an HTML, RTF, or TXT file. Received: ${attachment.contentType || "unknown"} with filename ${attachment.name}`,
       };
     }
-    
+
     // Get the article from storage
     const article = await storage.getArticle(articleId);
-    
+
     if (!article) {
       console.error(`Article ID ${articleId} not found in database.`);
       return {
         success: false,
-        message: `Article with ID ${articleId} not found.`
+        message: `Article with ID ${articleId} not found.`,
       };
     }
-    
-    console.log(`Processing content file for article: "${article.title}" (ID: ${articleId}), file: ${attachment.name}`);
-    
+
+    console.log(
+      `Processing content file for article: "${article.title}" (ID: ${articleId}), file: ${attachment.name}`,
+    );
+
     // STEP 1: Download the file content from Discord's CDN
-    console.log('STEP 1: Downloading file from Discord CDN:', attachment.url);
-    
+    console.log("STEP 1: Downloading file from Discord CDN:", attachment.url);
+
     let fileContent = "";
-    
+
     try {
       const response = await fetch(attachment.url);
-      
+
       if (!response.ok) {
-        console.error('Failed to download file from Discord, status:', response.status);
+        console.error(
+          "Failed to download file from Discord, status:",
+          response.status,
+        );
         return {
           success: false,
-          message: `Failed to download file from Discord. Status: ${response.status}`
+          message: `Failed to download file from Discord. Status: ${response.status}`,
         };
       }
-      
-      console.log('Response headers:', {
-        contentType: response.headers.get('content-type'),
-        contentLength: response.headers.get('content-length')
+
+      console.log("Response headers:", {
+        contentType: response.headers.get("content-type"),
+        contentLength: response.headers.get("content-length"),
       });
-      
+
       // Get raw file content as ArrayBuffer for better handling of binary data
       const buffer = await response.arrayBuffer();
-      
+
       if (!buffer || buffer.byteLength === 0) {
-        console.error('Downloaded buffer is empty!');
+        console.error("Downloaded buffer is empty!");
         return {
           success: false,
-          message: 'Downloaded file appears to be empty. Please check the file and try again.'
+          message:
+            "Downloaded file appears to be empty. Please check the file and try again.",
         };
       }
-      
-      console.log('Downloaded file as buffer, size:', buffer.byteLength, 'bytes');
-      
+
+      console.log(
+        "Downloaded file as buffer, size:",
+        buffer.byteLength,
+        "bytes",
+      );
+
       // Convert buffer to text
-      const decoder = new TextDecoder('utf-8');
+      const decoder = new TextDecoder("utf-8");
       fileContent = decoder.decode(buffer);
-      
+
       if (!fileContent || fileContent.length === 0) {
-        console.error('Decoded text content is empty!');
+        console.error("Decoded text content is empty!");
         return {
           success: false,
-          message: 'File content is empty after decoding. Please try a different file.'
+          message:
+            "File content is empty after decoding. Please try a different file.",
         };
       }
-      
-      console.log('Successfully decoded to text, content length:', fileContent.length, 'characters');
-      console.log('Content preview:', fileContent.substring(0, 100).replace(/\n/g, '\\n'));
-      
+
+      console.log(
+        "Successfully decoded to text, content length:",
+        fileContent.length,
+        "characters",
+      );
+      console.log(
+        "Content preview:",
+        fileContent.substring(0, 100).replace(/\n/g, "\\n"),
+      );
     } catch (error) {
-      console.error('Error downloading file from Discord:', error);
+      console.error("Error downloading file from Discord:", error);
       return {
         success: false,
-        message: `Error fetching file: ${error instanceof Error ? error.message : 'Unknown download error'}`
+        message: `Error fetching file: ${error instanceof Error ? error.message : "Unknown download error"}`,
       };
     }
-    
+
     // STEP 2: Determine the content format based on file extension
-    console.log('STEP 2: Determining content format');
-    
-    let contentFormat = 'plaintext'; // Default format
-    
+    console.log("STEP 2: Determining content format");
+
+    let contentFormat = "plaintext"; // Default format
+
     // Set content format based on file extension
-    if (attachment.name.toLowerCase().endsWith('.html') || attachment.contentType === 'text/html') {
-      contentFormat = 'html';
-      console.log('Detected HTML format');
-    } else if (attachment.name.toLowerCase().endsWith('.rtf') || 
-               attachment.contentType === 'text/rtf' || 
-               attachment.contentType === 'application/rtf') {
-      contentFormat = 'rtf';
-      console.log('Detected RTF format');
-    } else if (attachment.name.toLowerCase().endsWith('.txt') || 
-               attachment.contentType === 'text/plain') {
-      contentFormat = 'plaintext';
-      console.log('Detected plaintext format');
-      
+    if (
+      attachment.name.toLowerCase().endsWith(".html") ||
+      attachment.contentType === "text/html"
+    ) {
+      contentFormat = "html";
+      console.log("Detected HTML format");
+    } else if (
+      attachment.name.toLowerCase().endsWith(".rtf") ||
+      attachment.contentType === "text/rtf" ||
+      attachment.contentType === "application/rtf"
+    ) {
+      contentFormat = "rtf";
+      console.log("Detected RTF format");
+    } else if (
+      attachment.name.toLowerCase().endsWith(".txt") ||
+      attachment.contentType === "text/plain"
+    ) {
+      contentFormat = "plaintext";
+      console.log("Detected plaintext format");
+
       // Check for potential truncation issues
       if (fileContent.length < 10 && attachment.size > 100) {
-        console.warn('WARNING: Content appears truncated! Attachment size vs. content length mismatch.');
+        console.warn(
+          "WARNING: Content appears truncated! Attachment size vs. content length mismatch.",
+        );
       }
     }
-    
+
     console.log(`Content will be saved with format '${contentFormat}'`);
-    
+
     // STEP 3: Update the article content in database
-    console.log('STEP 3: Updating article in database');
-    
+    console.log("STEP 3: Updating article in database");
+
     // Create the update data object
     const updateData: Partial<Article> = {
       content: fileContent,
-      contentFormat: contentFormat
+      contentFormat: contentFormat,
     };
-    
+
     // Special handling for .txt files to ensure they're always marked as plaintext
-    if (attachment.name.toLowerCase().endsWith('.txt')) {
+    if (attachment.name.toLowerCase().endsWith(".txt")) {
       console.log('TXT file detected - forcing contentFormat to "plaintext"');
-      updateData.contentFormat = 'plaintext';
+      updateData.contentFormat = "plaintext";
     }
-    
+
     // Update the article
-    console.log('Updating article with new content...');
+    console.log("Updating article with new content...");
     const updatedArticle = await storage.updateArticle(articleId, updateData);
-    
+
     if (!updatedArticle) {
-      console.error('Failed to update article content in database');
+      console.error("Failed to update article content in database");
       return {
         success: false,
-        message: 'Failed to update article with the new content. Database error.'
+        message:
+          "Failed to update article with the new content. Database error.",
       };
     }
-    
-    console.log('Article successfully updated:',  {
+
+    console.log("Article successfully updated:", {
       id: updatedArticle.id,
       title: updatedArticle.title,
       contentFormat: updatedArticle.contentFormat,
-      contentLength: updatedArticle.content?.length || 0
+      contentLength: updatedArticle.content?.length || 0,
     });
-    
+
     // STEP 4: For Airtable articles, sync content to Airtable
-    if (article.source === 'airtable' && article.externalId) {
-      console.log('STEP 4: Syncing content to Airtable');
-      
+    if (article.source === "airtable" && article.externalId) {
+      console.log("STEP 4: Syncing content to Airtable");
+
       try {
         // Get Airtable settings
-        const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-        const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-        const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-        
-        if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value && 
-            apiKeySetting.enabled && baseIdSetting.enabled && tableNameSetting.enabled) {
-          
+        const apiKeySetting = await storage.getIntegrationSettingByKey(
+          "airtable",
+          "api_key",
+        );
+        const baseIdSetting = await storage.getIntegrationSettingByKey(
+          "airtable",
+          "base_id",
+        );
+        const tableNameSetting = await storage.getIntegrationSettingByKey(
+          "airtable",
+          "articles_table",
+        );
+
+        if (
+          apiKeySetting?.value &&
+          baseIdSetting?.value &&
+          tableNameSetting?.value &&
+          apiKeySetting.enabled &&
+          baseIdSetting.enabled &&
+          tableNameSetting.enabled
+        ) {
           const apiKey = apiKeySetting.value;
           const baseId = baseIdSetting.value;
           const tableName = tableNameSetting.value;
-          
-          console.log(`Syncing content to Airtable record: ${article.externalId}`);
-          
+
+          console.log(
+            `Syncing content to Airtable record: ${article.externalId}`,
+          );
+
           // Update just the Body field in Airtable
-          const airtableResponse = await fetch(`https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json'
+          const airtableResponse = await fetch(
+            `https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`,
+            {
+              method: "PATCH",
+              headers: {
+                Authorization: `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fields: {
+                  Body: fileContent,
+                  _updatedTime: new Date().toISOString(),
+                },
+              }),
             },
-            body: JSON.stringify({
-              fields: {
-                Body: fileContent,
-                _updatedTime: new Date().toISOString()
-              }
-            })
-          });
-          
+          );
+
           if (!airtableResponse.ok) {
             const errorText = await airtableResponse.text();
-            console.error('Error syncing to Airtable:', errorText);
+            console.error("Error syncing to Airtable:", errorText);
           } else {
-            console.log('Successfully synced content to Airtable');
+            console.log("Successfully synced content to Airtable");
           }
         } else {
-          console.log('Airtable settings unavailable or disabled, skipping sync');
+          console.log(
+            "Airtable settings unavailable or disabled, skipping sync",
+          );
         }
       } catch (error) {
-        console.error('Error syncing content to Airtable:', error);
+        console.error("Error syncing content to Airtable:", error);
         // Don't fail the whole operation if Airtable sync fails
       }
     }
-    
-    console.log('==== processContentFile COMPLETED SUCCESSFULLY ====');
-    
+
+    console.log("==== processContentFile COMPLETED SUCCESSFULLY ====");
+
     return {
       success: true,
       message: `Content from ${attachment.name} successfully uploaded and set as the article content.`,
-      content: fileContent
+      content: fileContent,
     };
   } catch (error) {
-    console.error('==== processContentFile ERROR ====', error);
+    console.error("==== processContentFile ERROR ====", error);
     return {
       success: false,
-      message: `Error processing content file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      message: `Error processing content file: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   }
 }
 
 async function processDiscordAttachment(
-  attachment: { url: string; contentType?: string; name?: string; size: number },
+  attachment: {
+    url: string;
+    contentType?: string;
+    name?: string;
+    size: number;
+  },
   articleId: number,
-  fieldName: 'MainImage' | 'instaPhoto'
+  fieldName: "MainImage" | "instaPhoto",
 ): Promise<{ success: boolean; message: string; url?: string }> {
   try {
     // Validate the attachment is an image
-    const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!attachment.contentType || !validImageTypes.includes(attachment.contentType)) {
+    const validImageTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+    ];
+    if (
+      !attachment.contentType ||
+      !validImageTypes.includes(attachment.contentType)
+    ) {
       return {
         success: false,
-        message: 'Invalid file type. Please upload a JPEG, PNG, GIF or WebP image.'
+        message:
+          "Invalid file type. Please upload a JPEG, PNG, GIF or WebP image.",
       };
     }
-    
+
     // Check file size - Discord limit is 25MB but we'll limit to 10MB
     if (attachment.size > 10 * 1024 * 1024) {
       return {
         success: false,
-        message: 'Image file is too large. Maximum allowed size is 10MB.'
+        message: "Image file is too large. Maximum allowed size is 10MB.",
       };
     }
-    
+
     // Get the article
     const article = await storage.getArticle(articleId);
     if (!article) {
-      console.error(`Article with ID ${articleId} not found in processDiscordAttachment.`);
+      console.error(
+        `Article with ID ${articleId} not found in processDiscordAttachment.`,
+      );
       return {
         success: false,
-        message: `Article with ID ${articleId} not found.`
+        message: `Article with ID ${articleId} not found.`,
       };
     }
-    
-    console.log(`Processing Discord attachment for article ID ${articleId}, title "${article.title}", field ${fieldName}`);
-    
+
+    console.log(
+      `Processing Discord attachment for article ID ${articleId}, title "${article.title}", field ${fieldName}`,
+    );
+
     // Upload directly to Imgur using the URL from Discord
     const imgurResult = await uploadImageUrlToImgBB(
       attachment.url,
-      attachment.name || `discord_upload_${Date.now()}.jpg`
+      attachment.name || `discord_upload_${Date.now()}.jpg`,
     );
-    
+
     if (!imgurResult) {
       return {
         success: false,
-        message: 'Failed to upload image to ImgBB.'
+        message: "Failed to upload image to ImgBB.",
       };
     }
-    
+
     // For Airtable articles, upload to Airtable as well
     let airtableResult = null;
-    if (article.source === 'airtable' && article.externalId) {
+    if (article.source === "airtable" && article.externalId) {
       airtableResult = await uploadImageUrlToAirtable(
         imgurResult.url,
         article.externalId,
         fieldName,
-        attachment.name || `discord_upload_${Date.now()}.jpg`
+        attachment.name || `discord_upload_${Date.now()}.jpg`,
       );
-      
+
       if (!airtableResult) {
         return {
           success: true,
           message: `Image uploaded to ImgBB (${imgurResult.url}) but failed to attach to Airtable record. The article will be updated with the ImgBB URL.`,
-          url: imgurResult.url
+          url: imgurResult.url,
         };
       }
     }
-    
+
     // Update the article in our database
     const updateData: Partial<Article> = {};
-    
-    if (fieldName === 'MainImage') {
+
+    if (fieldName === "MainImage") {
       updateData.imageUrl = imgurResult.url;
-      console.log(`Updating article ${articleId} with MainImage URL: ${imgurResult.url}`);
-    } else if (fieldName === 'instaPhoto') {
+      console.log(
+        `Updating article ${articleId} with MainImage URL: ${imgurResult.url}`,
+      );
+    } else if (fieldName === "instaPhoto") {
       updateData.instagramImageUrl = imgurResult.url;
-      console.log(`Updating article ${articleId} with Instagram image URL: ${imgurResult.url}`);
+      console.log(
+        `Updating article ${articleId} with Instagram image URL: ${imgurResult.url}`,
+      );
     }
-    
+
     // Update the article
     const updatedArticle = await storage.updateArticle(articleId, updateData);
-    console.log('Article update result:', updatedArticle ? 'Success' : 'Failed');
-    
+    console.log(
+      "Article update result:",
+      updatedArticle ? "Success" : "Failed",
+    );
+
     return {
       success: true,
-      message: airtableResult 
-        ? `Image uploaded successfully to ImgBB and Airtable for field ${fieldName}.` 
+      message: airtableResult
+        ? `Image uploaded successfully to ImgBB and Airtable for field ${fieldName}.`
         : `Image uploaded successfully to ImgBB for field ${fieldName}.`,
-      url: imgurResult.url
+      url: imgurResult.url,
     };
   } catch (error) {
-    console.error('Error processing Discord attachment:', error);
+    console.error("Error processing Discord attachment:", error);
     return {
       success: false,
-      message: `Error processing image: ${error instanceof Error ? error.message : 'Unknown error'}`
+      message: `Error processing image: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   }
 }
@@ -3350,45 +3799,50 @@ async function processDiscordAttachment(
  */
 async function handleInstaImageCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
-  
+
   try {
     // Create a select menu for article selection
     const articles = await storage.getArticles();
-    const unpublishedArticles = articles.filter(article => 
-      article.status !== 'published'
+    const unpublishedArticles = articles.filter(
+      (article) => article.status !== "published",
     );
-    
+
     if (unpublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.');
+      await interaction.editReply(
+        "No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.",
+      );
       return;
     }
-    
+
     // Create a select menu for article selection
     const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('select_article_for_insta_image')
-      .setPlaceholder('Select an article to add Instagram image')
+      .setCustomId("select_article_for_insta_image")
+      .setPlaceholder("Select an article to add Instagram image")
       .addOptions(
-        unpublishedArticles.slice(0, 25).map(article => ({
+        unpublishedArticles.slice(0, 25).map((article) => ({
           label: article.title.substring(0, 100), // Max 100 chars for option label
           description: `Status: ${article.status} | ID: ${article.id}`,
-          value: article.id.toString()
-        }))
+          value: article.id.toString(),
+        })),
       );
-    
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(selectMenu);
-    
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      selectMenu,
+    );
+
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to upload an Instagram image to.',
-      components: [row]
+      content: "Please select an article to upload an Instagram image to.",
+      components: [row],
     });
-    
+
     // We'll handle the selection in the handleStringSelectMenuInteraction function
     // which will check for the 'select_article_for_insta_image' custom ID
   } catch (error) {
-    console.error('Error handling Instagram image command:', error);
-    await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
+    console.error("Error handling Instagram image command:", error);
+    await interaction.editReply(
+      "Sorry, there was an error preparing the image upload. Please try again later.",
+    );
   }
 }
 
@@ -3398,45 +3852,50 @@ async function handleInstaImageCommand(interaction: any) {
  */
 async function handleWebImageCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
-  
+
   try {
     // Create a select menu for article selection
     const articles = await storage.getArticles();
-    const unpublishedArticles = articles.filter(article => 
-      article.status !== 'published'
+    const unpublishedArticles = articles.filter(
+      (article) => article.status !== "published",
     );
-    
+
     if (unpublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.');
+      await interaction.editReply(
+        "No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.",
+      );
       return;
     }
-    
+
     // Create a select menu for article selection
     const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('select_article_for_web_image')
-      .setPlaceholder('Select an article to add web image')
+      .setCustomId("select_article_for_web_image")
+      .setPlaceholder("Select an article to add web image")
       .addOptions(
-        unpublishedArticles.slice(0, 25).map(article => ({
+        unpublishedArticles.slice(0, 25).map((article) => ({
           label: article.title.substring(0, 100), // Max 100 chars for option label
           description: `Status: ${article.status} | ID: ${article.id}`,
-          value: article.id.toString()
-        }))
+          value: article.id.toString(),
+        })),
       );
-    
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(selectMenu);
-    
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      selectMenu,
+    );
+
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to upload a web (main) image to.',
-      components: [row]
+      content: "Please select an article to upload a web (main) image to.",
+      components: [row],
     });
-    
+
     // We'll handle the selection in the handleStringSelectMenuInteraction function
     // which will check for the 'select_article_for_web_image' custom ID
   } catch (error) {
-    console.error('Error handling web image command:', error);
-    await interaction.editReply('Sorry, there was an error preparing the image upload. Please try again later.');
+    console.error("Error handling web image command:", error);
+    await interaction.editReply(
+      "Sorry, there was an error preparing the image upload. Please try again later.",
+    );
   }
 }
 
@@ -3448,40 +3907,43 @@ async function handleWebRequestCommand(interaction: any) {
   try {
     // Create a modal for admin request submission
     const modal = new ModalBuilder()
-      .setCustomId('admin_request_modal')
-      .setTitle('Submit Administrative Request');
-    
+      .setCustomId("admin_request_modal")
+      .setTitle("Submit Administrative Request");
+
     // Add input fields for the form
     const titleInput = new TextInputBuilder()
-      .setCustomId('title')
-      .setLabel('Title')
+      .setCustomId("title")
+      .setLabel("Title")
       .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Enter a title for your request')
+      .setPlaceholder("Enter a title for your request")
       .setRequired(true)
       .setMaxLength(100);
-      
+
     const descriptionInput = new TextInputBuilder()
-      .setCustomId('description')
-      .setLabel('Description')
+      .setCustomId("description")
+      .setLabel("Description")
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Describe your request in detail')
+      .setPlaceholder("Describe your request in detail")
       .setRequired(true)
       .setMaxLength(1000);
-      
+
     // Create action rows for the inputs
-    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
-    const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
-    
+    const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(
+      titleInput,
+    );
+    const descriptionRow =
+      new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
+
     // Create select components for category and urgency in the follow-up message
     modal.addComponents(titleRow, descriptionRow);
-    
+
     // Show the modal to the user
     await interaction.showModal(modal);
   } catch (error) {
-    console.error('Error showing admin request modal:', error);
-    await interaction.reply({ 
-      content: 'Sorry, there was an error creating the request form.', 
-      ephemeral: true 
+    console.error("Error showing admin request modal:", error);
+    await interaction.reply({
+      content: "Sorry, there was an error creating the request form.",
+      ephemeral: true,
     });
   }
 }
@@ -3489,67 +3951,94 @@ async function handleWebRequestCommand(interaction: any) {
 /**
  * Handle the admin request modal submission
  */
-async function handleAdminRequestModalSubmit(interaction: ModalSubmitInteraction) {
+async function handleAdminRequestModalSubmit(
+  interaction: ModalSubmitInteraction,
+) {
   try {
     // Defer the reply to give us time to process and to show follow-up components
     await interaction.deferReply({ ephemeral: true });
-    
+
     // Get submitted values from the modal
-    const title = interaction.fields.getTextInputValue('title');
-    const description = interaction.fields.getTextInputValue('description');
-    
+    const title = interaction.fields.getTextInputValue("title");
+    const description = interaction.fields.getTextInputValue("description");
+
     // Get user information
     const userId = interaction.user.id;
     const userName = interaction.user.tag;
-    
+
     // Create select menus for category and urgency
     const categorySelect = new StringSelectMenuBuilder()
-      .setCustomId('admin_request_category')
-      .setPlaceholder('Select a category')
+      .setCustomId("admin_request_category")
+      .setPlaceholder("Select a category")
       .addOptions([
-        { label: 'Pinkytoe', value: 'pinkytoe', description: 'Related to Pinkytoe platform' },
-        { label: 'PISCOC', value: 'piscoc', description: 'Related to PISCOC services' },
-        { label: 'Misc', value: 'misc', description: 'Other miscellaneous requests' }
+        {
+          label: "Pinkytoe",
+          value: "pinkytoe",
+          description: "Related to Pinkytoe platform",
+        },
+        {
+          label: "PISCOC",
+          value: "piscoc",
+          description: "Related to PISCOC services",
+        },
+        {
+          label: "Misc",
+          value: "misc",
+          description: "Other miscellaneous requests",
+        },
       ]);
-    
+
     const urgencySelect = new StringSelectMenuBuilder()
-      .setCustomId('admin_request_urgency')
-      .setPlaceholder('Select urgency level')
+      .setCustomId("admin_request_urgency")
+      .setPlaceholder("Select urgency level")
       .addOptions([
-        { label: 'Low', value: 'low', description: 'Not time-sensitive' },
-        { label: 'Medium', value: 'medium', description: 'Normal priority' },
-        { label: 'High', value: 'high', description: 'Important request' },
-        { label: 'Critical', value: 'critical', description: 'Requires immediate attention' }
+        { label: "Low", value: "low", description: "Not time-sensitive" },
+        { label: "Medium", value: "medium", description: "Normal priority" },
+        { label: "High", value: "high", description: "Important request" },
+        {
+          label: "Critical",
+          value: "critical",
+          description: "Requires immediate attention",
+        },
       ]);
-    
+
     // Create action rows for the select menus
-    const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect);
-    const urgencyRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(urgencySelect);
-    
+    const categoryRow =
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        categorySelect,
+      );
+    const urgencyRow =
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        urgencySelect,
+      );
+
     // Store the title and description in a temporary response to use later
     // We'll store this in a global map using the interaction ID
     adminRequestsInProgress.set(interaction.user.id, {
       title,
       description,
       userId,
-      userName
+      userName,
     });
-    
+
     // Send the response with the select menus
     await interaction.editReply({
-      content: 'Please complete your request by selecting a category and urgency level:',
-      components: [categoryRow, urgencyRow]
+      content:
+        "Please complete your request by selecting a category and urgency level:",
+      components: [categoryRow, urgencyRow],
     });
   } catch (error) {
-    console.error('Error handling admin request modal submission:', error);
+    console.error("Error handling admin request modal submission:", error);
     if (interaction.deferred) {
       await interaction.editReply({
-        content: 'There was an error processing your request. Please try again.',
+        content:
+          "There was an error processing your request. Please try again.",
       });
     } else {
       await interaction.reply({
-        content: 'There was an error processing your request. Please try again.',
-        ephemeral: true
+        content:
+          "There was an error processing your request. Please try again.",
+        ephemeral: true,
       });
     }
   }
@@ -3560,153 +4049,187 @@ async function handleAdminRequestModalSubmit(interaction: ModalSubmitInteraction
  * This function is called when both category and urgency have been selected
  */
 async function finalizeAdminRequest(
-  interaction: MessageComponentInteraction, 
+  interaction: MessageComponentInteraction,
   userId: string,
   category?: string,
-  urgency?: string
+  urgency?: string,
 ) {
   try {
     // Defer the reply update to give us time to process
     await interaction.deferUpdate();
-    
+
     // Get the in-progress request data
     const requestData = adminRequestsInProgress.get(userId);
-    
+
     if (!requestData) {
       await interaction.editReply({
-        content: 'Your request session has expired. Please submit a new request using the /webreq command.',
-        components: []
+        content:
+          "Your request session has expired. Please submit a new request using the /webreq command.",
+        components: [],
       });
       return;
     }
-    
+
     // If we have both category and urgency, create the admin request
     if (category && urgency && requestData.category && requestData.urgency) {
       // Both were already set, this is a duplicate selection
       await interaction.editReply({
-        content: 'You have already selected both category and urgency. Your request is being processed.',
-        components: []
+        content:
+          "You have already selected both category and urgency. Your request is being processed.",
+        components: [],
       });
       return;
     }
-    
+
     // Update the request data with the new selection
     if (category) {
       requestData.category = category;
     }
-    
+
     if (urgency) {
       requestData.urgency = urgency;
     }
-    
+
     // Update the stored data
     adminRequestsInProgress.set(userId, requestData);
-    
+
     // If we still don't have both selections, prompt for the missing one
     if (!requestData.category || !requestData.urgency) {
       let components = [];
-      
+
       if (!requestData.category) {
         const categorySelect = new StringSelectMenuBuilder()
-          .setCustomId('admin_request_category')
-          .setPlaceholder('Select a category')
+          .setCustomId("admin_request_category")
+          .setPlaceholder("Select a category")
           .addOptions([
-            { label: 'Pinkytoe', value: 'pinkytoe', description: 'Related to Pinkytoe platform' },
-            { label: 'PISCOC', value: 'piscoc', description: 'Related to PISCOC services' },
-            { label: 'Misc', value: 'misc', description: 'Other miscellaneous requests' }
+            {
+              label: "Pinkytoe",
+              value: "pinkytoe",
+              description: "Related to Pinkytoe platform",
+            },
+            {
+              label: "PISCOC",
+              value: "piscoc",
+              description: "Related to PISCOC services",
+            },
+            {
+              label: "Misc",
+              value: "misc",
+              description: "Other miscellaneous requests",
+            },
           ]);
-        
-        const categoryRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(categorySelect);
+
+        const categoryRow =
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            categorySelect,
+          );
         components.push(categoryRow);
       }
-      
+
       if (!requestData.urgency) {
         const urgencySelect = new StringSelectMenuBuilder()
-          .setCustomId('admin_request_urgency')
-          .setPlaceholder('Select urgency level')
+          .setCustomId("admin_request_urgency")
+          .setPlaceholder("Select urgency level")
           .addOptions([
-            { label: 'Low', value: 'low', description: 'Not time-sensitive' },
-            { label: 'Medium', value: 'medium', description: 'Normal priority' },
-            { label: 'High', value: 'high', description: 'Important request' },
-            { label: 'Critical', value: 'critical', description: 'Requires immediate attention' }
+            { label: "Low", value: "low", description: "Not time-sensitive" },
+            {
+              label: "Medium",
+              value: "medium",
+              description: "Normal priority",
+            },
+            { label: "High", value: "high", description: "Important request" },
+            {
+              label: "Critical",
+              value: "critical",
+              description: "Requires immediate attention",
+            },
           ]);
-        
-        const urgencyRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(urgencySelect);
+
+        const urgencyRow =
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            urgencySelect,
+          );
         components.push(urgencyRow);
       }
-      
+
       // Prompt for the missing selection
       await interaction.editReply({
-        content: `Please complete your request by selecting the remaining options:${requestData.category ? '' : '\n• Category'}${requestData.urgency ? '' : '\n• Urgency level'}`,
-        components: components
+        content: `Please complete your request by selecting the remaining options:${requestData.category ? "" : "\n• Category"}${requestData.urgency ? "" : "\n• Urgency level"}`,
+        components: components,
       });
       return;
     }
-    
+
     // We have both selections, so create the admin request
     const { title, description, userName } = requestData;
     const categoryValue = requestData.category;
     const urgencyValue = requestData.urgency;
-    
+
     // Format the category and urgency for display
-    const categoryDisplay = categoryValue.charAt(0).toUpperCase() + categoryValue.slice(1);
-    const urgencyDisplay = urgencyValue.charAt(0).toUpperCase() + urgencyValue.slice(1);
-    
+    const categoryDisplay =
+      categoryValue.charAt(0).toUpperCase() + categoryValue.slice(1);
+    const urgencyDisplay =
+      urgencyValue.charAt(0).toUpperCase() + urgencyValue.slice(1);
+
     // Create the admin request in the database
     const adminRequest = await storage.createAdminRequest({
       title,
       description,
       category: categoryValue,
       urgency: urgencyValue,
-      status: 'open',
-      createdBy: 'discord',
+      status: "open",
+      createdBy: "discord",
       discordUserId: userId,
-      discordUserName: userName
+      discordUserName: userName,
     });
-    
+
     // Create an embed with request details for the response
     const embed = new EmbedBuilder()
-      .setTitle('Admin Request Submitted')
-      .setDescription(`Your request has been submitted successfully with ID #${adminRequest.id}`)
+      .setTitle("Admin Request Submitted")
+      .setDescription(
+        `Your request has been submitted successfully with ID #${adminRequest.id}`,
+      )
       .addFields(
-        { name: 'Title', value: title },
-        { name: 'Category', value: categoryDisplay, inline: true },
-        { name: 'Urgency', value: urgencyDisplay, inline: true },
-        { name: 'Status', value: 'Open', inline: true }
+        { name: "Title", value: title },
+        { name: "Category", value: categoryDisplay, inline: true },
+        { name: "Urgency", value: urgencyDisplay, inline: true },
+        { name: "Status", value: "Open", inline: true },
       )
       .setColor(getUrgencyColor(urgencyValue))
       .setFooter({
-        text: `Submitted by ${userName} • ${new Date().toLocaleString()}`
+        text: `Submitted by ${userName} • ${new Date().toLocaleString()}`,
       });
-    
+
     // Log the activity
     await storage.createActivityLog({
       userId: null,
-      action: 'create',
-      resourceType: 'admin_request',
+      action: "create",
+      resourceType: "admin_request",
       resourceId: adminRequest.id.toString(),
       details: {
         title,
         category: categoryValue,
         urgency: urgencyValue,
-        discordUser: userName
-      }
+        discordUser: userName,
+      },
     });
-    
+
     // Clear the stored data
     adminRequestsInProgress.delete(userId);
-    
+
     // Send the response
     await interaction.editReply({
       embeds: [embed],
-      content: 'Your request has been submitted and will be reviewed by an administrator.',
-      components: []
+      content:
+        "Your request has been submitted and will be reviewed by an administrator.",
+      components: [],
     });
   } catch (error) {
-    console.error('Error handling admin request finalization:', error);
+    console.error("Error handling admin request finalization:", error);
     await interaction.editReply({
-      content: 'There was an error submitting your request. Please try again or contact an administrator.',
-      components: []
+      content:
+        "There was an error submitting your request. Please try again or contact an administrator.",
+      components: [],
     });
   }
 }
@@ -3716,13 +4239,13 @@ async function finalizeAdminRequest(
  */
 function getUrgencyColor(urgency: string): number {
   switch (urgency) {
-    case 'low':
+    case "low":
       return 0x3498db; // Blue
-    case 'medium':
+    case "medium":
       return 0xf39c12; // Orange
-    case 'high':
+    case "high":
       return 0xe74c3c; // Red
-    case 'critical':
+    case "critical":
       return 0x9b59b6; // Purple
     default:
       return 0x95a5a6; // Gray
@@ -3736,45 +4259,51 @@ function getUrgencyColor(urgency: string): number {
  */
 async function handleContentUploadCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
-  
+
   try {
     // Create a select menu for article selection
     const articles = await storage.getArticles();
-    const unpublishedArticles = articles.filter(article => 
-      article.status !== 'published'
+    const unpublishedArticles = articles.filter(
+      (article) => article.status !== "published",
     );
-    
+
     if (unpublishedArticles.length === 0) {
-      await interaction.editReply('No unpublished articles found to upload content to. Create a new article using `/create_article` or use the website to create draft articles first.');
+      await interaction.editReply(
+        "No unpublished articles found to upload content to. Create a new article using `/create_article` or use the website to create draft articles first.",
+      );
       return;
     }
-    
+
     // Create a select menu for article selection
     const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('select_article_for_content_upload')
-      .setPlaceholder('Select an article to upload content')
+      .setCustomId("select_article_for_content_upload")
+      .setPlaceholder("Select an article to upload content")
       .addOptions(
-        unpublishedArticles.slice(0, 25).map(article => ({
+        unpublishedArticles.slice(0, 25).map((article) => ({
           label: article.title.substring(0, 100), // Max 100 chars for option label
           description: `Status: ${article.status} | ID: ${article.id}`,
-          value: article.id.toString()
-        }))
+          value: article.id.toString(),
+        })),
       );
-    
-    const row = new ActionRowBuilder<StringSelectMenuBuilder>()
-      .addComponents(selectMenu);
-    
+
+    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      selectMenu,
+    );
+
     // Show the selection menu to the user
     await interaction.editReply({
-      content: 'Please select an article to upload HTML, RTF, or plain text (.txt) content to. After selecting, you will be prompted to upload the file.',
-      components: [row]
+      content:
+        "Please select an article to upload HTML, RTF, or plain text (.txt) content to. After selecting, you will be prompted to upload the file.",
+      components: [row],
     });
-    
+
     // We'll handle the selection in the handleStringSelectMenuInteraction function
     // which will check for the 'select_article_for_content_upload' custom ID
   } catch (error) {
-    console.error('Error handling content upload command:', error);
-    await interaction.editReply('Sorry, there was an error preparing the content upload. Please try again later.');
+    console.error("Error handling content upload command:", error);
+    await interaction.editReply(
+      "Sorry, there was an error preparing the content upload. Please try again later.",
+    );
   }
 }
 
@@ -3789,234 +4318,278 @@ async function handleContentUploadCommand(interaction: any) {
  */
 async function processZipFile(
   attachment: { url: string; contentType?: string; name: string; size: number },
-  articleId: number
+  articleId: number,
 ): Promise<{ success: boolean; message: string; content?: string }> {
   try {
-    console.log('==== processZipFile STARTED ====');
-    console.log('Attachment details:', {
+    console.log("==== processZipFile STARTED ====");
+    console.log("Attachment details:", {
       name: attachment.name,
       contentType: attachment.contentType,
       url: attachment.url,
-      size: attachment.size
+      size: attachment.size,
     });
-    console.log('Processing for article ID:', articleId);
-    
+    console.log("Processing for article ID:", articleId);
+
     // Validate the attachment is a ZIP file
-    if (!attachment.name.toLowerCase().endsWith('.zip')) {
+    if (!attachment.name.toLowerCase().endsWith(".zip")) {
       return {
         success: false,
-        message: `Invalid file type. Please upload a ZIP file. Received file: ${attachment.name}`
+        message: `Invalid file type. Please upload a ZIP file. Received file: ${attachment.name}`,
       };
     }
-    
+
     // Get the article from storage
     const article = await storage.getArticle(articleId);
-    
+
     if (!article) {
       console.error(`Article ID ${articleId} not found in database.`);
       return {
         success: false,
-        message: `Article with ID ${articleId} not found.`
+        message: `Article with ID ${articleId} not found.`,
       };
     }
-    
-    console.log(`Processing zip file for article: "${article.title}" (ID: ${articleId}), file: ${attachment.name}`);
-    
+
+    console.log(
+      `Processing zip file for article: "${article.title}" (ID: ${articleId}), file: ${attachment.name}`,
+    );
+
     // STEP 1: Download the ZIP file from Discord's CDN
-    console.log('STEP 1: Downloading ZIP file from Discord CDN:', attachment.url);
-    
+    console.log(
+      "STEP 1: Downloading ZIP file from Discord CDN:",
+      attachment.url,
+    );
+
     try {
       const response = await fetch(attachment.url);
-      
+
       if (!response.ok) {
-        console.error('Failed to download file from Discord, status:', response.status);
+        console.error(
+          "Failed to download file from Discord, status:",
+          response.status,
+        );
         return {
           success: false,
-          message: `Failed to download ZIP file from Discord. Status: ${response.status}`
+          message: `Failed to download ZIP file from Discord. Status: ${response.status}`,
         };
       }
-      
+
       // Get ZIP file content as ArrayBuffer
       const buffer = await response.arrayBuffer();
-      
+
       if (!buffer || buffer.byteLength === 0) {
-        console.error('Downloaded ZIP buffer is empty!');
+        console.error("Downloaded ZIP buffer is empty!");
         return {
           success: false,
-          message: 'Downloaded ZIP file appears to be empty. Please check the file and try again.'
+          message:
+            "Downloaded ZIP file appears to be empty. Please check the file and try again.",
         };
       }
-      
-      console.log('Downloaded ZIP file, size:', buffer.byteLength, 'bytes');
-      
+
+      console.log("Downloaded ZIP file, size:", buffer.byteLength, "bytes");
+
       // STEP 2: Create a temporary directory to extract the ZIP
-      const tempDir = path.join(process.cwd(), 'temp', `article_${articleId}_${Date.now()}`);
-      console.log('STEP 2: Creating temporary directory:', tempDir);
-      
+      const tempDir = path.join(
+        process.cwd(),
+        "temp",
+        `article_${articleId}_${Date.now()}`,
+      );
+      console.log("STEP 2: Creating temporary directory:", tempDir);
+
       // Create the directory
       await fs.ensureDir(tempDir);
-      
+
       // STEP 3: Create a temporary file for the ZIP content
-      const zipPath = path.join(tempDir, 'content.zip');
-      console.log('STEP 3: Creating temporary ZIP file:', zipPath);
-      
+      const zipPath = path.join(tempDir, "content.zip");
+      console.log("STEP 3: Creating temporary ZIP file:", zipPath);
+
       // Write the ZIP content to a file
       await fs.writeFile(zipPath, Buffer.from(buffer));
-      
+
       // STEP 4: Extract the ZIP file
-      console.log('STEP 4: Extracting ZIP file to temporary directory');
+      console.log("STEP 4: Extracting ZIP file to temporary directory");
       await extract(zipPath, { dir: tempDir });
-      
+
       // STEP 5: Look for HTML files, prioritizing index.html
-      console.log('STEP 5: Looking for HTML files in extracted content');
+      console.log("STEP 5: Looking for HTML files in extracted content");
       const files = await fs.readdir(tempDir);
-      
-      let mainHtmlFile = '';
-      let htmlContent = '';
-      
+
+      let mainHtmlFile = "";
+      let htmlContent = "";
+
       // First, look for index.html
-      if (files.includes('index.html')) {
-        mainHtmlFile = 'index.html';
-        htmlContent = await fs.readFile(path.join(tempDir, mainHtmlFile), 'utf8');
-      } 
+      if (files.includes("index.html")) {
+        mainHtmlFile = "index.html";
+        htmlContent = await fs.readFile(
+          path.join(tempDir, mainHtmlFile),
+          "utf8",
+        );
+      }
       // If no index.html, look for any HTML file
       else {
-        const htmlFiles = files.filter(file => file.endsWith('.html') || file.endsWith('.htm'));
-        
+        const htmlFiles = files.filter(
+          (file) => file.endsWith(".html") || file.endsWith(".htm"),
+        );
+
         if (htmlFiles.length > 0) {
           mainHtmlFile = htmlFiles[0];
-          htmlContent = await fs.readFile(path.join(tempDir, mainHtmlFile), 'utf8');
+          htmlContent = await fs.readFile(
+            path.join(tempDir, mainHtmlFile),
+            "utf8",
+          );
         }
       }
-      
+
       // If no HTML file found
       if (!htmlContent) {
-        console.error('No HTML file found in ZIP');
-        
+        console.error("No HTML file found in ZIP");
+
         // Cleanup
         try {
           await fs.remove(tempDir);
-          console.log('Cleaned up temporary directory');
+          console.log("Cleaned up temporary directory");
         } catch (cleanupError) {
-          console.error('Error cleaning up:', cleanupError);
+          console.error("Error cleaning up:", cleanupError);
         }
-        
+
         return {
           success: false,
-          message: 'No HTML file found in the ZIP. Please ensure your ZIP contains an index.html file or at least one HTML file.'
+          message:
+            "No HTML file found in the ZIP. Please ensure your ZIP contains an index.html file or at least one HTML file.",
         };
       }
-      
-      console.log(`Found HTML file: ${mainHtmlFile}, content length: ${htmlContent.length} characters`);
-      
+
+      console.log(
+        `Found HTML file: ${mainHtmlFile}, content length: ${htmlContent.length} characters`,
+      );
+
       // STEP 6: Update the article with the HTML content
-      console.log('STEP 6: Updating article with HTML content');
-      
+      console.log("STEP 6: Updating article with HTML content");
+
       const updateData: Partial<Article> = {
         content: htmlContent,
-        contentFormat: 'html'
+        contentFormat: "html",
       };
-      
+
       // Update the article
       const updatedArticle = await storage.updateArticle(articleId, updateData);
-      
+
       if (!updatedArticle) {
-        console.error('Failed to update article with HTML content');
-        
+        console.error("Failed to update article with HTML content");
+
         // Cleanup
         try {
           await fs.remove(tempDir);
-          console.log('Cleaned up temporary directory');
+          console.log("Cleaned up temporary directory");
         } catch (cleanupError) {
-          console.error('Error cleaning up:', cleanupError);
+          console.error("Error cleaning up:", cleanupError);
         }
-        
+
         return {
           success: false,
-          message: 'Failed to update article with the HTML content. Database error.'
+          message:
+            "Failed to update article with the HTML content. Database error.",
         };
       }
-      
-      console.log('Article successfully updated with HTML content');
-      
+
+      console.log("Article successfully updated with HTML content");
+
       // STEP 7: Sync to Airtable if needed
-      if (article.source === 'airtable' && article.externalId) {
-        console.log('STEP 7: Syncing HTML content to Airtable');
-        
+      if (article.source === "airtable" && article.externalId) {
+        console.log("STEP 7: Syncing HTML content to Airtable");
+
         try {
           // Get Airtable settings
-          const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-          const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-          const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-          
-          if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value && 
-              apiKeySetting.enabled && baseIdSetting.enabled && tableNameSetting.enabled) {
-            
+          const apiKeySetting = await storage.getIntegrationSettingByKey(
+            "airtable",
+            "api_key",
+          );
+          const baseIdSetting = await storage.getIntegrationSettingByKey(
+            "airtable",
+            "base_id",
+          );
+          const tableNameSetting = await storage.getIntegrationSettingByKey(
+            "airtable",
+            "articles_table",
+          );
+
+          if (
+            apiKeySetting?.value &&
+            baseIdSetting?.value &&
+            tableNameSetting?.value &&
+            apiKeySetting.enabled &&
+            baseIdSetting.enabled &&
+            tableNameSetting.enabled
+          ) {
             const apiKey = apiKeySetting.value;
             const baseId = baseIdSetting.value;
             const tableName = tableNameSetting.value;
-            
-            console.log(`Syncing HTML content to Airtable record: ${article.externalId}`);
-            
+
+            console.log(
+              `Syncing HTML content to Airtable record: ${article.externalId}`,
+            );
+
             // Update just the Body field in Airtable
-            const airtableResponse = await fetch(`https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
+            const airtableResponse = await fetch(
+              `https://api.airtable.com/v0/${baseId}/${tableName}/${article.externalId}`,
+              {
+                method: "PATCH",
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  fields: {
+                    Body: htmlContent,
+                    _updatedTime: new Date().toISOString(),
+                  },
+                }),
               },
-              body: JSON.stringify({
-                fields: {
-                  Body: htmlContent,
-                  _updatedTime: new Date().toISOString()
-                }
-              })
-            });
-            
+            );
+
             if (!airtableResponse.ok) {
               const errorText = await airtableResponse.text();
-              console.error('Error syncing to Airtable:', errorText);
+              console.error("Error syncing to Airtable:", errorText);
             } else {
-              console.log('Successfully synced HTML content to Airtable');
+              console.log("Successfully synced HTML content to Airtable");
             }
           } else {
-            console.log('Airtable settings unavailable or disabled, skipping sync');
+            console.log(
+              "Airtable settings unavailable or disabled, skipping sync",
+            );
           }
         } catch (error) {
-          console.error('Error syncing content to Airtable:', error);
+          console.error("Error syncing content to Airtable:", error);
           // Don't fail the whole operation if Airtable sync fails
         }
       }
-      
+
       // Cleanup
       try {
         await fs.remove(tempDir);
-        console.log('Cleaned up temporary directory');
+        console.log("Cleaned up temporary directory");
       } catch (cleanupError) {
-        console.error('Error cleaning up:', cleanupError);
+        console.error("Error cleaning up:", cleanupError);
       }
-      
-      console.log('==== processZipFile COMPLETED SUCCESSFULLY ====');
-      
+
+      console.log("==== processZipFile COMPLETED SUCCESSFULLY ====");
+
       return {
         success: true,
         message: `HTML content from ${mainHtmlFile} in the ZIP file has been successfully extracted and set as the article content.`,
-        content: htmlContent
+        content: htmlContent,
       };
-      
     } catch (downloadError) {
-      console.error('Error downloading or processing ZIP file:', downloadError);
+      console.error("Error downloading or processing ZIP file:", downloadError);
       return {
         success: false,
-        message: `Error processing ZIP file: ${downloadError instanceof Error ? downloadError.message : 'Unknown download error'}`
+        message: `Error processing ZIP file: ${downloadError instanceof Error ? downloadError.message : "Unknown download error"}`,
       };
     }
-    
   } catch (error) {
-    console.error('==== processZipFile ERROR ====', error);
+    console.error("==== processZipFile ERROR ====", error);
     return {
       success: false,
-      message: `Error processing ZIP file: ${error instanceof Error ? error.message : 'Unknown error'}`
+      message: `Error processing ZIP file: ${error instanceof Error ? error.message : "Unknown error"}`,
     };
   }
 }
@@ -4024,15 +4597,21 @@ async function processZipFile(
 export const autoStartDiscordBot = async () => {
   try {
     // Check if we have the required settings
-    const tokenSetting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-    const clientIdSetting = await storage.getIntegrationSettingByKey('discord', 'bot_client_id');
-    
+    const tokenSetting = await storage.getIntegrationSettingByKey(
+      "discord",
+      "bot_token",
+    );
+    const clientIdSetting = await storage.getIntegrationSettingByKey(
+      "discord",
+      "bot_client_id",
+    );
+
     if (tokenSetting?.enabled && clientIdSetting?.enabled) {
-      console.log('Auto-starting Discord bot...');
+      console.log("Auto-starting Discord bot...");
       await initializeDiscordBot(tokenSetting.value, clientIdSetting.value);
       await startDiscordBot();
     }
   } catch (error) {
-    console.error('Error auto-starting Discord bot:', error);
+    console.error("Error auto-starting Discord bot:", error);
   }
 };
