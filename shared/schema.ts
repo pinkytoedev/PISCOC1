@@ -39,9 +39,9 @@ export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
 export const articles = pgTable("articles", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
-  description: text("description").notNull(),
+  description: text("description"), // Made optional
   excerpt: text("excerpt"),
-  content: text("content").notNull(),
+  content: text("content"), // Made optional
   contentFormat: text("content_format").notNull().default("plaintext"),
   imageUrl: text("image_url").notNull(),
   imageType: text("image_type").notNull().default("url"),
@@ -200,9 +200,9 @@ export const teamSchema = z.object({
 export const articleSchema = z.object({
   id: z.string(),
   title: z.string(),
-  description: z.string(),
+  description: z.string().optional(), // Made optional
   excerpt: z.string().optional(),
-  content: z.string(),
+  content: z.string().optional(), // Made optional
   contentFormat: z.enum(["rtf", "markdown", "plaintext", "html"]).default("plaintext"),
   imageUrl: z.string(),
   imageType: z.enum(["url", "file"]),
