@@ -28,6 +28,21 @@ export function calculateExpirationDate(days: number = 7): Date {
 }
 
 /**
+ * Helper function to get base URL for links
+ * Handles development/production environments
+ * @returns Base URL string appropriate for current environment
+ */
+export function getBaseUrl(): string {
+  // If running in Replit dev environment, use the Replit URL
+  if (process.env.REPLIT_SLUG) {
+    return `https://${process.env.REPLIT_SLUG}.replit.dev`;
+  }
+  
+  // Otherwise use configured BASE_URL or fallback to production URL
+  return process.env.BASE_URL || "http://piscoc.pinkytoepaper.com";
+}
+
+/**
  * Generate unique token with safeguards
  * @param existingTokens Array of existing tokens to check against
  * @param length Length of the token (default: 32)
