@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import FormData from 'form-data';
 import fs from 'fs';
+import path from 'path';
 import { log } from '../vite';
 import { storage } from '../storage';
 import { getInstagramAccountId } from './instagram';
@@ -38,11 +39,16 @@ export async function createInstagramMediaContainerWithDownload(imageUrl: string
     
     const accessToken = tokenSetting.value;
     
-    // Using FormData for multipart/form-data upload
-    const formData = new FormData();
+    // Create a server URL for the locally downloaded file
+    // This creates a URL that Facebook servers can access
+    const serverUrl = `${process.env.SERVER_URL || 'https://' + process.env.REPL_SLUG + '.replit.dev'}/uploads/${path.basename(downloadedImagePath)}`;
+    log(`Using server URL for Instagram API: ${serverUrl}`, 'instagram');
     
-    // Add the image file
-    formData.append('image_url', imageUrl);
+    // Using FormData for multipart/form-data upload
+    const formData = new URLSearchParams();
+    
+    // Add the image URL (now a URL that Facebook servers can access)
+    formData.append('image_url', serverUrl);
     formData.append('caption', caption);
     formData.append('access_token', accessToken);
     
@@ -77,10 +83,9 @@ export async function createInstagramMediaContainerWithDownload(imageUrl: string
     log(`Error creating Instagram media container: ${error}`, 'instagram');
     throw error;
   } finally {
-    // Clean up the downloaded image
-    if (downloadedImagePath) {
-      await cleanupImage(downloadedImagePath);
-    }
+    // For Instagram uploads, we need to keep the image file accessible
+    // until the media is published. We'll clean it up in a scheduled task.
+    log(`Keeping downloaded image for Instagram access: ${downloadedImagePath}`, 'instagram');
   }
 }
 

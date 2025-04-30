@@ -18,7 +18,7 @@ export async function downloadImage(imageUrl: string): Promise<string> {
   try {
     // Generate a unique file name
     const fileExtension = getFileExtension(imageUrl);
-    const fileName = `instagram-${uuidv4()}${fileExtension}`;
+    const fileName = `image-${uuidv4().replace(/-/g, '')}.${fileExtension}`;
     const uploadDir = path.join(process.cwd(), 'uploads');
     const filePath = path.join(uploadDir, fileName);
     
@@ -42,10 +42,10 @@ export async function downloadImage(imageUrl: string): Promise<string> {
     }
     
     // Get image buffer
-    const imageBuffer = await response.buffer();
+    const imageBuffer = await response.arrayBuffer();
     
     // Save image to file
-    await writeFileAsync(filePath, imageBuffer);
+    await writeFileAsync(filePath, Buffer.from(imageBuffer));
     log(`Image downloaded and saved to ${filePath}`, 'instagram');
     
     return filePath;
@@ -76,7 +76,7 @@ export async function cleanupImage(filePath: string): Promise<void> {
  * Gets the file extension from a URL
  * 
  * @param url URL to extract file extension from
- * @returns File extension (including the dot) or .jpg as fallback
+ * @returns File extension (without the dot) or jpg as fallback
  */
 function getFileExtension(url: string): string {
   try {
@@ -86,22 +86,15 @@ function getFileExtension(url: string): string {
     // Extract extension
     const extension = path.extname(urlWithoutQuery).toLowerCase();
     
-    // If extension is valid, return it
+    // If extension is valid, return it (without the dot)
     if (['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(extension)) {
-      return extension;
+      return extension.substring(1);
     }
     
-    // Check if URL ends with known extensions
-    if (url.includes('.jpg') || url.includes('.jpeg')) return '.jpg';
-    if (url.includes('.png')) return '.png';
-    if (url.includes('.gif')) return '.gif';
-    if (url.includes('.webp')) return '.webp';
-    
-    // Default to .jpg if no extension found
-    return '.jpg';
+    // Default to jpg for unknown extensions
+    return 'jpg';
   } catch (error) {
-    // Default to .jpg if there was an error
-    log(`Error getting file extension: ${error}`, 'instagram');
-    return '.jpg';
+    // Default to jpg on error
+    return 'jpg';
   }
 }
