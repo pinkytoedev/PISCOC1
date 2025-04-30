@@ -641,13 +641,7 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       
       embed.setFooter({ text: 'The article will be synced to Airtable through the website' });
       
-      // Create buttons for next actions
-      const uploadContentButton = new ButtonBuilder()
-        .setCustomId(`upload_content_now_${article.id}`)
-        .setLabel('Upload Text File Now')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('📄');
-        
+      // Create button to view article in dashboard
       const viewInDashboardButton = new ButtonBuilder()
         .setLabel('View in Dashboard')
         .setStyle(ButtonStyle.Link)
@@ -655,17 +649,17 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         .setEmoji('🔗');
         
       const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(viewInDashboardButton, uploadContentButton);
+        .addComponents(viewInDashboardButton);
       
       await interaction.editReply({ 
         embeds: [embed],
         components: [buttonRow]
       });
       
-      // Add a success confirmation message
+      // Add a simple success confirmation message
       try {
         await interaction.followUp({
-          content: "Your article has been created successfully. You can upload a text file directly by clicking the 'Upload Text File Now' button above.",
+          content: "Your article has been created successfully!",
           ephemeral: true
         });
       } catch (followUpError) {
