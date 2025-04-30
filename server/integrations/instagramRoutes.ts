@@ -326,6 +326,7 @@ export function setupInstagramRoutes(app: Express) {
       // First try the direct upload method with image download
       log(`Creating Instagram media container with direct upload for image: ${imageUrl}`, 'instagram');
       let containerId: string;
+      let allMethodsFailed = false;
       
       try {
         // Use our enhanced version that downloads and uploads the image directly
@@ -333,8 +334,30 @@ export function setupInstagramRoutes(app: Express) {
       } catch (uploadError) {
         log(`Direct upload failed, falling back to URL method: ${uploadError}`, 'instagram');
         
-        // Fall back to the original method if direct upload fails
-        containerId = await createInstagramMediaContainer(imageUrl, caption || '');
+        try {
+          // Fall back to the original method if direct upload fails
+          containerId = await createInstagramMediaContainer(imageUrl, caption || '');
+        } catch (urlError) {
+          log(`Both direct upload and URL methods failed. Using the default image: ${urlError}`, 'instagram');
+          
+          // Use an image from the public folder as a last resort
+          const defaultImageUrl = `${process.env.SERVER_URL || (process.env.REPL_SLUG ? 
+                                    `https://${process.env.REPL_SLUG}.replit.dev` : 
+                                    'http://localhost:5000')}/assets/images/pink-background.png`;
+          
+          try {
+            // Try with the placeholder image
+            containerId = await createMediaContainerWithDirectUpload(defaultImageUrl, 
+              caption ? `${caption} (Note: Original image could not be processed)` : 'Instagram post');
+            
+            // Let the frontend know we used a placeholder
+            allMethodsFailed = true;
+          } catch (error) {
+            // If even that fails, we're out of options
+            const fallbackError = error as Error;
+            throw new Error(`Failed to create Instagram post: ${fallbackError.message}`);
+          }
+        }
       }
       
       // Then publish it
@@ -358,7 +381,10 @@ export function setupInstagramRoutes(app: Express) {
       res.status(201).json({
         success: true,
         mediaId,
-        message: 'Instagram post created successfully'
+        message: allMethodsFailed 
+          ? 'Instagram post created successfully, but with a placeholder image because the original image could not be processed' 
+          : 'Instagram post created successfully',
+        usedPlaceholder: allMethodsFailed || false
       });
     } catch (error) {
       log(`Error creating Instagram post: ${error}`, 'instagram');

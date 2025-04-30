@@ -121,25 +121,33 @@ export async function createMediaContainerWithDirectUpload(imageUrl: string, cap
     
     const accessToken = tokenSetting.value;
     
-    // Create a proper multipart form data
-    const formData = new FormData();
+    // Create a URL that Instagram/Facebook servers can access
+    // Format the URL with the correct domain based on environment
+    const baseUrl = process.env.SERVER_URL || 
+                   (process.env.REPL_SLUG ? 
+                    `https://${process.env.REPL_SLUG}.replit.dev` : 
+                    'http://localhost:5000');
     
-    // Add the caption and access token
-    formData.append('caption', caption);
-    formData.append('access_token', accessToken);
+    const publicImageUrl = `${baseUrl}/uploads/${path.basename(downloadedImagePath)}`;
+    log(`Using public image URL: ${publicImageUrl}`, 'instagram');
     
-    // Add the image file as actual file data
-    const fileStream = fs.createReadStream(downloadedImagePath);
-    formData.append('image', fileStream);
+    // Use URL-based approach as it's more reliable than direct file upload with FormData
+    const urlParams = new URLSearchParams();
+    urlParams.append('image_url', publicImageUrl);
+    urlParams.append('caption', caption);
+    urlParams.append('access_token', accessToken);
     
-    // Make the API request using the FormData object
-    log(`Uploading image directly to Instagram API with caption: ${caption}`, 'instagram');
+    // Make the API request
+    log(`Creating Instagram media container with image URL: ${publicImageUrl}`, 'instagram');
     
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
       {
         method: 'POST',
-        body: formData as any, // The 'as any' is needed due to type compatibility issues
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: urlParams.toString()
       }
     );
     
@@ -156,14 +164,19 @@ export async function createMediaContainerWithDirectUpload(imageUrl: string, cap
     }
     
     log(`Successfully created Instagram media container with ID: ${data.id}`, 'instagram');
+    
+    // We'll keep the downloaded image file until the container is published
+    // to ensure it remains accessible to Instagram
+    
     return data.id;
   } catch (error) {
     log(`Error creating Instagram media container: ${error}`, 'instagram');
-    throw error;
-  } finally {
-    // Clean up the downloaded image
+    
+    // Clean up the downloaded image if there was an error
     if (downloadedImagePath) {
       await cleanupImage(downloadedImagePath);
     }
+    
+    throw error;
   }
 }
