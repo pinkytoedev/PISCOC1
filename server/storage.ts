@@ -1,18 +1,19 @@
 import { 
   users, teamMembers, articles, carouselQuotes, 
-  imageAssets, integrationSettings, activityLogs, adminRequests
+  imageAssets, integrationSettings, activityLogs, adminRequests,
+  uploadTokens
 } from "@shared/schema";
 import type { 
   User, InsertUser, TeamMember, InsertTeamMember, 
   Article, InsertArticle, CarouselQuote, InsertCarouselQuote, 
   ImageAsset, InsertImageAsset, IntegrationSetting, 
   InsertIntegrationSetting, ActivityLog, InsertActivityLog,
-  AdminRequest, InsertAdminRequest
+  AdminRequest, InsertAdminRequest, UploadToken, InsertUploadToken
 } from "@shared/schema";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lt, gt } from "drizzle-orm";
 import { pgPool } from './db';
 
 const PostgresSessionStore = connectPg(session);
@@ -455,6 +456,91 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(adminRequests)
       .where(eq(adminRequests.urgency, urgency));
+  }
+
+  // Upload token operations
+  async getUploadTokens(): Promise<UploadToken[]> {
+    return await db.select().from(uploadTokens);
+  }
+
+  async getUploadToken(id: number): Promise<UploadToken | undefined> {
+    const [token] = await db.select().from(uploadTokens).where(eq(uploadTokens.id, id));
+    return token;
+  }
+
+  async getUploadTokenByToken(token: string): Promise<UploadToken | undefined> {
+    const [uploadToken] = await db
+      .select()
+      .from(uploadTokens)
+      .where(eq(uploadTokens.token, token));
+    return uploadToken;
+  }
+
+  async getUploadTokensByArticle(articleId: number): Promise<UploadToken[]> {
+    return await db
+      .select()
+      .from(uploadTokens)
+      .where(eq(uploadTokens.articleId, articleId));
+  }
+
+  async createUploadToken(token: InsertUploadToken): Promise<UploadToken> {
+    const [newToken] = await db
+      .insert(uploadTokens)
+      .values({
+        ...token,
+        createdAt: new Date()
+      })
+      .returning();
+    return newToken;
+  }
+
+  async updateUploadToken(id: number, token: Partial<InsertUploadToken>): Promise<UploadToken | undefined> {
+    const [updatedToken] = await db
+      .update(uploadTokens)
+      .set(token)
+      .where(eq(uploadTokens.id, id))
+      .returning();
+    return updatedToken;
+  }
+
+  async incrementUploadTokenUses(id: number): Promise<UploadToken | undefined> {
+    const token = await this.getUploadToken(id);
+    if (!token) return undefined;
+    
+    const [updatedToken] = await db
+      .update(uploadTokens)
+      .set({ 
+        uses: token.uses + 1,
+        active: token.maxUses > 0 ? token.uses + 1 < token.maxUses : true 
+      })
+      .where(eq(uploadTokens.id, id))
+      .returning();
+    
+    return updatedToken;
+  }
+
+  async deleteUploadToken(id: number): Promise<boolean> {
+    const deleted = await db
+      .delete(uploadTokens)
+      .where(eq(uploadTokens.id, id))
+      .returning();
+    return deleted.length > 0;
+  }
+
+  async inactivateExpiredTokens(): Promise<number> {
+    const now = new Date();
+    const result = await db
+      .update(uploadTokens)
+      .set({ active: false })
+      .where(
+        and(
+          eq(uploadTokens.active, true),
+          lt(uploadTokens.expiresAt, now)
+        )
+      )
+      .returning();
+    
+    return result.length;
   }
 }
 
