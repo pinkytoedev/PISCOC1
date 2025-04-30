@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -159,6 +159,9 @@ export type InsertIntegrationSetting = z.infer<typeof insertIntegrationSettingSc
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 
+export type UploadToken = typeof uploadTokens.$inferSelect;
+export type InsertUploadToken = z.infer<typeof insertUploadTokenSchema>;
+
 // Admin requests table
 export const adminRequests = pgTable("admin_requests", {
   id: serial("id").primaryKey(),
@@ -236,4 +239,35 @@ export const adminSchema = z.object({
   password: z.string(),
   isAdmin: z.boolean().default(true),
   lastLogin: z.date().optional(),
+});
+
+// Public upload tokens table
+export const uploadTokens = pgTable("upload_tokens", {
+  id: serial("id").primaryKey(),
+  token: varchar("token", { length: 64 }).notNull().unique(),
+  articleId: integer("article_id").notNull().references(() => articles.id, { onDelete: 'cascade' }),
+  uploadType: varchar("upload_type", { length: 50 }).notNull(), // 'image', 'instagram-image', 'html-zip'
+  createdById: integer("created_by_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  maxUses: integer("max_uses").default(1),
+  uses: integer("uses").default(0),
+  active: boolean("active").default(true),
+  name: varchar("name", { length: 255 }),
+  notes: text("notes"),
+}, (table) => {
+  return {
+    tokenIdx: uniqueIndex('token_idx').on(table.token),
+  }
+});
+
+export const insertUploadTokenSchema = createInsertSchema(uploadTokens).omit({
+  id: true,
+  createdAt: true,
+  uses: true,
+}).extend({
+  expiresAt: z.union([
+    z.string().transform((val) => new Date(val)),
+    z.date()
+  ]),
 });
