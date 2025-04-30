@@ -1082,7 +1082,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
 
       // Confirm selection and provide options
       await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required)\n2. Use the "Upload via Discord" button to upload directly through Discord`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required, opens in new tab, this Discord prompt will remain active)\n2. Use the "Upload via Discord" button to upload directly through Discord\n\n**Note:** If you choose option 1, you can safely dismiss this Discord prompt once you're on the web interface.`,
         components: [buttonRow],
       });
     }
@@ -1206,7 +1206,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
 
       // Confirm selection and provide options
       await interaction.followUp({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading zipped HTML content:\n\n1. Use the "Upload via Browser" button to upload your zip file using a web browser (no login required)\n2. Use the "Upload via Discord" button to upload directly through Discord`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading zipped HTML content:\n\n1. Use the "Upload via Browser" button to upload your zip file using a web browser (no login required, opens in new tab, this Discord prompt will remain active)\n2. Use the "Upload via Discord" button to upload directly through Discord\n\n**Note:** If you choose option 1, you can safely dismiss this Discord prompt once you're on the web interface.`,
         components: [buttonRow],
         ephemeral: true,
       });
@@ -1792,7 +1792,7 @@ async function handleButtonInteraction(
         );
 
         await interaction.editReply({
-          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.`,
+          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface (opens in new tab, this Discord prompt will remain active)\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.\n\n**Note:** If you choose option 2, you can safely dismiss this Discord prompt once you're on the web interface.`,
           components: [buttonRow],
         });
       } catch (error) {
