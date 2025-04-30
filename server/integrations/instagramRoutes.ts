@@ -11,10 +11,10 @@ import {
   testWebhookConnection,
   getInstagramMedia,
   getInstagramMediaById,
+  createInstagramMediaContainer,
+  publishInstagramMedia,
   getInstagramAccountId
 } from './instagram';
-import { createAndPublishPost } from './instagram-publish';
-import { checkInstagramPermissions, resetInstagramConnection } from './instagram-permissions';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -298,44 +298,6 @@ export function setupInstagramRoutes(app: Express) {
     }
   });
   
-  // API route to check Instagram permissions
-  app.get('/api/instagram/permissions', async (req: Request, res: Response) => {
-    try {
-      const permissions = await checkInstagramPermissions();
-      res.status(200).json(permissions);
-    } catch (error) {
-      log(`Error checking Instagram permissions: ${error}`, 'instagram');
-      res.status(500).json({ 
-        error: 'Failed to check Instagram permissions', 
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // API route to reset Instagram connection
-  app.post('/api/instagram/reset', async (req: Request, res: Response) => {
-    try {
-      const result = await resetInstagramConnection();
-      if (result) {
-        res.status(200).json({ 
-          success: true, 
-          message: 'Instagram connection reset successfully. Please reconnect with Facebook.' 
-        });
-      } else {
-        res.status(500).json({ 
-          error: 'Failed to reset connection', 
-          message: 'An error occurred while trying to reset the Instagram connection' 
-        });
-      }
-    } catch (error) {
-      log(`Error resetting Instagram connection: ${error}`, 'instagram');
-      res.status(500).json({ 
-        error: 'Failed to reset Instagram connection', 
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
   // API route to create a new Instagram post
   app.post('/api/instagram/media', async (req: Request, res: Response) => {
     try {
@@ -346,29 +308,6 @@ export function setupInstagramRoutes(app: Express) {
           error: 'Invalid request',
           message: 'Image URL is required',
           code: 'MISSING_IMAGE_URL'
-        });
-      }
-      
-      // Basic validation to filter out non-image URLs
-      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.svg'];
-      const isLikelyImageUrl = 
-        imageExtensions.some(ext => imageUrl.toLowerCase().includes(ext)) || 
-        imageUrl.includes('i.ibb.co') || 
-        imageUrl.includes('imgur') || 
-        imageUrl.includes('cloudinary');
-      
-      // Detect known non-image URLs
-      const isKnownNonImageUrl = 
-        imageUrl.includes('airtable.com') ||
-        imageUrl.includes('notion.so') ||
-        imageUrl.includes('docs.google.com') || 
-        imageUrl.includes('trello.com');
-      
-      if (isKnownNonImageUrl) {
-        return res.status(400).json({
-          error: 'Invalid image URL',
-          message: 'The URL you provided appears to be a link to a document or application, not an image. Please provide a direct link to an image file.',
-          code: 'INVALID_IMAGE_URL'
         });
       }
       
@@ -383,34 +322,32 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
-      // Create and publish Instagram post using our improved method
-      log(`Creating Instagram post with image: ${imageUrl}`, 'instagram');
+      // Two-step process: First create a container
+      log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
+      const containerId = await createInstagramMediaContainer(imageUrl, caption || '');
       
-      // Use the combined method that handles the two-step process automatically
-      const result = await createAndPublishPost(imageUrl, caption || '');
+      // Then publish it
+      log(`Publishing Instagram media container: ${containerId}`, 'instagram');
+      const mediaId = await publishInstagramMedia(containerId);
       
       // Log the activity
       await storage.createActivityLog({
         action: 'instagram_media_created',
         userId: null,
         resourceType: 'instagram_media',
-        resourceId: result.mediaId,
+        resourceId: mediaId,
         details: {
           timestamp: new Date().toISOString(),
-          containerId: result.containerId,
-          mediaId: result.mediaId,
-          usedFallback: result.usedFallback
+          containerId,
+          mediaId
         }
       });
       
       // Return the result
       res.status(201).json({
         success: true,
-        mediaId: result.mediaId,
-        message: result.usedFallback 
-          ? 'Instagram post created successfully, but with a placeholder image because the original image could not be processed' 
-          : 'Instagram post created successfully',
-        usedPlaceholder: result.usedFallback
+        mediaId,
+        message: 'Instagram post created successfully'
       });
     } catch (error) {
       log(`Error creating Instagram post: ${error}`, 'instagram');
