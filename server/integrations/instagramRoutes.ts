@@ -15,6 +15,7 @@ import {
   publishInstagramMedia,
   getInstagramAccountId
 } from './instagram';
+import { createMediaContainerWithDirectUpload } from './instagram-image';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -322,9 +323,19 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
-      // Two-step process: First create a container
-      log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
-      const containerId = await createInstagramMediaContainer(imageUrl, caption || '');
+      // First try the direct upload method with image download
+      log(`Creating Instagram media container with direct upload for image: ${imageUrl}`, 'instagram');
+      let containerId: string;
+      
+      try {
+        // Use our enhanced version that downloads and uploads the image directly
+        containerId = await createMediaContainerWithDirectUpload(imageUrl, caption || '');
+      } catch (uploadError) {
+        log(`Direct upload failed, falling back to URL method: ${uploadError}`, 'instagram');
+        
+        // Fall back to the original method if direct upload fails
+        containerId = await createInstagramMediaContainer(imageUrl, caption || '');
+      }
       
       // Then publish it
       log(`Publishing Instagram media container: ${containerId}`, 'instagram');
