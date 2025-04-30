@@ -31,7 +31,7 @@ export default function ArticlesPage() {
   const [sortBy, setSortBy] = useState<string>(sortParam || "newest");
   const [highlightedArticleId, setHighlightedArticleId] = useState<number | null>(null);
   
-  // Parse article ID from URL if present (for Discord bot links)
+  // Parse article ID from URL if present
   useEffect(() => {
     if (articleIdParam) {
       const parsedId = parseInt(articleIdParam, 10);
@@ -43,10 +43,19 @@ export default function ArticlesPage() {
           setHighlightedArticleId(null);
         }, 10000);
         
+        // Auto-open the view modal if article ID is specified in the URL
+        if (articles) {
+          const article = articles.find(a => a.id === parsedId);
+          if (article) {
+            setViewArticle(article);
+            setIsViewModalOpen(true);
+          }
+        }
+        
         return () => clearTimeout(timer);
       }
     }
-  }, [articleIdParam]);
+  }, [articleIdParam, articles]);
   
   // Check for action=create in URL and open create modal
   useEffect(() => {
