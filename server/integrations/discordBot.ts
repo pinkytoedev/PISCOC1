@@ -235,57 +235,42 @@ async function handleCreateArticleCommand(interaction: any) {
       .setCustomId('description')
       .setLabel('Description')  // Maps to Airtable's "Description" field
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter a brief description')
-      .setRequired(true)
+      .setPlaceholder('Enter a brief description (optional)')
+      .setRequired(false)
       .setMaxLength(500);
     
     const bodyInput = new TextInputBuilder()
       .setCustomId('body')
       .setLabel('Body')  // Maps to Airtable's "Body" field
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Enter the article content')
-      .setRequired(true)
-      .setMaxLength(4000);
-    
-    // For author, we'll use a text input initially, but we'll display a selection dropdown after showing the modal
-    const authorInput = new TextInputBuilder()
-      .setCustomId('author')
-      .setLabel('Author')  // Maps to Airtable's "Author" field
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Choose from team members in the follow-up prompt')
-      .setRequired(true)
-      .setMaxLength(100);
-    
-    const featuredInput = new TextInputBuilder()
-      .setCustomId('featured')
-      .setLabel('Featured (yes/no)')  // Maps to Airtable's "Featured" field
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder('Type "yes" to mark as featured')
+      .setPlaceholder('Enter the article content (optional)')
       .setRequired(false)
-      .setMaxLength(3);
+      .setMaxLength(4000);
+      
+    const scheduledInput = new TextInputBuilder()
+      .setCustomId('scheduled')
+      .setLabel('Scheduled Date (YYYY-MM-DD HH:MM)')  // Maps to Airtable's "Scheduled" field
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder('e.g., 2025-05-15 14:30 (optional)')
+      .setRequired(false)
+      .setMaxLength(20);
     
     // Create action rows (each input needs its own row)
     const titleRow = new ActionRowBuilder<TextInputBuilder>().addComponents(titleInput);
     const descriptionRow = new ActionRowBuilder<TextInputBuilder>().addComponents(descriptionInput);
     const bodyRow = new ActionRowBuilder<TextInputBuilder>().addComponents(bodyInput);
-    const authorRow = new ActionRowBuilder<TextInputBuilder>().addComponents(authorInput);
-    const featuredRow = new ActionRowBuilder<TextInputBuilder>().addComponents(featuredInput);
+    const scheduledRow = new ActionRowBuilder<TextInputBuilder>().addComponents(scheduledInput);
     
     // Add inputs to the modal
-    modal.addComponents(titleRow, descriptionRow, bodyRow, authorRow, featuredRow);
+    modal.addComponents(titleRow, descriptionRow, bodyRow, scheduledRow);
     
     // Show the modal with info about field mapping
     await interaction.showModal(modal);
     
-    // Add a follow-up message about Airtable mapping and author selection
+    // Add a follow-up message about Airtable mapping
     try {
-      // Get author selection menu
-      const authorSelect = await createAuthorSelectMenu();
-      const authorRow = new ActionRowBuilder().addComponents(authorSelect);
-      
       await interaction.followUp({
-        content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.\n\nThe fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Author → Author, Featured → Featured",
-        components: [authorRow],
+        content: "**Important:** The fields in this form map to Airtable fields: Title → Name, Description → Description, Body → Body, Scheduled Date → Scheduled. Articles will be created with default values for author and featured fields. The Description and Body fields are optional.",
         ephemeral: true
       });
     } catch (error) {
@@ -410,13 +395,7 @@ async function handleWritersCommand(interaction: any) {
       return;
     }
     
-    // Show options to the user
-    const editButton = new ButtonBuilder()
-      .setCustomId('writers_edit')
-      .setLabel('Edit Article')
-      .setStyle(ButtonStyle.Primary)
-      .setEmoji('✏️');
-    
+    // Show only the upload option to the user
     const uploadButton = new ButtonBuilder()
       .setCustomId('writers_upload_zip')
       .setLabel('Upload Zipped HTML')
@@ -424,11 +403,11 @@ async function handleWritersCommand(interaction: any) {
       .setEmoji('📁');
     
     const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-      .addComponents(editButton, uploadButton);
+      .addComponents(uploadButton);
     
     // Show the selection menu to the user
     await interaction.editReply({
-      content: '**Writer Tools**\n\nChoose an option:\n• **Edit Article** - Edit an article\'s content directly through Discord\n• **Upload Zipped HTML** - Upload a zipped HTML file containing your article content',
+      content: '**Writer Tools**\n\nChoose an option:\n• **Upload Zipped HTML** - Upload a zipped HTML file containing your article content',
       components: [buttonRow]
     });
     
@@ -566,11 +545,51 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
       
       // Get form input values
       const title = interaction.fields.getTextInputValue('title');
-      const description = interaction.fields.getTextInputValue('description');
-      const body = interaction.fields.getTextInputValue('body');
-      const author = interaction.fields.getTextInputValue('author');
-      const featuredInput = interaction.fields.getTextInputValue('featured').toLowerCase();
-      const featured = featuredInput === 'yes' || featuredInput === 'y' || featuredInput === 'true';
+      const description = interaction.fields.getTextInputValue('description') || '';
+      const body = interaction.fields.getTextInputValue('body') || '';
+      
+      // Try to get scheduled date, validate and parse it
+      let scheduledDate: Date | null = null;
+      try {
+        const scheduledInput = interaction.fields.getTextInputValue('scheduled');
+        if (scheduledInput && scheduledInput.trim()) {
+          // Try to parse the date - expects format YYYY-MM-DD HH:MM
+          const dateMatch = scheduledInput.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?$/);
+          if (dateMatch) {
+            const year = parseInt(dateMatch[1], 10);
+            const month = parseInt(dateMatch[2], 10) - 1; // Month is 0-indexed in JS Date
+            const day = parseInt(dateMatch[3], 10);
+            const hour = dateMatch[4] ? parseInt(dateMatch[4], 10) : 0;
+            const minute = dateMatch[5] ? parseInt(dateMatch[5], 10) : 0;
+            
+            scheduledDate = new Date(year, month, day, hour, minute);
+            
+            // Validate the date is in the future
+            if (scheduledDate <= new Date()) {
+              await interaction.followUp({
+                content: "⚠️ Warning: The scheduled date must be in the future. The article was created but scheduling was ignored.",
+                ephemeral: true
+              });
+              scheduledDate = null;
+            }
+          } else {
+            await interaction.followUp({
+              content: "⚠️ Warning: Invalid date format. Expected YYYY-MM-DD HH:MM. The article was created but scheduling was ignored.",
+              ephemeral: true
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing scheduled date:', error);
+        await interaction.followUp({
+          content: "⚠️ Warning: There was an error processing the scheduled date. The article was created but scheduling was ignored.",
+          ephemeral: true
+        });
+      }
+      
+      // Set default values for removed fields
+      const author = "Unknown"; // Default author 
+      const featured = false;   // Default to not featured
       
       // Create article data - map to fields in our system
       // Note: These field names are later mapped to Airtable's fields by the website,
@@ -579,14 +598,15 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         title,                    // Maps to Airtable's "Name" field
         description,              // Maps to Airtable's "Description" field
         content: body,            // Maps to Airtable's "Body" field
-        author,                   // Maps to Airtable's "Author" field
-        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field
+        author,                   // Maps to Airtable's "Author" field - using default
+        featured: featured ? 'yes' : 'no',  // Maps to Airtable's "Featured" field - using default
         status: 'draft',          // Article status in our system
         imageUrl: 'https://placehold.co/600x400?text=No+Image', // Default placeholder image
         imageType: 'url',
         contentFormat: 'plaintext',
         source: 'discord',        // Identifies the article as coming from Discord
         externalId: `discord-${interaction.user.id}-${Date.now()}`,
+        Scheduled: scheduledDate ? scheduledDate.toISOString() : undefined // Add the scheduled date if it exists
       };
       
       // Create the article via our API - Discord bot only modifies our website's data
@@ -603,8 +623,23 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
           { name: 'Author', value: author },
           { name: 'Status', value: 'Draft' },
           { name: 'Featured', value: featured ? 'Yes' : 'No' }
-        )
-        .setFooter({ text: 'The article will be synced to Airtable through the website' });
+        );
+        
+      // Add scheduled publish date if it exists
+      if (scheduledDate) {
+        embed.addFields({ 
+          name: 'Scheduled Publish Date', 
+          value: scheduledDate.toLocaleString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        });
+      }
+      
+      embed.setFooter({ text: 'The article will be synced to Airtable through the website' });
       
       // Create buttons for next actions
       const uploadContentButton = new ButtonBuilder()
@@ -627,19 +662,14 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         components: [buttonRow]
       });
       
-      // Add author selection menu after successful article creation
+      // Add a success confirmation message
       try {
-        // Get author selection menu
-        const authorSelect = await createAuthorSelectMenu();
-        const authorRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(authorSelect);
-        
         await interaction.followUp({
-          content: "**Important:** Please select an author from the team members dropdown below. This will properly link to Airtable's reference field.\n\nAlso, you can now upload a text file directly by clicking the 'Upload Text File Now' button above.",
-          components: [authorRow],
+          content: "Your article has been created successfully. You can upload a text file directly by clicking the 'Upload Text File Now' button above.",
           ephemeral: true
         });
       } catch (followUpError) {
-        console.error("Couldn't send author selection menu:", followUpError);
+        console.error("Couldn't send follow-up message:", followUpError);
       }
     }
     // Handle article editing (check if customId starts with edit_article_modal_)
