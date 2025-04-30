@@ -114,6 +114,9 @@ async function createContainerWithImageUpload(
       contentType: 'image/jpeg', // Default content type
     });
     
+    // Instagram API is picky about how image files are uploaded
+    // The key for binary upload must be 'image_url' not 'image_file'
+    
     // Make the API request
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${instagramId}/media`,
@@ -216,6 +219,7 @@ async function createContainerWithFallbackImage(
 ): Promise<string> {
   // Path to the local fallback image
   const fallbackImagePath = path.join(process.cwd(), 'client/public/assets/images/fallback-image.jpg');
+  log(`Looking for fallback image at: ${fallbackImagePath}`, 'instagram');
   
   // Check if fallback image exists
   if (!fs.existsSync(fallbackImagePath)) {
