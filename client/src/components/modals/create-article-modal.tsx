@@ -501,11 +501,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   // This will be sent to Airtable's "Date" field to track when the article was created
   submissionData.date = new Date().toISOString();
 
-  // Handle publication date & time from the datetime-local input (for scheduled field)
-  if (submissionData.scheduled) {
-    // Convert scheduled string from datetime-local to Date object for publishedAt
+  // Handle publication date & time from the datetime-local input (for Scheduled field)
+  if (submissionData.Scheduled) {
+    // Convert Scheduled string from datetime-local to Date object for publishedAt
     try {
-      const dateTime = new Date(submissionData.scheduled);
+      const dateTime = new Date(submissionData.Scheduled);
       
       // Check if valid date
       if (!isNaN(dateTime.getTime())) {
@@ -513,13 +513,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         submissionData.publishedAt = dateTime;
         
         // Keep the ISO string format for Airtable Scheduled field
-        // submissionData.scheduled is already correctly formatted from the input
+        // submissionData.Scheduled is already correctly formatted from the input
       } else {
         console.warn("Invalid date format from datetime-local input");
-        // If scheduled date is invalid and status is published, default to current
+        // If Scheduled date is invalid and status is published, default to current
         if (submissionData.status === "published") {
           submissionData.publishedAt = new Date();
-          submissionData.scheduled = submissionData.publishedAt.toISOString();
+          submissionData.Scheduled = submissionData.publishedAt.toISOString();
         }
       }
     } catch (error) {
@@ -527,14 +527,14 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       // If parsing fails and status is published, default to current
       if (submissionData.status === "published") {
         submissionData.publishedAt = new Date();
-        submissionData.scheduled = submissionData.publishedAt.toISOString();
+        submissionData.Scheduled = submissionData.publishedAt.toISOString();
       }
     }
   }
-  // If no scheduled date is provided but status is published, set current date
+  // If no Scheduled date is provided but status is published, set current date
   else if (submissionData.status === "published") {
     submissionData.publishedAt = new Date();
-    submissionData.scheduled = submissionData.publishedAt.toISOString();
+    submissionData.Scheduled = submissionData.publishedAt.toISOString();
   }
     
     // Set the finished field based on status
@@ -633,7 +633,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 name="description"
                 value={formData.description || ''}
                 onChange={handleInputChange}
-                placeholder="Brief description for article listing and previews"
+                placeholder="Brief description for article listing and previews (optional)"
                 rows={2}
               />
             </div>
@@ -693,12 +693,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               <Textarea
                 id="content"
                 name="content"
-                value={formData.content}
+                value={formData.content || ''}
                 onChange={handleInputChange}
-                placeholder="Article content"
+                placeholder="Article content (optional)"
                 rows={5}
                 className="font-mono"
-                required
               />
             </div>
 
@@ -910,12 +909,12 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             </div>
             
             <div>
-              <Label htmlFor="scheduled">Publication Date & Time</Label>
+              <Label htmlFor="Scheduled">Publication Date & Time</Label>
               <Input
-                id="scheduled"
-                name="scheduled"
+                id="Scheduled"
+                name="Scheduled"
                 type="datetime-local"
-                value={formData.scheduled || ''}
+                value={formData.Scheduled || ''}
                 onChange={handleInputChange}
                 placeholder="YYYY-MM-DD HH:MM"
               />
