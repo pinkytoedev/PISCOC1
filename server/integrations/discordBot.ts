@@ -733,7 +733,7 @@ async function handleModalSubmission(interaction: ModalSubmitInteraction) {
         .setLabel("View in Dashboard")
         .setStyle(ButtonStyle.Link)
         .setURL(
-          `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${article.id}`,
+          `${getBaseUrl()}/articles?id=${article.id}`,
         )
         .setEmoji("🔗");
 
@@ -1694,7 +1694,7 @@ async function handleButtonInteraction(
             .setLabel("View in Dashboard")
             .setStyle(ButtonStyle.Link)
             .setURL(
-              `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+              `${getBaseUrl()}/articles?id=${articleId}`,
             );
 
           // Create a button for additional uploads
@@ -1780,7 +1780,7 @@ async function handleButtonInteraction(
           .setLabel("View in Dashboard")
           .setStyle(ButtonStyle.Link)
           .setURL(
-            `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+            `${getBaseUrl()}/articles?id=${articleId}`,
           );
 
         // Create an "Upload Image" button for immediate attachment
@@ -2115,7 +2115,7 @@ async function handleButtonInteraction(
           .setLabel("View in Dashboard")
           .setStyle(ButtonStyle.Link)
           .setURL(
-            `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+            `${getBaseUrl()}/articles?id=${articleId}`,
           );
 
         // Create an "Upload Content" button for immediate attachment
@@ -2188,7 +2188,7 @@ async function handleButtonInteraction(
           .setLabel("View in Dashboard")
           .setStyle(ButtonStyle.Link)
           .setURL(
-            `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+            `${getBaseUrl()}/articles?id=${articleId}`,
           );
 
         // Create an "Upload Image" button for immediate attachment
@@ -2390,7 +2390,7 @@ async function handleButtonInteraction(
             .setLabel("View in Dashboard")
             .setStyle(ButtonStyle.Link)
             .setURL(
-              `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/articles?id=${articleId}`,
+              `${getBaseUrl()}/articles?id=${articleId}`,
             );
 
           const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
