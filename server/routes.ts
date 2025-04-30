@@ -8,6 +8,7 @@ import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtab
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { setupImgBBRoutes } from "./integrations/imgbb";
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
+import { setupPublicUploadRoutes } from "./integrations/publicUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
@@ -40,6 +41,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Set up direct upload routes
   setupDirectUploadRoutes(app);
+  
+  // Set up public upload routes
+  setupPublicUploadRoutes(app);
   
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {
