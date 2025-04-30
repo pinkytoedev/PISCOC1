@@ -28,6 +28,7 @@ import type { Express, Request, Response } from 'express';
 import { storage } from '../storage';
 import { Article, InsertArticle, InsertAdminRequest } from '@shared/schema';
 import fetch from 'node-fetch';
+import { generateUniqueToken, calculateExpirationDate } from '../utils/tokenGenerator';
 import FormData from 'form-data';
 import path from 'path';
 import fs from 'fs-extra';
@@ -880,25 +881,71 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
+      // Generate a public upload token for image upload
+      const generateImageToken = async () => {
+        try {
+          // Import token generation functions if needed at the top of this file
+          const { generateUniqueToken, calculateExpirationDate } = await import('../utils/tokenGenerator');
+          
+          // Create a token valid for 7 days with 3 max uses
+          const expirationDays = 7;
+          const maxUses = 3;
+          
+          // Generate unique token
+          const token = await generateUniqueToken(async (token) => {
+            const existingToken = await storage.getUploadTokenByToken(token);
+            return !!existingToken;
+          });
+          
+          // Calculate expiration date
+          const expiresAt = calculateExpirationDate(expirationDays);
+          
+          // Create token record with discord user in the name
+          const uploadToken = await storage.createUploadToken({
+            token,
+            articleId: article.id,
+            uploadType: 'image',
+            createdById: null, // No user ID since this is from Discord
+            expiresAt,
+            maxUses,
+            active: true,
+            name: `Discord: ${interaction.user.username}'s Image Upload`,
+            notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`
+          });
+          
+          // Return the token URL
+          return {
+            token: uploadToken.token,
+            url: `${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/public-upload/image/${uploadToken.token}`
+          };
+        } catch (error) {
+          console.error('Error generating image upload token:', error);
+          throw error;
+        }
+      };
+      
+      // Generate token and create buttons
+      const tokenData = await generateImageToken();
+      
       // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_web_image_${articleId}`)
-        .setLabel('Upload via Bot')
+        .setLabel('Upload via Discord')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🖼️');
       
-      const dashboardButton = new ButtonBuilder()
-        .setLabel('Open in Dashboard')
+      const publicUploadButton = new ButtonBuilder()
+        .setLabel('Upload via Browser')
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`)
+        .setURL(tokenData.url)
         .setEmoji('🔗');
       
       const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(dashboardButton, uploadButton);
+        .addComponents(publicUploadButton, uploadButton);
       
       // Confirm selection and provide options
       await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the "Upload via Bot" button to attach an image directly through Discord\n2. Use the dashboard link to upload through the website`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading a web (main) image:\n\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required)\n2. Use the "Upload via Discord" button to upload directly through Discord`,
         components: [buttonRow]
       });
     }
@@ -954,25 +1001,68 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
       
+      // Generate a public upload token for HTML zip
+      const generateToken = async () => {
+        try {
+          // Create a token valid for 7 days with 5 max uses
+          const expirationDays = 7;
+          const maxUses = 5;
+          
+          // Generate unique token using the helper function
+          const token = await generateUniqueToken(async (token) => {
+            const existingToken = await storage.getUploadTokenByToken(token);
+            return !!existingToken;
+          });
+          
+          // Calculate expiration date
+          const expiresAt = calculateExpirationDate(expirationDays);
+          
+          // Create token record with discord user in the name
+          const uploadToken = await storage.createUploadToken({
+            token,
+            articleId: article.id,
+            uploadType: 'html-zip',
+            createdById: null, // No user ID since this is from Discord
+            expiresAt,
+            maxUses,
+            active: true,
+            name: `Discord: ${interaction.user.username}'s HTML Upload`,
+            notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`
+          });
+          
+          // Return the token URL
+          return {
+            token: uploadToken.token,
+            url: `${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/public-upload/html-zip/${uploadToken.token}`
+          };
+        } catch (error) {
+          console.error('Error generating upload token:', error);
+          throw error;
+        }
+      };
+      
+      // Generate token and create buttons
+      const tokenData = await generateToken();
+      
       // Create buttons for different options
       const uploadButton = new ButtonBuilder()
         .setCustomId(`upload_zip_${articleId}`)
-        .setLabel('Upload Zipped HTML')
+        .setLabel('Upload via Discord')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('📁');
       
-      const dashboardButton = new ButtonBuilder()
-        .setLabel('Open in Dashboard')
+      const publicUploadButton = new ButtonBuilder()
+        .setLabel('Upload via Browser')
         .setStyle(ButtonStyle.Link)
-        .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`)
+        .setURL(tokenData.url)
         .setEmoji('🔗');
       
       const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-        .addComponents(dashboardButton, uploadButton);
+        .addComponents(publicUploadButton, uploadButton);
       
       // Confirm selection and provide options
       await interaction.followUp({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading zipped HTML content:\n\n1. Use the "Upload Zipped HTML" button to attach a .zip file containing HTML and related assets\n2. Use the dashboard link to edit through the website`,
+        content: `Selected article: **${article.title}**\n\nOptions for uploading zipped HTML content:\n\n1. Use the "Upload via Browser" button to upload your zip file using a web browser (no login required)\n2. Use the "Upload via Discord" button to upload directly through Discord`,
         components: [buttonRow],
         ephemeral: true
       });
@@ -1354,18 +1444,70 @@ async function handleButtonInteraction(interaction: MessageComponentInteraction)
         
         // Confirm the upload with the result message
         if (result.success) {
+          // Create a token for uploading additional content if needed
+          const generateToken = async () => {
+            try {
+              // Import token generation functions if needed
+              const { generateUniqueToken, calculateExpirationDate } = await import('../utils/tokenGenerator');
+              
+              // Create a token valid for 7 days with 5 max uses
+              const expirationDays = 7;
+              const maxUses = 5;
+              
+              // Generate unique token
+              const token = await generateUniqueToken(async (token) => {
+                const existingToken = await storage.getUploadTokenByToken(token);
+                return !!existingToken;
+              });
+              
+              // Calculate expiration date
+              const expiresAt = calculateExpirationDate(expirationDays);
+              
+              // Create token record with discord user in the name
+              const uploadToken = await storage.createUploadToken({
+                token,
+                articleId,
+                uploadType: 'html-zip',
+                createdById: null, // No user ID since this is from Discord
+                expiresAt,
+                maxUses,
+                active: true,
+                name: `Discord: ${interaction.user.username}'s Follow-up HTML Upload`,
+                notes: `Generated via Discord bot after successful upload by ${interaction.user.username} on ${new Date().toLocaleString()}`
+              });
+              
+              // Return the token URL
+              return {
+                token: uploadToken.token,
+                url: `${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/public-upload/html-zip/${uploadToken.token}`
+              };
+            } catch (error) {
+              console.error('Error generating follow-up upload token:', error);
+              throw error;
+            }
+          };
+          
+          // Generate token and create buttons
+          const tokenData = await generateToken();
+          
           // Create a view in dashboard button
           const viewInDashboardButton = new ButtonBuilder()
             .setLabel('View in Dashboard')
             .setStyle(ButtonStyle.Link)
             .setURL(`${process.env.BASE_URL || 'http://piscoc.pinkytoepaper.com'}/articles?id=${articleId}`);
           
+          // Create a button for additional uploads
+          const additionalUploadButton = new ButtonBuilder()
+            .setLabel('Upload More Files')
+            .setStyle(ButtonStyle.Link)
+            .setURL(tokenData.url);
+          
           const buttonRow = new ActionRowBuilder<ButtonBuilder>()
-            .addComponents(viewInDashboardButton);
+            .addComponents(viewInDashboardButton, additionalUploadButton);
           
           // Send confirmation message
           await interaction.followUp({
-            content: `✅ **Success!** ${result.message}\n\nThe article content has been updated with the HTML from your ZIP file. You can view or further edit the article in the dashboard.`,
+            content: `✅ **Success!** ${result.message}\n\nThe article content has been updated with the HTML from your ZIP file. You can use the buttons below to:\n\n• View the article in the dashboard\n• Upload additional files if needed (no login required)`,
             components: [buttonRow],
             ephemeral: true
           });
