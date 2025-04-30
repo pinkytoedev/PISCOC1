@@ -310,9 +310,12 @@ export function setupPublicUploadRoutes(app: Express) {
   app.post('/api/public-upload/image/:token', verifyUploadToken, imageUpload.single('file'), async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
-      // We can safely assert these are defined because verifyUploadToken guarantees it
-      const uploadToken = req.uploadToken!;
-      const article = req.targetArticle!;
+      if (!req.uploadToken || !req.targetArticle) {
+        return res.status(500).json({ message: 'Internal server error - token data missing' });
+      }
+      
+      const uploadToken = req.uploadToken;
+      const article = req.targetArticle;
       
       if (uploadToken.uploadType !== 'image') {
         return res.status(400).json({ message: 'This token is not valid for image uploads' });
@@ -399,9 +402,12 @@ export function setupPublicUploadRoutes(app: Express) {
   app.post('/api/public-upload/instagram-image/:token', verifyUploadToken, imageUpload.single('file'), async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
-      // We can safely assert these are defined because verifyUploadToken guarantees it
-      const uploadToken = req.uploadToken!;
-      const article = req.targetArticle!;
+      if (!req.uploadToken || !req.targetArticle) {
+        return res.status(500).json({ message: 'Internal server error - token data missing' });
+      }
+      
+      const uploadToken = req.uploadToken;
+      const article = req.targetArticle;
       
       if (uploadToken.uploadType !== 'instagram-image') {
         return res.status(400).json({ message: 'This token is not valid for Instagram image uploads' });
@@ -487,9 +493,12 @@ export function setupPublicUploadRoutes(app: Express) {
   app.post('/api/public-upload/html-zip/:token', verifyUploadToken, zipUpload.single('file'), async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
-      // We can safely assert these are defined because verifyUploadToken guarantees it
-      const uploadToken = req.uploadToken!;
-      const article = req.targetArticle!;
+      if (!req.uploadToken || !req.targetArticle) {
+        return res.status(500).json({ message: 'Internal server error - token data missing' });
+      }
+      
+      const uploadToken = req.uploadToken;
+      const article = req.targetArticle;
       
       if (uploadToken.uploadType !== 'html-zip') {
         return res.status(400).json({ message: 'This token is not valid for HTML ZIP uploads' });
