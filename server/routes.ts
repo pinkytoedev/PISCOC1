@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import express, { type Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -44,6 +44,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Set up public upload routes
   setupPublicUploadRoutes(app);
+  
+  // Serve uploads directory statically to make images accessible to Instagram API
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {
