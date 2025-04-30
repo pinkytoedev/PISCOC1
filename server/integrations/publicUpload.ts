@@ -190,7 +190,7 @@ export function setupPublicUploadRoutes(app: Express) {
       return res.json({
         success: true,
         token: uploadToken.token,
-        uploadUrl: `/api/public-upload/${uploadToken.uploadType}/${uploadToken.token}`,
+        uploadUrl: `/public-upload/${uploadToken.uploadType}/${uploadToken.token}`,
         uploadType: uploadToken.uploadType,
         expiresAt: uploadToken.expiresAt,
         maxUses: uploadToken.maxUses
@@ -236,7 +236,7 @@ export function setupPublicUploadRoutes(app: Express) {
           id: token.id,
           token: token.token,
           uploadType: token.uploadType,
-          uploadUrl: `/api/public-upload/${token.uploadType}/${token.token}`,
+          uploadUrl: `/public-upload/${token.uploadType}/${token.token}`,
           createdAt: token.createdAt,
           expiresAt: token.expiresAt,
           maxUses: token.maxUses,
