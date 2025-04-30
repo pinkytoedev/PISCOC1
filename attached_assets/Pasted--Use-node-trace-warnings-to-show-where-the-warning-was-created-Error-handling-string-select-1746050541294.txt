@@ -1,0 +1,23 @@
+(Use `node --trace-warnings ...` to show where the warning was created)
+Error handling string select menu interaction: DiscordAPIError[10062]: Unknown interaction
+    at handleErrors (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/Shared.ts:148:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async BurstHandler.runRequest (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/BurstHandler.ts:144:20)
+    at async _REST.request (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/REST.ts:210:20)
+    at async StringSelectMenuInteraction.deferUpdate (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:306:22)
+    at async handleStringSelectMenuInteraction (/home/runner/workspace/server/integrations/discordBot.ts:971:7)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2260:11) {
+  requestBody: { files: undefined, json: { type: 6 } },
+  rawError: { message: 'Unknown interaction', code: 10062 },
+  code: 10062,
+  status: 404,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1367258961379594483/aW50ZXJhY3Rpb246MTM2NzI1ODk2MTM3OTU5NDQ4MzpGN3I4T1NnQUNYcDBSRnRhY3E4TGtodGlJd2JwN3FIYlpwN3RXMTZrZER2SHRIS2l4cmxUdkZKNmZWcEpFb1g5b0N3MWdOdzlkVEJySm9kS3dNN3RvenpjZlpVYWxOVGZLZ0xxN1ZRdGZQejQ3T2dzM0E2bGtkRHlVaVZFbWFsTg/callback?with_response=false'
+}
+Error sending error follow-up: Error [InteractionNotReplied]: The reply to this interaction has not been sent or deferred.
+    at StringSelectMenuInteraction.followUp (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:276:48)
+    at handleStringSelectMenuInteraction (/home/runner/workspace/server/integrations/discordBot.ts:1169:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2260:11) {
+  code: 'InteractionNotReplied'
+}
