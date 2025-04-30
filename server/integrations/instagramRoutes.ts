@@ -16,6 +16,7 @@ import {
   getInstagramAccountId
 } from './instagram';
 import { createMediaContainerWithDirectUpload } from './instagram-image';
+import { createInstagramMediaContainerBinary, createInstagramMediaContainerWithLocalImage } from './instagram-binary';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -346,31 +347,26 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
-      // First try the direct upload method with image download
-      log(`Creating Instagram media container with direct upload for image: ${imageUrl}`, 'instagram');
+      // Try the binary upload method for direct image upload
+      log(`Creating Instagram media container with binary upload for image: ${imageUrl}`, 'instagram');
       let containerId: string;
       let allMethodsFailed = false;
       
       try {
-        // Use our enhanced version that downloads and uploads the image directly
-        containerId = await createMediaContainerWithDirectUpload(imageUrl, caption || '');
-      } catch (uploadError) {
-        log(`Direct upload failed, falling back to URL method: ${uploadError}`, 'instagram');
+        // Use our binary upload method that downloads and uploads the actual image data
+        containerId = await createInstagramMediaContainerBinary(imageUrl, caption || '');
+      } catch (binaryError) {
+        log(`Binary upload failed, falling back to URL method: ${binaryError}`, 'instagram');
         
         try {
-          // Fall back to the original method if direct upload fails
+          // Fall back to the original method if binary upload fails
           containerId = await createInstagramMediaContainer(imageUrl, caption || '');
         } catch (urlError) {
-          log(`Both direct upload and URL methods failed. Using the default image: ${urlError}`, 'instagram');
-          
-          // Use an image from the public folder as a last resort
-          const defaultImageUrl = `${process.env.SERVER_URL || (process.env.REPL_SLUG ? 
-                                    `https://${process.env.REPL_SLUG}.replit.dev` : 
-                                    'http://localhost:5000')}/assets/images/pink-background.png`;
+          log(`Both binary and URL methods failed. Using local fallback image: ${urlError}`, 'instagram');
           
           try {
-            // Try with the placeholder image
-            containerId = await createMediaContainerWithDirectUpload(defaultImageUrl, 
+            // Try with the local fallback image
+            containerId = await createInstagramMediaContainerWithLocalImage(
               caption ? `${caption} (Note: Original image could not be processed)` : 'Instagram post');
             
             // Let the frontend know we used a placeholder
