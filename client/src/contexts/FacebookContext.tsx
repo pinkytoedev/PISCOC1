@@ -179,29 +179,39 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
             const isInIframe = window !== window.parent;
             console.log('Is in iframe:', isInIframe);
             
-            // Need to log in - use a popup that should work better in iframe environments
-            window.FB.login((response) => {
-              console.log('Facebook login response:', response);
-              
-              if (response.status === 'connected') {
-                handleStatusChange('connected', response);
-                onSuccess && onSuccess();
-              } else {
-                // Handle auth failure but don't trigger error for user cancellations
-                if (response.status === 'not_authorized') {
-                  console.log('User cancelled login or did not fully authorize.');
+            // Alert user to authenticate on a separate window for Replit environment
+            if (isInIframe) {
+              alert('The Facebook login popup may be blocked in the Replit environment. If it does not open, please try using this app outside of Replit or check for popup blockers.');
+            }
+            
+            try {
+              // Need to log in - use a popup that should work better in iframe environments
+              window.FB.login((response) => {
+                console.log('Facebook login response:', response);
+                
+                if (response.status === 'connected') {
+                  handleStatusChange('connected', response);
+                  onSuccess && onSuccess();
                 } else {
-                  console.error('Login failed:', response);
-                  onError && onError(response);
+                  // Handle auth failure but don't trigger error for user cancellations
+                  if (response.status === 'not_authorized') {
+                    console.log('User cancelled login or did not fully authorize.');
+                  } else {
+                    console.error('Login failed:', response);
+                    onError && onError(response);
+                  }
                 }
-              }
-            }, {
-              scope: 'email,public_profile,instagram_basic,pages_show_list,pages_read_engagement,instagram_content_publish',
-              auth_type: 'rerequest',       // Ask for login even if previously denied
-              return_scopes: true,          // Return granted scopes in response
-              display: 'popup',             // Force popup mode to avoid iframe issues
-              enable_profile_selector: true // Allow selecting between multiple profiles 
-            });
+              }, {
+                scope: 'email,public_profile,instagram_basic,pages_show_list,pages_read_engagement,instagram_content_publish',
+                auth_type: 'rerequest',       // Ask for login even if previously denied
+                return_scopes: true,          // Return granted scopes in response
+                display: 'popup'              // Force popup mode to avoid iframe issues
+                // Note: enable_profile_selector is not a valid option in the Facebook SDK type definition
+              });
+            } catch (fbLoginError) {
+              console.error('Error during FB.login call:', fbLoginError);
+              onError && onError(fbLoginError);
+            }
           }
         });
       } catch (fbError) {

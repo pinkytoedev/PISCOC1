@@ -71,62 +71,17 @@ function Router() {
 }
 
 function App() {
-  const [facebookAppId, setFacebookAppId] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Use the hardcoded Facebook App ID directly to fix the initialization issue
+  const [facebookAppId, setFacebookAppId] = useState<string>('1776254399859599');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   useEffect(() => {
-    // Fetch Facebook App ID from our backend API
-    fetch('/api/config/facebook')
-      .then(response => {
-        // We'll still try to get the JSON even if the status is not OK, 
-        // as the error response should contain a structured error message
-        return response.json().then(data => {
-          if (!response.ok) {
-            // Check if we have a proper error response with message
-            if (data && data.status === 'error' && data.message) {
-              throw new Error(data.message);
-            } else {
-              // Otherwise just throw a generic error with the status
-              throw new Error(`Failed to fetch Facebook config: ${response.status}`);
-            }
-          }
-          return data;
-        });
-      })
-      .then(data => {
-        if (data.configured && data.status === 'success') {
-          // If the server indicates Facebook is configured, use the environment variable
-          // This prevents exposing the actual App ID in API responses
-          const appId = import.meta.env.VITE_FACEBOOK_APP_ID || '';
-          setFacebookAppId(appId);
-        } else if (data.appId === 'CONFIGURED') {
-          // For backward compatibility with our new secure response format
-          const appId = import.meta.env.VITE_FACEBOOK_APP_ID || '';
-          setFacebookAppId(appId);
-        } else if (data.appId) {
-          // Legacy support for old API format - should no longer be used
-          console.warn('Using legacy API response format, should update implementation');
-          setFacebookAppId(data.appId);
-        } else {
-          // Fallback to the environment variable if the API doesn't return a value
-          console.warn('Facebook configuration status not provided in API response');
-          setFacebookAppId(import.meta.env.VITE_FACEBOOK_APP_ID || '');
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching Facebook App ID:', err);
-        // Fallback to the environment variable if the API fails
-        setFacebookAppId(import.meta.env.VITE_FACEBOOK_APP_ID || '');
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []);
+    // Add some debugging to help understand environment variables
+    console.log('Facebook App ID set:', facebookAppId);
+    console.log('Environment variables available:', import.meta.env);
+  }, [facebookAppId]);
 
-  // Show a loading message while we're fetching the Facebook App ID
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading application configuration...</div>;
-  }
+  // No need for loading state since we hardcode the App ID
 
   return (
     <QueryClientProvider client={queryClient}>
