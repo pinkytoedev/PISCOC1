@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import DebugEnv from '@/components/DebugEnv';
 import { 
   CheckCircle2, 
   XCircle, 
@@ -956,6 +957,8 @@ export default function InstagramPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-6">
+                      {/* Debug Environment Variables */}
+                      <DebugEnv />
                       {webhookTestResult && (
                         <div className={`rounded-lg border p-4 ${webhookTestResult.success ? 'border-green-500' : 'border-red-500'}`}>
                           <h3 className="font-medium flex items-center mb-4">
