@@ -16,16 +16,38 @@ import { downloadImage, cleanupImage } from '../utils/imageDownloader';
 
 /**
  * Get the Instagram Business Account ID from storage
+ * If not found, attempts to retrieve it from Facebook API
  * 
  * @returns The Instagram Account ID or null if not found
  */
 async function getInstagramId(): Promise<string | null> {
+  // First check in storage
   const idSetting = await storage.getIntegrationSettingByKey("instagram", "account_id");
-  if (!idSetting?.value) {
-    log('No Instagram Account ID found in storage', 'instagram');
+  if (idSetting?.value) {
+    return idSetting.value;
+  }
+  
+  log('No Instagram Account ID found in storage, retrieving from Facebook...', 'instagram');
+  
+  // Import dynamically to avoid circular dependencies
+  const { checkInstagramPermissions } = await import('./instagram-permissions');
+  
+  // Check permissions and get a fresh Instagram ID
+  const permissionCheck = await checkInstagramPermissions();
+  
+  if (!permissionCheck.hasValidAccount) {
+    log(`Instagram account validation failed: ${permissionCheck.errorMessage}`, 'instagram');
     return null;
   }
-  return idSetting.value;
+  
+  // After permission check, the ID should be in storage if it was found
+  const refreshedIdSetting = await storage.getIntegrationSettingByKey("instagram", "account_id");
+  if (refreshedIdSetting?.value) {
+    return refreshedIdSetting.value;
+  }
+  
+  log('Failed to retrieve Instagram Account ID', 'instagram');
+  return null;
 }
 
 /**
