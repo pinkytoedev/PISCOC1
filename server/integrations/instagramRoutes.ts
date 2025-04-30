@@ -14,6 +14,7 @@ import {
   getInstagramAccountId
 } from './instagram';
 import { createAndPublishPost } from './instagram-publish';
+import { checkInstagramPermissions, resetInstagramConnection } from './instagram-permissions';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -292,6 +293,44 @@ export function setupInstagramRoutes(app: Express) {
       log(`Error getting Instagram media: ${error}`, 'instagram');
       res.status(500).json({ 
         error: 'Failed to get Instagram media', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // API route to check Instagram permissions
+  app.get('/api/instagram/permissions', async (req: Request, res: Response) => {
+    try {
+      const permissions = await checkInstagramPermissions();
+      res.status(200).json(permissions);
+    } catch (error) {
+      log(`Error checking Instagram permissions: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to check Instagram permissions', 
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // API route to reset Instagram connection
+  app.post('/api/instagram/reset', async (req: Request, res: Response) => {
+    try {
+      const result = await resetInstagramConnection();
+      if (result) {
+        res.status(200).json({ 
+          success: true, 
+          message: 'Instagram connection reset successfully. Please reconnect with Facebook.' 
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Failed to reset connection', 
+          message: 'An error occurred while trying to reset the Instagram connection' 
+        });
+      }
+    } catch (error) {
+      log(`Error resetting Instagram connection: ${error}`, 'instagram');
+      res.status(500).json({ 
+        error: 'Failed to reset Instagram connection', 
         message: error instanceof Error ? error.message : String(error)
       });
     }
