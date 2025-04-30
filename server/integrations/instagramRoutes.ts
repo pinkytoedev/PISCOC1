@@ -312,6 +312,29 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
+      // Basic validation to filter out non-image URLs
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.svg'];
+      const isLikelyImageUrl = 
+        imageExtensions.some(ext => imageUrl.toLowerCase().includes(ext)) || 
+        imageUrl.includes('i.ibb.co') || 
+        imageUrl.includes('imgur') || 
+        imageUrl.includes('cloudinary');
+      
+      // Detect known non-image URLs
+      const isKnownNonImageUrl = 
+        imageUrl.includes('airtable.com') ||
+        imageUrl.includes('notion.so') ||
+        imageUrl.includes('docs.google.com') || 
+        imageUrl.includes('trello.com');
+      
+      if (isKnownNonImageUrl) {
+        return res.status(400).json({
+          error: 'Invalid image URL',
+          message: 'The URL you provided appears to be a link to a document or application, not an image. Please provide a direct link to an image file.',
+          code: 'INVALID_IMAGE_URL'
+        });
+      }
+      
       // Check if we have an access token
       const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
       
