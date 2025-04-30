@@ -11,12 +11,9 @@ import {
   testWebhookConnection,
   getInstagramMedia,
   getInstagramMediaById,
-  createInstagramMediaContainer,
-  publishInstagramMedia,
   getInstagramAccountId
 } from './instagram';
-import { createMediaContainerWithDirectUpload } from './instagram-image';
-import { createInstagramMediaContainerBinary, createInstagramMediaContainerWithLocalImage } from './instagram-binary';
+import { createAndPublishPost } from './instagram-publish';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -347,63 +344,34 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
-      // Try the binary upload method for direct image upload
-      log(`Creating Instagram media container with binary upload for image: ${imageUrl}`, 'instagram');
-      let containerId: string;
-      let allMethodsFailed = false;
+      // Create and publish Instagram post using our improved method
+      log(`Creating Instagram post with image: ${imageUrl}`, 'instagram');
       
-      try {
-        // Use our binary upload method that downloads and uploads the actual image data
-        containerId = await createInstagramMediaContainerBinary(imageUrl, caption || '');
-      } catch (binaryError) {
-        log(`Binary upload failed, falling back to URL method: ${binaryError}`, 'instagram');
-        
-        try {
-          // Fall back to the original method if binary upload fails
-          containerId = await createInstagramMediaContainer(imageUrl, caption || '');
-        } catch (urlError) {
-          log(`Both binary and URL methods failed. Using local fallback image: ${urlError}`, 'instagram');
-          
-          try {
-            // Try with the local fallback image
-            containerId = await createInstagramMediaContainerWithLocalImage(
-              caption ? `${caption} (Note: Original image could not be processed)` : 'Instagram post');
-            
-            // Let the frontend know we used a placeholder
-            allMethodsFailed = true;
-          } catch (error) {
-            // If even that fails, we're out of options
-            const fallbackError = error as Error;
-            throw new Error(`Failed to create Instagram post: ${fallbackError.message}`);
-          }
-        }
-      }
-      
-      // Then publish it
-      log(`Publishing Instagram media container: ${containerId}`, 'instagram');
-      const mediaId = await publishInstagramMedia(containerId);
+      // Use the combined method that handles the two-step process automatically
+      const result = await createAndPublishPost(imageUrl, caption || '');
       
       // Log the activity
       await storage.createActivityLog({
         action: 'instagram_media_created',
         userId: null,
         resourceType: 'instagram_media',
-        resourceId: mediaId,
+        resourceId: result.mediaId,
         details: {
           timestamp: new Date().toISOString(),
-          containerId,
-          mediaId
+          containerId: result.containerId,
+          mediaId: result.mediaId,
+          usedFallback: result.usedFallback
         }
       });
       
       // Return the result
       res.status(201).json({
         success: true,
-        mediaId,
-        message: allMethodsFailed 
+        mediaId: result.mediaId,
+        message: result.usedFallback 
           ? 'Instagram post created successfully, but with a placeholder image because the original image could not be processed' 
           : 'Instagram post created successfully',
-        usedPlaceholder: allMethodsFailed || false
+        usedPlaceholder: result.usedFallback
       });
     } catch (error) {
       log(`Error creating Instagram post: ${error}`, 'instagram');
