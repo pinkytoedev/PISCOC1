@@ -26,6 +26,7 @@ import UploadsPage from "@/pages/uploads";
 import ImgBBPage from "@/pages/integrations/imgbb-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TestPage from "@/pages/test-page";
+import PublicUploadPage from "@/pages/public-upload";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -60,6 +61,10 @@ function Router() {
       </Route>
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
+      
+      {/* Public upload routes - these don't require auth */}
+      <Route path="/public-upload/:uploadType/:token" component={PublicUploadPage} />
+      
       <Route component={NotFound} />
     </Switch>
   );
