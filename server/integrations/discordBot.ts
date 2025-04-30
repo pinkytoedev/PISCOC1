@@ -1771,28 +1771,74 @@ async function handleButtonInteraction(
       await interaction.deferReply({ ephemeral: true });
 
       try {
-        // Create a button that will take the user to the article in the dashboard
-        const viewInDashboardButton = new ButtonBuilder()
-          .setLabel("View in Dashboard")
+        // Generate a token for public Instagram upload
+        const generateInstagramToken = async () => {
+          try {
+            // Create a token valid for 7 days with 5 max uses
+            const expirationDays = 7;
+            const maxUses = 5;
+
+            // Generate unique token using the helper function
+            const token = await generateUniqueToken(
+              async (tokenToCheck: string) => {
+                const existingToken =
+                  await storage.getUploadTokenByToken(tokenToCheck);
+                return !!existingToken;
+              },
+            );
+
+            // Calculate expiration date
+            const expiresAt = calculateExpirationDate(expirationDays);
+
+            // Create token record with discord user in the name
+            const uploadToken = await storage.createUploadToken({
+              token,
+              articleId: article.id,
+              uploadType: "instagram-image",
+              createdById: null, // No user ID since this is from Discord
+              expiresAt,
+              maxUses,
+              active: true,
+              name: `Discord: ${interaction.user.username}'s Instagram Image Upload`,
+              notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`,
+            });
+
+            // Return the token URL
+            return {
+              token: uploadToken.token,
+              // Use getBaseUrl() helper for consistent URL generation
+              url: `${getBaseUrl()}/public-upload/instagram-image/${uploadToken.token}`,
+            };
+          } catch (error) {
+            console.error("Error generating Instagram upload token:", error);
+            throw error;
+          }
+        };
+
+        // Generate token for Instagram upload
+        const instagramTokenData = await generateInstagramToken();
+
+        // Create a button that will take the user to the public upload page
+        const publicUploadButton = new ButtonBuilder()
+          .setLabel("Upload via Browser")
           .setStyle(ButtonStyle.Link)
-          .setURL(
-            `${getBaseUrl()}/articles?id=${articleId}`,
-          );
+          .setURL(instagramTokenData.url)
+          .setEmoji("🔗");
 
         // Create an "Upload Image" button for immediate attachment
         const uploadNowButton = new ButtonBuilder()
           .setCustomId(`upload_insta_image_now_${articleId}`)
-          .setLabel("Upload Image Now")
+          .setLabel("Upload via Discord")
           .setStyle(ButtonStyle.Primary)
           .setEmoji("📸");
 
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          viewInDashboardButton,
+          publicUploadButton,
           uploadNowButton,
         );
 
         await interaction.editReply({
-          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Click "Upload Image Now" and attach an image in your next message\n2. Go to the Dashboard to use the web interface (opens in new tab, this Discord prompt will remain active)\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.\n\n**Note:** If you choose option 2, you can safely dismiss this Discord prompt once you're on the web interface.`,
+          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required, opens in new tab, this Discord prompt will remain active)\n2. Use the "Upload via Discord" button to upload directly through Discord\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.\n\n**Note:** If you choose option 1, you can safely dismiss this Discord prompt once you're on the web interface.`,
           components: [buttonRow],
         });
       } catch (error) {
