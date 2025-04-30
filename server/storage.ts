@@ -63,6 +63,17 @@ export interface IStorage {
   getAdminRequestsByCategory(category: string): Promise<AdminRequest[]>;
   getAdminRequestsByUrgency(urgency: string): Promise<AdminRequest[]>;
   
+  // Upload token operations
+  getUploadTokens(): Promise<UploadToken[]>;
+  getUploadToken(id: number): Promise<UploadToken | undefined>;
+  getUploadTokenByToken(token: string): Promise<UploadToken | undefined>;
+  getUploadTokensByArticle(articleId: number): Promise<UploadToken[]>;
+  createUploadToken(token: InsertUploadToken): Promise<UploadToken>;
+  updateUploadToken(id: number, token: Partial<InsertUploadToken>): Promise<UploadToken | undefined>;
+  incrementUploadTokenUses(id: number): Promise<UploadToken | undefined>;
+  deleteUploadToken(id: number): Promise<boolean>;
+  inactivateExpiredTokens(): Promise<number>; // Returns count of inactivated tokens
+  
   // Image asset operations
   getImageAssets(): Promise<ImageAsset[]>;
   getImageAsset(id: number): Promise<ImageAsset | undefined>;
