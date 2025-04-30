@@ -366,7 +366,7 @@ export default function Dashboard() {
                               </p>
                             </div>
                             <div className="ml-4">
-                              <Link href={`/articles/${article.id}`}>
+                              <Link href={`/articles?id=${article.id}`}>
                                 <Button size="sm">Review</Button>
                               </Link>
                             </div>
