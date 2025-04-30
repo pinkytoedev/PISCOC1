@@ -1175,7 +1175,10 @@ async function handleStringSelectMenuInteraction(interaction: any) {
           // Return the token URL
           return {
             token: uploadToken.token,
-            url: `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/public-upload/html-zip/${uploadToken.token}`,
+            // Use REPLIT_SLUG for development environments, fall back to configured BASE_URL or production URL
+            url: `${process.env.REPLIT_SLUG ? 
+                 `https://${process.env.REPLIT_SLUG}.replit.dev` : 
+                 (process.env.BASE_URL || "http://piscoc.pinkytoepaper.com")}/public-upload/html-zip/${uploadToken.token}`,
           };
         } catch (error) {
           console.error("Error generating upload token:", error);
@@ -1674,7 +1677,10 @@ async function handleButtonInteraction(
               // Return the token URL
               return {
                 token: uploadToken.token,
-                url: `${process.env.BASE_URL || "http://piscoc.pinkytoepaper.com"}/public-upload/html-zip/${uploadToken.token}`,
+                // Use REPLIT_SLUG for development environments, fall back to configured BASE_URL or production URL
+                url: `${process.env.REPLIT_SLUG ? 
+                     `https://${process.env.REPLIT_SLUG}.replit.dev` : 
+                     (process.env.BASE_URL || "http://piscoc.pinkytoepaper.com")}/public-upload/html-zip/${uploadToken.token}`,
               };
             } catch (error) {
               console.error("Error generating follow-up upload token:", error);
