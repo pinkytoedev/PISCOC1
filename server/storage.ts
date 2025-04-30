@@ -507,11 +507,15 @@ export class DatabaseStorage implements IStorage {
     const token = await this.getUploadToken(id);
     if (!token) return undefined;
     
+    // Handle null values safely
+    const currentUses = token.uses ?? 0;
+    const maxUses = token.maxUses ?? 0;
+    
     const [updatedToken] = await db
       .update(uploadTokens)
       .set({ 
-        uses: token.uses + 1,
-        active: token.maxUses > 0 ? token.uses + 1 < token.maxUses : true 
+        uses: currentUses + 1,
+        active: maxUses > 0 ? currentUses + 1 < maxUses : true 
       })
       .where(eq(uploadTokens.id, id))
       .returning();

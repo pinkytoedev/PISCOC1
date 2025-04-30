@@ -86,7 +86,11 @@ async function verifyUploadToken(req: Request, res: Response, next: Function) {
       return res.status(401).json({ message: 'Upload token has expired' });
     }
     
-    if (uploadToken.maxUses > 0 && uploadToken.uses >= uploadToken.maxUses) {
+    // Handle null values safely
+    const maxUses = uploadToken.maxUses ?? 0;
+    const uses = uploadToken.uses ?? 0;
+    
+    if (maxUses > 0 && uses >= maxUses) {
       return res.status(401).json({ message: 'Upload token has reached maximum uses' });
     }
     
@@ -306,8 +310,9 @@ export function setupPublicUploadRoutes(app: Express) {
   app.post('/api/public-upload/image/:token', verifyUploadToken, imageUpload.single('file'), async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
-      const uploadToken = req.uploadToken;
-      const article = req.targetArticle;
+      // We can safely assert these are defined because verifyUploadToken guarantees it
+      const uploadToken = req.uploadToken!;
+      const article = req.targetArticle!;
       
       if (uploadToken.uploadType !== 'image') {
         return res.status(400).json({ message: 'This token is not valid for image uploads' });
@@ -394,8 +399,9 @@ export function setupPublicUploadRoutes(app: Express) {
   app.post('/api/public-upload/instagram-image/:token', verifyUploadToken, imageUpload.single('file'), async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
-      const uploadToken = req.uploadToken;
-      const article = req.targetArticle;
+      // We can safely assert these are defined because verifyUploadToken guarantees it
+      const uploadToken = req.uploadToken!;
+      const article = req.targetArticle!;
       
       if (uploadToken.uploadType !== 'instagram-image') {
         return res.status(400).json({ message: 'This token is not valid for Instagram image uploads' });
@@ -481,8 +487,9 @@ export function setupPublicUploadRoutes(app: Express) {
   app.post('/api/public-upload/html-zip/:token', verifyUploadToken, zipUpload.single('file'), async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
-      const uploadToken = req.uploadToken;
-      const article = req.targetArticle;
+      // We can safely assert these are defined because verifyUploadToken guarantees it
+      const uploadToken = req.uploadToken!;
+      const article = req.targetArticle!;
       
       if (uploadToken.uploadType !== 'html-zip') {
         return res.status(400).json({ message: 'This token is not valid for HTML ZIP uploads' });
@@ -548,6 +555,10 @@ export function setupPublicUploadRoutes(app: Express) {
   app.get('/api/public-upload/info/:token', verifyUploadToken, async (req: Request, res: Response) => {
     try {
       // Token and article are attached by verifyUploadToken middleware
+      if (!req.uploadToken || !req.targetArticle) {
+        return res.status(500).json({ message: 'Internal server error - token data missing' });
+      }
+      
       const uploadToken = req.uploadToken;
       const article = req.targetArticle;
       
