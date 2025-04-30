@@ -534,6 +534,21 @@ export default function InstagramPage() {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
+                
+                {/* Facebook in Replit notice */}
+                <Alert className="mb-4">
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>Facebook in Replit</AlertTitle>
+                  <AlertDescription>
+                    <p>Facebook login may not work correctly in the Replit environment due to security restrictions, especially with popup blockers and iframe limitations.</p>
+                    <p className="mt-2">To get around this:</p>
+                    <ul className="list-disc pl-5 mt-1">
+                      <li>Try using this app outside the Replit environment</li>
+                      <li>Disable popup blockers in your browser</li>
+                      <li>Use the application in a full browser window</li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
               </CardContent>
               <CardFooter>
                 {status === 'connected' ? (

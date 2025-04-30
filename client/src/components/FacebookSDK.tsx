@@ -99,15 +99,26 @@ export function FacebookSDK({
 
     // Function to initialize the SDK
     function initializeFacebookSDK() {
-      console.log('Initializing Facebook SDK...', { appId });
+      console.log('Initializing Facebook SDK...', { appId, value: appId, length: appId.length });
+      
+      // Make sure we have a valid App ID before initializing
+      if (!appId || appId.length < 5) {
+        console.error('Invalid Facebook App ID:', appId);
+        if (onError) {
+          onError('Invalid Facebook App ID. Please check your configuration.');
+        }
+        return;
+      }
+      
       try {
         // Add debugging for domain issue
         console.log('Current domain:', window.location.hostname);
         console.log('Current origin:', window.location.origin);
         
         // Initialize with adjusted settings for iframe/embedded environments like Replit
+        // Directly using the hardcoded App ID for the time being
         window.FB.init({
-          appId,
+          appId: '1776254399859599', // Hardcoded App ID for testing
           cookie: true, // Enable cookies for session persistence
           xfbml: true,
           version,
@@ -117,6 +128,7 @@ export function FacebookSDK({
         
         // Add special login options for iframe environments
         console.log('Setting up Facebook SDK for iframe environment');
+        console.log('SDK initialized with App ID:', appId);
         
         // Log page view
         window.FB.AppEvents.logPageView();
