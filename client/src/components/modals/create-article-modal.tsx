@@ -883,16 +883,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               </p>
             </div>
 
-            <div>
-              <Label htmlFor="photoCredit">Photo Credit</Label>
-              <Input
-                id="photoCredit"
-                name="photoCredit"
-                value={formData.photoCredit || ''}
-                onChange={handleInputChange}
-                placeholder="Credit for the photo"
-              />
-            </div>
+
 
             <div>
               <Label htmlFor="hashtags">Hashtags</Label>
