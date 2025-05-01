@@ -1855,24 +1855,16 @@ async function handleButtonInteraction(
     else if (interaction.customId.startsWith("upload_insta_image_now_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      // Properly extract the ID part by taking everything after the prefix
-      const prefix = "upload_insta_image_now_";
-      const idPart = fullId.slice(prefix.length);
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
       
       console.log("Instagram image upload NOW - full ID:", fullId);
-      console.log("Instagram image upload NOW - extracted ID part:", idPart);
-      
-      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
-      // Extract just the numeric part using regex
-      const numericMatch = idPart.match(/^\d+/);
-      const numericId = numericMatch ? numericMatch[0] : idPart;
-      
-      console.log("Instagram image upload NOW - numeric ID part:", numericId);
-      const articleId = parseInt(numericId, 10);
+      console.log("Instagram image upload NOW - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          content: `Invalid article ID from "${fullId}". Please try again.`,
           ephemeral: true,
         });
         return;
@@ -1999,24 +1991,16 @@ async function handleButtonInteraction(
     else if (interaction.customId.startsWith("upload_web_image_now_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      // Properly extract the ID part by taking everything after the prefix
-      const prefix = "upload_web_image_now_";
-      const idPart = fullId.slice(prefix.length);
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
       
       console.log("Web image upload NOW - full ID:", fullId);
-      console.log("Web image upload NOW - extracted ID part:", idPart);
-      
-      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
-      // Extract just the numeric part using regex
-      const numericMatch = idPart.match(/^\d+/);
-      const numericId = numericMatch ? numericMatch[0] : idPart;
-      
-      console.log("Web image upload NOW - numeric ID part:", numericId);
-      const articleId = parseInt(numericId, 10);
+      console.log("Web image upload NOW - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          content: `Invalid article ID from "${fullId}". Please try again.`,
           ephemeral: true,
         });
         return;
@@ -2138,23 +2122,16 @@ async function handleButtonInteraction(
     else if (interaction.customId.startsWith("upload_content_")) {
       // Extract article ID from the custom ID
       const fullId = interaction.customId;
-      // Properly extract the ID part by taking everything after the prefix
-      const prefix = "upload_content_";
-      const idPart = fullId.slice(prefix.length);
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      
       console.log("Content upload - full ID:", fullId);
-      console.log("Content upload - extracted ID part:", idPart);
-      
-      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
-      // Extract just the numeric part using regex
-      const numericMatch = idPart.match(/^\d+/);
-      const numericId = numericMatch ? numericMatch[0] : idPart;
-      
-      console.log("Content upload - numeric ID part:", numericId);
-      const articleId = parseInt(numericId, 10);
+      console.log("Content upload - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          content: `Invalid article ID from "${fullId}". Please try again.`,
           ephemeral: true,
         });
         return;
@@ -2220,25 +2197,18 @@ async function handleButtonInteraction(
     // Handle immediate content file upload
     // Handler for upload_content_now button removed as it's no longer needed
     else if (interaction.customId.startsWith("upload_web_image_")) {
-      // Extract article ID from the custom ID - be careful with the exact string match
+      // Extract article ID from the custom ID
       const fullId = interaction.customId;
-      // Properly extract the ID part by taking everything after the prefix
-      const prefix = "upload_web_image_";
-      const idPart = fullId.slice(prefix.length);
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      
       console.log("Web image upload - full ID:", fullId);
-      console.log("Web image upload - extracted ID part:", idPart);
-      
-      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
-      // Extract just the numeric part using regex
-      const numericMatch = idPart.match(/^\d+/);
-      const numericId = numericMatch ? numericMatch[0] : idPart;
-      
-      console.log("Web image upload - numeric ID part:", numericId);
-      const articleId = parseInt(numericId, 10);
+      console.log("Web image upload - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          content: `Invalid article ID from "${fullId}". Please try again.`,
           ephemeral: true,
         });
         return;
