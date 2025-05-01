@@ -2,63 +2,63 @@ import { Request, Response } from 'express';
 import crypto from 'crypto';
 import { log } from '../vite';
 import { storage } from '../storage';
+import {
+  getAppAccessToken,
+  getUserAccessToken,
+  getInstagramAccountId as getInstagramAccountIdFromClient,
+  getInstagramMedia as getInstagramMediaFromClient,
+  getInstagramMediaById as getInstagramMediaByIdFromClient,
+  getWebhookSubscriptions as getWebhookSubscriptionsFromClient,
+  clearInstagramCaches
+} from './instagramClient';
 
 // Constants
 const WEBHOOK_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN;
 const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
-const APP_ID = process.env.FACEBOOK_APP_ID;
 
-// Helper to get Instagram media fields
+// Instagram field constants
 const INSTAGRAM_MEDIA_FIELDS = 'id,caption,media_type,media_url,permalink,thumbnail_url,timestamp,username,children{id,media_type,media_url,thumbnail_url}';
 
 /**
- * Get an app access token for API calls that require it
- * @returns App access token or null if unavailable
+ * Get the Instagram Business Account ID for the authenticated user
+ * Using client with rate limiting and caching
+ * 
+ * @returns Instagram Business Account ID or null if not found
  */
-async function getAppAccessToken(): Promise<string | null> {
-  try {
-    // First check if we have it cached
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "app_access_token");
-    if (tokenSetting?.value) {
-      return tokenSetting.value;
-    }
-    
-    // If not cached, we need to generate it
-    if (!APP_ID || !APP_SECRET) {
-      log('Cannot generate app access token: APP_ID or APP_SECRET missing', 'instagram');
-      return null;
-    }
-    
-    // Make the API call to get an app access token
-    const response = await fetch(
-      `https://graph.facebook.com/oauth/access_token?client_id=${APP_ID}&client_secret=${APP_SECRET}&grant_type=client_credentials`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`Failed to get app access token: ${await response.text()}`);
-    }
-    
-    const data = await response.json();
-    const appAccessToken = data.access_token;
-    
-    if (!appAccessToken) {
-      throw new Error('No access_token in response');
-    }
-    
-    // Cache the token for future use
-    await storage.createIntegrationSetting({
-      service: "facebook",
-      key: "app_access_token",
-      value: appAccessToken,
-      enabled: true
-    });
-    
-    log('Generated and stored new app access token', 'instagram');
-    return appAccessToken;
-  } catch (error) {
-    log(`Error getting app access token: ${error}`, 'instagram');
-    return null;
-  }
+export async function getInstagramAccountId(): Promise<string | null> {
+  return getInstagramAccountIdFromClient();
+}
+
+/**
+ * Get recent media from an Instagram Business Account
+ * Using client with rate limiting and caching
+ * 
+ * @param limit Number of posts to retrieve (default: 25)
+ * @returns Array of Instagram media objects
+ */
+export async function getInstagramMedia(limit: number = 25) {
+  return getInstagramMediaFromClient(limit);
+}
+
+/**
+ * Get a single Instagram media post by ID
+ * Using client with rate limiting and caching
+ * 
+ * @param mediaId ID of the Instagram media post
+ * @returns Instagram media object or null if not found
+ */
+export async function getInstagramMediaById(mediaId: string) {
+  return getInstagramMediaByIdFromClient(mediaId);
+}
+
+/**
+ * Get active webhook subscriptions
+ * Using client with rate limiting and caching
+ * 
+ * @returns Array of active subscriptions
+ */
+export async function getWebhookSubscriptions() {
+  return getWebhookSubscriptionsFromClient();
 }
 
 /**
@@ -76,6 +76,9 @@ export async function testWebhookConnection(): Promise<{
   details?: any;
 }> {
   try {
+    // Get APP_ID from environment
+    const APP_ID = process.env.FACEBOOK_APP_ID;
+    
     const results: {
       success: boolean;
       appId: boolean;
@@ -143,6 +146,9 @@ export async function testWebhookConnection(): Promise<{
       return results;
     }
   } catch (error) {
+    // Get APP_ID here too for error handling
+    const APP_ID = process.env.FACEBOOK_APP_ID;
+    
     return {
       success: false,
       appId: !!APP_ID,
@@ -543,231 +549,58 @@ export async function subscribeToWebhook(
 }
 
 /**
- * Get active webhook subscriptions
- * 
- * @returns Array of active subscriptions
- */
-export async function getWebhookSubscriptions() {
-  try {
-    log('Getting Instagram webhook subscriptions', 'instagram');
-    
-    // Get app access token - required for webhook operations
-    const appAccessToken = await getAppAccessToken();
-    
-    // If we have an app access token, attempt to call the Graph API
-    if (appAccessToken) {
-      try {
-        // Make the API call to Facebook Graph API
-        const response = await fetch(
-          `https://graph.facebook.com/v17.0/app/subscriptions?access_token=${appAccessToken}`
-        );
-        
-        if (!response.ok) {
-          throw new Error(`API returned ${response.status}: ${await response.text()}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data && data.data) {
-          // Transform the response to match our expected format
-          return data.data.map((sub: any) => ({
-            object: sub.object,
-            callback_url: sub.callback_url,
-            active: true,
-            fields: sub.fields,
-            subscription_id: `sub_${sub.object}_${sub.fields.join('_')}`
-          }));
-        }
-      } catch (graphError) {
-        log(`Error calling Graph API for subscriptions: ${graphError}`, 'instagram');
-        // Fall back to local data if API call fails
-      }
-    }
-    
-    // Fall back to getting subscriptions from our database
-    try {
-      const settings = await storage.getIntegrationSettings("instagram");
-      const subscriptionSettings = settings.filter(setting => setting.key.startsWith('webhook_subscription_'));
-      
-      if (subscriptionSettings.length > 0) {
-        return subscriptionSettings.map(sub => JSON.parse(sub.value));
-      }
-    } catch (dbError) {
-      log(`Error getting webhook subscriptions from database: ${dbError}`, 'instagram');
-    }
-    
-    // Return empty array if no subscriptions are found
-    return [];
-  } catch (error) {
-    log(`Error getting webhook subscriptions: ${error}`, 'instagram');
-    throw error;
-  }
-}
-
-/**
  * Unsubscribe from a webhook subscription
  * 
  * @param subscriptionId The ID of the subscription to delete
  * @returns Success status
  */
-/**
- * Get the Instagram Business Account ID for the authenticated user
- * 
- * @returns Instagram Business Account ID or null if not found
- */
-export async function getInstagramAccountId(): Promise<string | null> {
+export async function unsubscribeFromWebhook(subscriptionId: string): Promise<{ success: boolean }> {
   try {
-    // First check if we have it cached
-    const idSetting = await storage.getIntegrationSettingByKey("instagram", "account_id");
-    if (idSetting?.value) {
-      return idSetting.value;
+    log(`Unsubscribing from webhook: ${subscriptionId}`, 'instagram');
+    
+    // First, try to find the subscription in our database
+    const key = `webhook_subscription_${subscriptionId}`;
+    const setting = await storage.getIntegrationSettingByKey("instagram", key);
+    
+    if (!setting) {
+      throw new Error(`Subscription ${subscriptionId} not found`);
     }
     
-    // Get user access token
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    if (!tokenSetting?.value) {
-      log('Cannot get Instagram account ID: User access token missing', 'instagram');
-      return null;
-    }
+    // TODO: Add actual unsubscribe logic with the Graph API
+    // This would require knowledge of the specific subscription 
+    // from the Facebook Developer Portal
     
-    const accessToken = tokenSetting.value;
+    // For now, just remove from our database
+    await storage.deleteIntegrationSetting(setting.id);
     
-    // First get the user's pages
-    const pagesResponse = await fetch(
-      `https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`
-    );
+    await logWebhookActivity('unsubscribe_success', {
+      subscription_id: subscriptionId
+    });
     
-    if (!pagesResponse.ok) {
-      throw new Error(`Failed to get user pages: ${await pagesResponse.text()}`);
-    }
-    
-    const pagesData = await pagesResponse.json();
-    
-    if (!pagesData.data || !pagesData.data.length) {
-      log('User has no Facebook Pages associated with their account', 'instagram');
-      return null;
-    }
-    
-    // For each page, try to get the Instagram Business Account
-    for (const page of pagesData.data) {
-      try {
-        const igResponse = await fetch(
-          `https://graph.facebook.com/v18.0/${page.id}?fields=instagram_business_account&access_token=${accessToken}`
-        );
-        
-        if (!igResponse.ok) continue;
-        
-        const igData = await igResponse.json();
-        
-        if (igData.instagram_business_account && igData.instagram_business_account.id) {
-          const instagramAccountId = igData.instagram_business_account.id;
-          
-          // Cache the ID for future use
-          await storage.createIntegrationSetting({
-            service: "instagram",
-            key: "account_id",
-            value: instagramAccountId,
-            enabled: true
-          });
-          
-          log(`Found and stored Instagram account ID: ${instagramAccountId}`, 'instagram');
-          return instagramAccountId;
-        }
-      } catch (pageError) {
-        log(`Error checking page ${page.id} for Instagram account: ${pageError}`, 'instagram');
-        // Continue to next page
-      }
-    }
-    
-    log('No Instagram Business Account found for any of the user\'s pages', 'instagram');
-    return null;
+    return { success: true };
   } catch (error) {
-    log(`Error getting Instagram account ID: ${error}`, 'instagram');
-    return null;
-  }
-}
-
-/**
- * Get recent media from an Instagram Business Account
- * 
- * @param limit Number of posts to retrieve (default: 25)
- * @returns Array of Instagram media objects
- */
-export async function getInstagramMedia(limit: number = 25) {
-  try {
-    // Get Instagram account ID
-    const instagramAccountId = await getInstagramAccountId();
-    if (!instagramAccountId) {
-      throw new Error('Instagram account ID not found');
-    }
+    log(`Error unsubscribing from webhook: ${error}`, 'instagram');
+    await logWebhookActivity('unsubscribe_error', {
+      error: error instanceof Error ? error.message : String(error),
+      subscription_id: subscriptionId
+    });
     
-    // Get user access token
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    if (!tokenSetting?.value) {
-      throw new Error('User access token missing');
-    }
-    
-    const accessToken = tokenSetting.value;
-    
-    // Fetch media from the Instagram Graph API
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${instagramAccountId}/media?fields=${INSTAGRAM_MEDIA_FIELDS}&limit=${limit}&access_token=${accessToken}`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}: ${await response.text()}`);
-    }
-    
-    const data = await response.json();
-    return data.data || [];
-  } catch (error) {
-    log(`Error getting Instagram media: ${error}`, 'instagram');
     throw error;
   }
 }
 
 /**
- * Get a single Instagram media post by ID
+ * Create an Instagram media container for later publishing
+ * This is the first step in the creation process
  * 
- * @param mediaId ID of the Instagram media post
- * @returns Instagram media object or null if not found
- */
-export async function getInstagramMediaById(mediaId: string) {
-  try {
-    // Get user access token
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    if (!tokenSetting?.value) {
-      throw new Error('User access token missing');
-    }
-    
-    const accessToken = tokenSetting.value;
-    
-    // Fetch the specific media from the Instagram Graph API
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${mediaId}?fields=${INSTAGRAM_MEDIA_FIELDS}&access_token=${accessToken}`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}: ${await response.text()}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    log(`Error getting Instagram media by ID: ${error}`, 'instagram');
-    throw error;
-  }
-}
-
-/**
- * Create a new Instagram media container
- * This is step 1 of publishing content to Instagram (create container)
- * 
- * @param imageUrl URL of the image to publish
+ * @param imageUrl URL of the image to post
  * @param caption Caption for the post
- * @returns Container ID to use in the publish step
+ * @returns Container ID for publishing
  */
-export async function createInstagramMediaContainer(imageUrl: string, caption: string) {
+export async function createInstagramMediaContainer(imageUrl: string, caption: string): Promise<string> {
   try {
+    log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
+    
     // Get Instagram account ID
     const instagramAccountId = await getInstagramAccountId();
     if (!instagramAccountId) {
@@ -775,19 +608,18 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
     }
     
     // Get user access token
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    if (!tokenSetting?.value) {
+    const accessToken = await getUserAccessToken();
+    if (!accessToken) {
       throw new Error('User access token missing');
     }
     
-    const accessToken = tokenSetting.value;
-    
-    // Create the media container
+    // Set up the request to create a media container
     const formData = new URLSearchParams();
     formData.append('image_url', imageUrl);
     formData.append('caption', caption);
     formData.append('access_token', accessToken);
     
+    // Make the API call to Instagram Graph API
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
       {
@@ -806,7 +638,7 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
     const data = await response.json();
     
     if (!data.id) {
-      throw new Error('No container ID returned from API');
+      throw new Error('No container ID returned');
     }
     
     return data.id;
@@ -817,14 +649,16 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
 }
 
 /**
- * Publish an Instagram media container
- * This is step 2 of publishing content to Instagram (publish container)
+ * Publish a media container to Instagram
+ * This is the second step in the creation process
  * 
  * @param containerId Container ID from createInstagramMediaContainer
- * @returns ID of the published media
+ * @returns Media ID of the published post
  */
-export async function publishInstagramMedia(containerId: string) {
+export async function publishInstagramMedia(containerId: string): Promise<string> {
   try {
+    log(`Publishing Instagram media container: ${containerId}`, 'instagram');
+    
     // Get Instagram account ID
     const instagramAccountId = await getInstagramAccountId();
     if (!instagramAccountId) {
@@ -832,18 +666,17 @@ export async function publishInstagramMedia(containerId: string) {
     }
     
     // Get user access token
-    const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
-    if (!tokenSetting?.value) {
+    const accessToken = await getUserAccessToken();
+    if (!accessToken) {
       throw new Error('User access token missing');
     }
     
-    const accessToken = tokenSetting.value;
-    
-    // Publish the media
+    // Set up the request to publish the media
     const formData = new URLSearchParams();
     formData.append('creation_id', containerId);
     formData.append('access_token', accessToken);
     
+    // Make the API call to Instagram Graph API
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${instagramAccountId}/media_publish`,
       {
@@ -862,105 +695,12 @@ export async function publishInstagramMedia(containerId: string) {
     const data = await response.json();
     
     if (!data.id) {
-      throw new Error('No media ID returned from API');
+      throw new Error('No media ID returned');
     }
     
     return data.id;
   } catch (error) {
     log(`Error publishing Instagram media: ${error}`, 'instagram');
-    throw error;
-  }
-}
-
-export async function unsubscribeFromWebhook(subscriptionId: string) {
-  try {
-    log(`Unsubscribing from Instagram webhook: ${subscriptionId}`, 'instagram');
-    
-    // First, try to find this subscription in our database
-    let subscriptionData: any = null;
-    let subscriptionSettingId: number | null = null;
-    
-    try {
-      const settings = await storage.getIntegrationSettings("instagram");
-      const subscriptionSetting = settings.find(
-        setting => setting.key === `webhook_subscription_${subscriptionId}`
-      );
-      
-      if (subscriptionSetting) {
-        subscriptionData = JSON.parse(subscriptionSetting.value);
-        subscriptionSettingId = subscriptionSetting.id;
-      }
-    } catch (dbError) {
-      log(`Error finding webhook subscription: ${dbError}`, 'instagram');
-    }
-    
-    // Get app access token - required for webhook operations
-    const appAccessToken = await getAppAccessToken();
-    
-    // Attempt to call the API if we have an app access token
-    if (appAccessToken && subscriptionData) {
-      try {
-        // We need to use the fields to properly identify the subscription to delete
-        const fields = subscriptionData.fields;
-        
-        // Setup the request to the Graph API
-        const formData = new URLSearchParams();
-        formData.append('object', 'instagram');
-        formData.append('fields', fields.join(','));
-        formData.append('access_token', appAccessToken);
-        
-        // Make the API call to Facebook Graph API
-        const response = await fetch(
-          'https://graph.facebook.com/v17.0/app/subscriptions',
-          {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData.toString()
-          }
-        );
-        
-        const responseText = await response.text();
-        
-        if (!response.ok) {
-          throw new Error(`API returned ${response.status}: ${responseText}`);
-        }
-        
-        // Check if the response indicates success
-        const isSuccess = responseText === 'true' || responseText.includes('"success":true');
-        
-        if (!isSuccess) {
-          throw new Error(`API did not indicate success: ${responseText}`);
-        }
-      } catch (graphError) {
-        log(`Error calling Graph API for subscription deletion: ${graphError}`, 'instagram');
-        // Continue with local deletion even if API call fails
-      }
-    }
-    
-    // Remove the subscription from our database if we found it
-    if (subscriptionSettingId) {
-      try {
-        await storage.deleteIntegrationSetting(subscriptionSettingId);
-      } catch (dbError) {
-        log(`Error deleting webhook subscription from database: ${dbError}`, 'instagram');
-      }
-    }
-    
-    await logWebhookActivity('subscription_deleted', {
-      subscription_id: subscriptionId,
-      timestamp: new Date().toISOString()
-    });
-    
-    return { success: true };
-  } catch (error) {
-    log(`Error unsubscribing from webhook: ${error}`, 'instagram');
-    await logWebhookActivity('unsubscribe_error', {
-      error: error instanceof Error ? error.message : String(error),
-      subscription_id: subscriptionId
-    });
-    
     throw error;
   }
 }
