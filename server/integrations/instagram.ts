@@ -704,3 +704,85 @@ export async function publishInstagramMedia(containerId: string): Promise<string
     throw error;
   }
 }
+
+/**
+ * Posts an article to Instagram when it's published
+ * Uses the article's instagramImageUrl (InstaPhotoLink) and hashtags for the post
+ *
+ * @param article The article to post to Instagram
+ * @returns Object with success status and mediaId if successful
+ */
+export async function postArticleToInstagram(article: any): Promise<{success: boolean, mediaId?: string, error?: string}> {
+  try {
+    log(`Attempting to post article to Instagram: ${article.title} (ID: ${article.id})`, 'instagram');
+    
+    // Check if article has an Instagram image URL (InstaPhotoLink)
+    if (!article.instagramImageUrl) {
+      log(`Article ${article.id} has no Instagram image URL, skipping Instagram post`, 'instagram');
+      return { success: false, error: 'No Instagram image URL found for this article' };
+    }
+    
+    // Prepare the caption using hashtags if available
+    let caption = article.title || '';
+    
+    if (article.hashtags && article.hashtags.trim() !== '') {
+      // Make sure hashtags start with # if not already formatted
+      const hashtags = article.hashtags
+        .split(' ')
+        .map((tag: string) => tag.startsWith('#') ? tag : `#${tag}`)
+        .join(' ');
+      
+      caption = `${caption}\n\n${hashtags}`;
+    }
+    
+    log(`Creating Instagram post with image: ${article.instagramImageUrl}`, 'instagram');
+    log(`Caption: ${caption}`, 'instagram');
+    
+    // Create an Instagram media container
+    const containerId = await createInstagramMediaContainer(article.instagramImageUrl, caption);
+    
+    // Publish the media
+    const mediaId = await publishInstagramMedia(containerId);
+    
+    // Log the activity
+    await storage.createActivityLog({
+      action: 'instagram_article_published',
+      userId: null,
+      resourceType: 'article',
+      resourceId: article.id.toString(),
+      details: {
+        timestamp: new Date().toISOString(),
+        containerId,
+        mediaId,
+        articleTitle: article.title
+      }
+    });
+    
+    log(`Successfully posted article to Instagram: ${article.title} (Media ID: ${mediaId})`, 'instagram');
+    
+    return { 
+      success: true, 
+      mediaId 
+    };
+  } catch (error) {
+    log(`Error posting article to Instagram: ${error}`, 'instagram');
+    
+    // Log the error
+    await storage.createActivityLog({
+      action: 'instagram_post_error',
+      userId: null,
+      resourceType: 'article',
+      resourceId: article.id.toString(),
+      details: {
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+        articleTitle: article.title
+      }
+    });
+    
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
