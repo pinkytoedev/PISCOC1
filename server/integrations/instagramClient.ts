@@ -395,7 +395,7 @@ export function clearInstagramCaches(): void {
 /**
  * Process and prepare an image URL for Instagram
  * This ensures the image meets Instagram's API requirements
- * Uses ImgBB for reliable image hosting that Instagram can access
+ * Downloads the image locally and serves it from our own server to ensure compatibility
  * 
  * @param imageUrl Original image URL
  * @returns Processed image URL that is compatible with Instagram API
@@ -404,31 +404,46 @@ export async function prepareImageForInstagram(imageUrl: string): Promise<string
   try {
     log(`Preparing image for Instagram: ${imageUrl}`, 'instagram');
     
-    // Import the image utilities
+    // Import the image handler utilities
+    const { downloadAndStoreImage, getPublicImageUrl } = await import('../utils/instagramImageHandler');
     const { uploadToImgBB } = await import('../utils/imageDownloader');
     
-    // Method 1: Use ImgBB's service to host the image (most reliable)
+    // Step 1: Try to download and store the image locally first (most reliable)
     try {
-      // Upload the image to ImgBB
-      const imgbbUrl = await uploadToImgBB(imageUrl);
-      log(`Image uploaded to ImgBB for Instagram: ${imgbbUrl}`, 'instagram');
-      return imgbbUrl;
-    } catch (imgbbError) {
-      log(`ImgBB upload failed, trying alternative methods: ${imgbbError}`, 'instagram');
+      // Download and store the image
+      const localPath = await downloadAndStoreImage(imageUrl);
       
-      // Method 2: If ImgBB fails, clean up the URL if it's already an imgBB URL
-      if (imageUrl.includes('i.ibb.co')) {
-        // For imgBB URLs we need to ensure they are direct image links
-        // 1. Remove any query parameters if they exist
-        const cleanUrl = imageUrl.split('?')[0];
+      // Get the full public URL
+      const publicUrl = getPublicImageUrl(localPath);
+      
+      log(`Image downloaded and stored locally for Instagram: ${publicUrl}`, 'instagram');
+      return publicUrl;
+    } catch (downloadError) {
+      log(`Local image storage failed, trying ImgBB as fallback: ${downloadError}`, 'instagram');
+      
+      // Step 2: Fallback to ImgBB if local download fails
+      try {
+        // Upload the image to ImgBB
+        const imgbbUrl = await uploadToImgBB(imageUrl);
+        log(`Image uploaded to ImgBB for Instagram: ${imgbbUrl}`, 'instagram');
+        return imgbbUrl;
+      } catch (imgbbError) {
+        log(`ImgBB upload failed, trying alternative methods: ${imgbbError}`, 'instagram');
         
-        // 2. Ensure the URL has an image extension
-        if (!cleanUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
-          // If no extension, append .jpg as fallback
-          return `${cleanUrl}.jpg`;
+        // Step 3: If ImgBB fails, clean up the URL if it's already an imgBB URL
+        if (imageUrl.includes('i.ibb.co')) {
+          // For imgBB URLs we need to ensure they are direct image links
+          // 1. Remove any query parameters if they exist
+          const cleanUrl = imageUrl.split('?')[0];
+          
+          // 2. Ensure the URL has an image extension
+          if (!cleanUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
+            // If no extension, append .jpg as fallback
+            return `${cleanUrl}.jpg`;
+          }
+          
+          return cleanUrl;
         }
-        
-        return cleanUrl;
       }
     }
     
