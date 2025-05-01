@@ -1,0 +1,30 @@
+Instagram image upload - full ID: upload_insta_image_217
+Instagram image upload - matched article ID: 217
+Processing Instagram image upload for article ID: 217
+Instagram image upload - full ID: upload_insta_image_now_217
+Instagram image upload - matched article ID: 217
+Processing Instagram image upload for article ID: 217
+Instagram image upload - full ID: upload_insta_image_now_217
+Instagram image upload - matched article ID: 217
+Processing Instagram image upload for article ID: 217
+Instagram image upload - full ID: upload_insta_image_now_217
+Instagram image upload - matched article ID: 217
+Processing Instagram image upload for article ID: 217
+Error deferring Instagram upload reply: DiscordAPIError[40060]: Interaction has already been acknowledged.
+    at handleErrors (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/Shared.ts:148:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async BurstHandler.runRequest (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/BurstHandler.ts:144:20)
+    at async _REST.request (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/REST.ts:210:20)
+    at async ButtonInteraction.deferReply (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:123:22)
+    at async handleButtonInteraction (/home/runner/workspace/server/integrations/discordBot.ts:1775:9)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2612:11) {
+  requestBody: { files: undefined, json: { type: 5, data: [Object] } },
+  rawError: {
+    message: 'Interaction has already been acknowledged.',
+    code: 40060
+  },
+  code: 40060,
+  status: 400,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1367523720167690281/aW50ZXJhY3Rpb246MTM2NzUyMzcyMDE2NzY5MDI4MTptaHNzTDMwNUVRcGpEcWZjdmNVTWpCeDNLWlROWmw4MmVlWm8za2Z1SWFHemZHNUd4M1hPM0FITU51OXJQS1g0YTBiS2ZSbzlqR3NZcFpQdHhXdTdtZGNSbHVPQ29IOTFhc0JXWjBwTzBSZFNvcURBaHZZRmQwQU56Ykt1SHZOOA/callback?with_response=false'
+}
