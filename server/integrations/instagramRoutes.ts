@@ -11,10 +11,13 @@ import {
   testWebhookConnection,
   getInstagramMedia,
   getInstagramMediaById,
-  createInstagramMediaContainer,
-  publishInstagramMedia,
   getInstagramAccountId
 } from './instagram';
+
+import {
+  createInstagramMediaContainer,
+  publishInstagramMedia
+} from './instagramClient';
 
 /**
  * Setup routes for Instagram webhooks and API integration

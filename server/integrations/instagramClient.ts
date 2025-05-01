@@ -391,3 +391,170 @@ export function clearInstagramCaches(): void {
     }
   });
 }
+
+/**
+ * Process and prepare an image URL for Instagram
+ * This ensures the image meets Instagram's API requirements
+ * 
+ * @param imageUrl Original image URL
+ * @returns Processed image URL that is compatible with Instagram API
+ */
+export async function prepareImageForInstagram(imageUrl: string): Promise<string> {
+  try {
+    log(`Preparing image for Instagram: ${imageUrl}`, 'instagram');
+    
+    // Check if URL is from imgBB (common source of issues)
+    if (imageUrl.includes('i.ibb.co')) {
+      // For imgBB URLs we need to ensure they are direct image links
+      // Sometimes these are truncated or have additional parameters
+      
+      // 1. Remove any query parameters if they exist
+      const cleanUrl = imageUrl.split('?')[0];
+      
+      // 2. Ensure the URL has an image extension
+      if (!cleanUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
+        // If no extension, append .jpg as fallback
+        return `${cleanUrl}.jpg`;
+      }
+      
+      return cleanUrl;
+    }
+    
+    // Return original URL for other sources
+    return imageUrl;
+  } catch (error) {
+    log(`Error preparing image for Instagram: ${error}`, 'instagram');
+    // If any error occurs, return the original URL
+    return imageUrl;
+  }
+}
+
+/**
+ * Create an Instagram media container for later publishing
+ * Uses rate limiting and handles image preparation
+ * 
+ * @param imageUrl URL of the image to post
+ * @param caption Caption for the post
+ * @returns Container ID for publishing
+ */
+export async function createInstagramMediaContainer(imageUrl: string, caption: string): Promise<string> {
+  try {
+    log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
+    
+    // Process the image URL to ensure it's compatible with Instagram
+    const processedImageUrl = await prepareImageForInstagram(imageUrl);
+    
+    // Get Instagram account ID
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
+    }
+    
+    // Get user access token
+    const accessToken = await getUserAccessToken();
+    if (!accessToken) {
+      throw new Error('User access token missing');
+    }
+    
+    // Rate limit the API call
+    const endpoint = 'media/container';
+    return await executeRateLimitedRequest(endpoint, async () => {
+      // Set up the request to create a media container
+      const formData = new URLSearchParams();
+      formData.append('image_url', processedImageUrl);
+      formData.append('caption', caption);
+      formData.append('access_token', accessToken);
+      
+      // Log the actual URL being sent (for debugging)
+      log(`Sending image URL to Instagram: ${processedImageUrl}`, 'instagram');
+      
+      // Make the API call to Instagram Graph API
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${await response.text()}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.id) {
+        throw new Error('No container ID returned');
+      }
+      
+      return data.id;
+    });
+  } catch (error) {
+    log(`Error creating Instagram media container: ${error}`, 'instagram');
+    throw error;
+  }
+}
+
+/**
+ * Publish a media container to Instagram
+ * Uses rate limiting and error handling
+ * 
+ * @param containerId Container ID from createInstagramMediaContainer
+ * @returns Media ID of the published post
+ */
+export async function publishInstagramMedia(containerId: string): Promise<string> {
+  try {
+    log(`Publishing Instagram media container: ${containerId}`, 'instagram');
+    
+    // Get Instagram account ID
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
+    }
+    
+    // Get user access token
+    const accessToken = await getUserAccessToken();
+    if (!accessToken) {
+      throw new Error('User access token missing');
+    }
+    
+    // Rate limit the API call
+    const endpoint = 'media/publish';
+    return await executeRateLimitedRequest(endpoint, async () => {
+      // Set up the request to publish the media
+      const formData = new URLSearchParams();
+      formData.append('creation_id', containerId);
+      formData.append('access_token', accessToken);
+      
+      // Make the API call to Instagram Graph API
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${instagramAccountId}/media_publish`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}: ${await response.text()}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.id) {
+        throw new Error('No media ID returned');
+      }
+      
+      return data.id;
+    });
+  } catch (error) {
+    log(`Error publishing Instagram media: ${error}`, 'instagram');
+    throw error;
+  }
+}
