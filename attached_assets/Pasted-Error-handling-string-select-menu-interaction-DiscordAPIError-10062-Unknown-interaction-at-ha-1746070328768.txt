@@ -1,0 +1,81 @@
+Error handling string select menu interaction: DiscordAPIError[10062]: Unknown interaction
+    at handleErrors (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/Shared.ts:148:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async BurstHandler.runRequest (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/BurstHandler.ts:144:20)
+    at async _REST.request (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/REST.ts:210:20)
+    at async StringSelectMenuInteraction.deferUpdate (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:306:22)
+    at async handleStringSelectMenuInteraction (/home/runner/workspace/server/integrations/discordBot.ts:948:7)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2580:11) {
+  requestBody: { files: undefined, json: { type: 6 } },
+  rawError: { message: 'Unknown interaction', code: 10062 },
+  code: 10062,
+  status: 404,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1367341312021368852/aW50ZXJhY3Rpb246MTM2NzM0MTMxMjAyMTM2ODg1MjoyRnJMc3hIdVJNRUxQaWlNNlNOZ3doeGplOWpFb1NaSzZHNEZBSk9JaTdFUUFmVGhOSllOUThseDkwNEpLNVpLUmp5T2c4bjlrNzNhMTlxY0NIMGdQYW45VHU4cFYzMkJ5VUN0QW5lYVEyQmpEOGI4ejRTWWxDSFZZcFRaWHU0SA/callback?with_response=false'
+}
+Error sending error follow-up: Error [InteractionNotReplied]: The reply to this interaction has not been sent or deferred.
+    at StringSelectMenuInteraction.followUp (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:276:48)
+    at handleStringSelectMenuInteraction (/home/runner/workspace/server/integrations/discordBot.ts:1322:27)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2580:11) {
+  code: 'InteractionNotReplied'
+}
+Instagram image upload - full ID: upload_insta_image_216
+Instagram image upload - matched article ID: 216
+Processing Instagram image upload for article ID: 216
+Instagram image upload - full ID: upload_insta_image_now_216
+Instagram image upload - matched article ID: 216
+Processing Instagram image upload for article ID: 216
+Error handling button interaction: DiscordAPIError[10062]: Unknown interaction
+    at handleErrors (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/Shared.ts:148:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async BurstHandler.runRequest (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/BurstHandler.ts:144:20)
+    at async _REST.request (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/REST.ts:210:20)
+    at async ButtonInteraction.deferReply (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:123:22)
+    at async handleButtonInteraction (/home/runner/workspace/server/integrations/discordBot.ts:1774:7)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2574:11) {
+  requestBody: { files: undefined, json: { type: 5, data: [Object] } },
+  rawError: { message: 'Unknown interaction', code: 10062 },
+  code: 10062,
+  status: 404,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1367341335996006410/aW50ZXJhY3Rpb246MTM2NzM0MTMzNTk5NjAwNjQxMDpaZ3FuMG53a2ZIeEVITWZjZXV3azQwOE1oQURIQUN5aEE2S2FHcDNjUENSdVM0V2dxdXM3MzVWd291dlR1Q3ppRW9UcGFGam9lYWZKOVRON2pwOGNIZDZGTlU5SU0wcVpVdUJrY2l4a2tZVnpIMEE2QmZhZFYyM3pWOHlqeVp6Zg/callback?with_response=false'
+}
+Error handling Discord interaction: DiscordAPIError[40060]: Interaction has already been acknowledged.
+    at handleErrors (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/Shared.ts:148:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async BurstHandler.runRequest (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/BurstHandler.ts:144:20)
+    at async _REST.request (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/REST.ts:210:20)
+    at async ButtonInteraction.reply (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:194:22)
+    at async handleButtonInteraction (/home/runner/workspace/server/integrations/discordBot.ts:2487:5)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2574:11) {
+  requestBody: { files: [], json: { type: 4, data: [Object] } },
+  rawError: {
+    message: 'Interaction has already been acknowledged.',
+    code: 40060
+  },
+  code: 40060,
+  status: 400,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1367341335996006410/aW50ZXJhY3Rpb246MTM2NzM0MTMzNTk5NjAwNjQxMDpaZ3FuMG53a2ZIeEVITWZjZXV3azQwOE1oQURIQUN5aEE2S2FHcDNjUENSdVM0V2dxdXM3MzVWd291dlR1Q3ppRW9UcGFGam9lYWZKOVRON2pwOGNIZDZGTlU5SU0wcVpVdUJrY2l4a2tZVnpIMEE2QmZhZFYyM3pWOHlqeVp6Zg/callback?with_response=false'
+}
+Error sending error reply: DiscordAPIError[40060]: Interaction has already been acknowledged.
+    at handleErrors (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/Shared.ts:148:10)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async BurstHandler.runRequest (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/handlers/BurstHandler.ts:144:20)
+    at async _REST.request (/home/runner/workspace/node_modules/@discordjs/rest/src/lib/REST.ts:210:20)
+    at async ButtonInteraction.reply (/home/runner/workspace/node_modules/discord.js/src/structures/interfaces/InteractionResponses.js:194:22)
+    at async Client.<anonymous> (/home/runner/workspace/server/integrations/discordBot.ts:2640:13) {
+  requestBody: { files: [], json: { type: 4, data: [Object] } },
+  rawError: {
+    message: 'Interaction has already been acknowledged.',
+    code: 40060
+  },
+  code: 40060,
+  status: 400,
+  method: 'POST',
+  url: 'https://discord.com/api/v10/interactions/1367341335996006410/aW50ZXJhY3Rpb246MTM2NzM0MTMzNTk5NjAwNjQxMDpaZ3FuMG53a2ZIeEVITWZjZXV3azQwOE1oQURIQUN5aEE2S2FHcDNjUENSdVM0V2dxdXM3MzVWd291dlR1Q3ppRW9UcGFGam9lYWZKOVRON2pwOGNIZDZGTlU5SU0wcVpVdUJrY2l4a2tZVnpIMEE2QmZhZFYyM3pWOHlqeVp6Zg/callback?with_response=false'
+}
+Instagram image upload - full ID: upload_insta_image_216
+Instagram image upload - matched article ID: 216
+Processing Instagram image upload for article ID: 216
