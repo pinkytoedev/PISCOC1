@@ -127,15 +127,7 @@ export async function cleanupProcessedImages(filePath?: string, olderThanHours: 
  * Handles development vs production environments
  */
 async function getBaseUrl(): Promise<string> {
-  // Check if we have a base URL in settings
-  const baseUrlSetting = await storage.getIntegrationSettingByKey('application', 'base_url');
-  if (baseUrlSetting?.value) {
-    return baseUrlSetting.value;
-  }
-  
-  // Fallback to environment or default
-  const port = process.env.PORT || 5000;
-  return process.env.NODE_ENV === 'production' 
-    ? process.env.BASE_URL || `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-    : `http://localhost:${port}`;
+  // Always use the production domain for Instagram images
+  // as Instagram cannot access localhost or Replit preview domains
+  return 'https://piscoc.pinkytoepaper.com';
 }

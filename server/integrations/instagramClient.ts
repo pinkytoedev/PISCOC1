@@ -494,8 +494,9 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
       const containerId = await createMediaContainer(processedUrl, caption, instagramAccountId, accessToken);
       log(`Successfully created media container with ID: ${containerId}`, 'instagram');
       return containerId;
-    } catch (approach1Error) {
-      log(`Base64 approach failed: ${approach1Error}. Trying ImgBB approach...`, 'instagram');
+    } catch (error) {
+      const approach1Error = error as Error;
+      log(`Base64 approach failed: ${approach1Error.message}. Trying ImgBB approach...`, 'instagram');
     }
     
     // APPROACH 2: Using ImgBB as intermediary host
@@ -511,8 +512,9 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
       const containerId = await createMediaContainer(imgbbUrl, caption, instagramAccountId, accessToken);
       log(`Successfully created media container with ID: ${containerId}`, 'instagram');
       return containerId;
-    } catch (approach2Error) {
-      log(`ImgBB approach failed: ${approach2Error}. Trying direct URL approach...`, 'instagram');
+    } catch (error) {
+      const approach2Error = error as Error;
+      log(`ImgBB approach failed: ${approach2Error.message}. Trying direct URL approach...`, 'instagram');
     }
     
     // APPROACH 3: Trying direct image URL as last resort
@@ -525,8 +527,9 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
       const containerId = await createMediaContainer(cleanUrl, caption, instagramAccountId, accessToken);
       log(`Successfully created media container with ID: ${containerId}`, 'instagram');
       return containerId;
-    } catch (approach3Error) {
-      log(`Direct URL approach failed: ${approach3Error}.`, 'instagram');
+    } catch (error) {
+      const approach3Error = error as Error;
+      log(`Direct URL approach failed: ${approach3Error.message}`, 'instagram');
       throw new Error(`All approaches failed. Instagram API error: ${approach3Error.message}`);
     }
   } catch (error) {
