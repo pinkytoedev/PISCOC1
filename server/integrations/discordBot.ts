@@ -1730,7 +1730,9 @@ async function handleButtonInteraction(
     else if (interaction.customId.startsWith("upload_insta_image_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      const idPart = fullId.substring("upload_insta_image_".length);
+      // Properly extract the ID part by taking everything after the prefix
+      const prefix = "upload_insta_image_";
+      const idPart = fullId.slice(prefix.length);
       console.log("Instagram image upload - full ID:", fullId);
       console.log("Instagram image upload - extracted ID part:", idPart);
       const articleId = parseInt(idPart, 10);
@@ -1936,11 +1938,12 @@ async function handleButtonInteraction(
           return;
         }
 
-        // Process the attachment (uploads to Imgur and updates the article)
+        // Process the attachment (uploads to ImgBB and updates the article)
+        // Use InstaPhotoLink field name instead of instaPhoto
         const result = await processDiscordAttachment(
           attachment,
           articleId,
-          "instaPhoto",
+          "InstaPhotoLink",
         );
 
         // Confirm the upload with the result message
@@ -2067,11 +2070,12 @@ async function handleButtonInteraction(
           return;
         }
 
-        // Process the attachment (uploads to Imgur and updates the article)
+        // Process the attachment (uploads to ImgBB and updates the article)
+        // Use MainImageLink field instead of MainImage
         const result = await processDiscordAttachment(
           attachment,
           articleId,
-          "MainImage",
+          "MainImageLink",
         );
 
         // Confirm the upload with the result message
@@ -3735,7 +3739,7 @@ async function processDiscordAttachment(
     size: number;
   },
   articleId: number,
-  fieldName: "MainImage" | "instaPhoto",
+  fieldName: "MainImage" | "instaPhoto" | "MainImageLink" | "InstaPhotoLink",
 ): Promise<{ success: boolean; message: string; url?: string }> {
   try {
     // Validate the attachment is an image
@@ -3827,12 +3831,12 @@ async function processDiscordAttachment(
     // Update the article in our database
     const updateData: Partial<Article> = {};
 
-    if (fieldName === "MainImage") {
+    if (fieldName === "MainImage" || fieldName === "MainImageLink") {
       updateData.imageUrl = imgbbResult.url;
       console.log(
         `Updating article ${articleId} with MainImage URL: ${imgbbResult.url}`,
       );
-    } else if (fieldName === "instaPhoto") {
+    } else if (fieldName === "instaPhoto" || fieldName === "InstaPhotoLink") {
       updateData.instagramImageUrl = imgbbResult.url;
       console.log(
         `Updating article ${articleId} with Instagram image URL: ${imgbbResult.url}`,
@@ -3849,7 +3853,9 @@ async function processDiscordAttachment(
     // Map field names for user-friendly messages
     const fieldDisplayNames = {
       'MainImage': 'web image',
-      'instaPhoto': 'Instagram image'
+      'MainImageLink': 'web image',
+      'instaPhoto': 'Instagram image',
+      'InstaPhotoLink': 'Instagram image'
     };
     const displayName = fieldDisplayNames[fieldName] || fieldName;
 
