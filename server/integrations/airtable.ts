@@ -1886,9 +1886,11 @@ export function setupAirtableRoutes(app: Express) {
         
         // Step 2: Upload ImgBB URL to Airtable using the new link field approach
         // Map the field names to their link field equivalents
-        const fieldMappings = {
+        const fieldMappings: Record<string, string> = {
           'MainImage': 'MainImageLink',
-          'instaPhoto': 'InstaPhotoLink'
+          'instaPhoto': 'InstaPhotoLink',
+          'MainImageLink': 'MainImageLink',
+          'InstaPhotoLink': 'InstaPhotoLink'
         };
         
         // Use the mapped field name or fallback to original

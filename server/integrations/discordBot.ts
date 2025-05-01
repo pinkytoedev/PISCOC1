@@ -3895,7 +3895,7 @@ async function processDiscordAttachment(
     return {
       success: true,
       message: airtableResult
-        ? `${displayName} uploaded successfully to ImgBB and synced to Airtable's ${fieldName} field.`
+        ? `${displayName} uploaded successfully to ImgBB and synced to Airtable's ${targetFieldName} field.`
         : `${displayName} uploaded successfully to ImgBB but not synced to Airtable.`,
       url: imgbbResult.url,
     };
