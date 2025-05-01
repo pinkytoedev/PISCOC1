@@ -1870,7 +1870,8 @@ async function handleButtonInteraction(
 
       if (isNaN(articleId)) {
         try {
-          await interaction.reply({
+          await interaction.deferUpdate();
+          await interaction.followUp({
             content: `Invalid article ID from "${fullId}". Please try again.`,
             ephemeral: true,
           });
@@ -1889,7 +1890,8 @@ async function handleButtonInteraction(
       const article = await storage.getArticle(articleId);
 
       if (!article) {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content: "Article not found. It may have been deleted.",
           ephemeral: true,
         });
@@ -1897,7 +1899,8 @@ async function handleButtonInteraction(
       }
 
       if (article.status === "published") {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content:
             "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
           ephemeral: true,
@@ -1905,11 +1908,14 @@ async function handleButtonInteraction(
         return;
       }
 
+      // Defer the update first to acknowledge the button press
+      await interaction.deferUpdate();
+
       // Create a unique identifier for this upload request
       const uploadId = `insta_${articleId}_${Date.now()}`;
 
       // Tell the user to upload an image
-      await interaction.reply({
+      await interaction.followUp({
         content: `Please upload an image for Instagram for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
         ephemeral: true,
       });
@@ -2010,7 +2016,8 @@ async function handleButtonInteraction(
 
       if (isNaN(articleId)) {
         try {
-          await interaction.reply({
+          await interaction.deferUpdate();
+          await interaction.followUp({
             content: `Invalid article ID from "${fullId}". Please try again.`,
             ephemeral: true,
           });
@@ -2024,7 +2031,8 @@ async function handleButtonInteraction(
       const article = await storage.getArticle(articleId);
 
       if (!article) {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content: "Article not found. It may have been deleted.",
           ephemeral: true,
         });
@@ -2032,7 +2040,8 @@ async function handleButtonInteraction(
       }
 
       if (article.status === "published") {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content:
             "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
           ephemeral: true,
@@ -2040,11 +2049,14 @@ async function handleButtonInteraction(
         return;
       }
 
+      // Defer the update first to acknowledge the button press
+      await interaction.deferUpdate();
+
       // Create a unique identifier for this upload request
       const uploadId = `web_${articleId}_${Date.now()}`;
 
       // Tell the user to upload an image
-      await interaction.reply({
+      await interaction.followUp({
         content: `Please upload a main web image for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
         ephemeral: true,
       });
