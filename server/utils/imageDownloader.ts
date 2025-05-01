@@ -39,11 +39,23 @@ export async function uploadToImgBB(imageUrl: string): Promise<string> {
     // Get the image data as an array buffer
     const imageBuffer = await response.arrayBuffer();
     
+    // Check content type to confirm it's an image
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.startsWith('image/')) {
+      throw new Error(`Invalid content type: ${contentType}`);
+    }
+    
     // Create form data with base64 encoded image
     const urlParams = new URLSearchParams();
     // Convert the buffer to base64 string that ImgBB API accepts
     const base64Image = Buffer.from(imageBuffer).toString('base64');
     urlParams.append('image', base64Image);
+    
+    // Set the name parameter to help ImgBB identify the image
+    // Extract filename from URL or create a random one
+    const urlParts = imageUrl.split('/');
+    const fileName = urlParts[urlParts.length - 1].split('?')[0] || `image-${Date.now()}`;
+    urlParams.append('name', fileName);
     
     // Use a reliable image hosting service API
     // ImgBB provides direct image URLs that Instagram can access

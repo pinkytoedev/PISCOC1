@@ -78,6 +78,20 @@ export async function downloadAndUploadToImgBB(imageUrl: string): Promise<string
     // Create a form with multipart/form-data
     const formData = new URLSearchParams();
     
+    // Extract the file extension to determine how to handle the image
+    const fileExtension = getFileExtensionFromUrl(imageUrl);
+    
+    // Instagram specifically requires JPEG images
+    // For non-JPEG images, we'll convert them to JPEG through ImgBB
+    if (fileExtension && !['.jpg', '.jpeg'].includes(fileExtension.toLowerCase())) {
+      log(`Non-JPEG image detected (${fileExtension}), converting for Instagram compatibility...`, 'instagramImage');
+      formData.append('format', 'jpg'); // Convert to JPEG format
+    }
+    
+    // Set the name parameter to help ImgBB identify the image
+    const fileName = `instagram-${Date.now()}.jpg`;
+    formData.append('name', fileName);
+    
     // Base64 encode the image
     const base64Image = Buffer.from(imageBuffer).toString('base64');
     formData.append('image', base64Image);
