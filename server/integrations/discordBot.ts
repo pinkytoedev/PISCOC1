@@ -1860,9 +1860,9 @@ async function handleButtonInteraction(
     else if (interaction.customId.startsWith("upload_insta_image_now_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      // Extract the ID directly with a regex that finds all digits at the end of the string
-      const matches = fullId.match(/(\d+)$/);
-      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      // Extract only the numeric ID at the end, after "upload_insta_image_now_"
+      const idPart = fullId.replace("upload_insta_image_now_", "");
+      const articleId = parseInt(idPart, 10);
       
       console.log("Instagram image upload NOW - full ID:", fullId);
       console.log("Instagram image upload NOW - matched article ID:", articleId);
@@ -2006,9 +2006,9 @@ async function handleButtonInteraction(
     else if (interaction.customId.startsWith("upload_web_image_now_")) {
       // Extract article ID from the custom ID - be careful with the exact string match
       const fullId = interaction.customId;
-      // Extract the ID directly with a regex that finds all digits at the end of the string
-      const matches = fullId.match(/(\d+)$/);
-      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      // Extract only the numeric ID at the end, after "upload_web_image_now_"
+      const idPart = fullId.replace("upload_web_image_now_", "");
+      const articleId = parseInt(idPart, 10);
       
       console.log("Web image upload NOW - full ID:", fullId);
       console.log("Web image upload NOW - matched article ID:", articleId);
