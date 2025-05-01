@@ -773,17 +773,13 @@ export async function postArticleToInstagram(article: any): Promise<{success: bo
       return { success: false, error: 'No Instagram image URL found for this article' };
     }
     
-    // Prepare the caption using hashtags if available
-    let caption = article.title || '';
+    // Use only the hashtags field as the caption without modifying it
+    // This allows users to format their Instagram captions exactly as they want
+    let caption = '';
     
     if (article.hashtags && article.hashtags.trim() !== '') {
-      // Make sure hashtags start with # if not already formatted
-      const hashtags = article.hashtags
-        .split(' ')
-        .map((tag: string) => tag.startsWith('#') ? tag : `#${tag}`)
-        .join(' ');
-      
-      caption = `${caption}\n\n${hashtags}`;
+      // Use the hashtags field as is - no modification
+      caption = article.hashtags.trim();
     }
     
     log(`Creating Instagram post with image: ${article.instagramImageUrl}`, 'instagram');
