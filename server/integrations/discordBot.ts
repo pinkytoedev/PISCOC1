@@ -2521,10 +2521,26 @@ async function handleButtonInteraction(
     }
   } catch (error) {
     console.error("Error handling button interaction:", error);
-    await interaction.reply({
-      content: "Sorry, there was an error processing your request.",
-      ephemeral: true,
-    });
+    try {
+      // Check if the interaction has already been replied to
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({
+          content: "Sorry, there was an error processing your request.",
+          ephemeral: true,
+        }).catch(followUpError => {
+          console.error("Error sending follow-up error message:", followUpError);
+        });
+      } else {
+        await interaction.reply({
+          content: "Sorry, there was an error processing your request.",
+          ephemeral: true,
+        }).catch(replyError => {
+          console.error("Error sending error message:", replyError);
+        });
+      }
+    } catch (responseError) {
+      console.error("Failed to send error response:", responseError);
+    }
   }
 }
 
@@ -2674,14 +2690,22 @@ export const initializeDiscordBot = async (token: string, clientId: string) => {
             !interaction.replied &&
             !interaction.deferred
           ) {
+            // Interaction hasn't been responded to yet, so we can reply directly
             await interaction.reply({
               content: "An error occurred while processing this command.",
               ephemeral: true,
-            });
-          } else if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.editReply(
-              "An error occurred while processing this command.",
-            );
+            }).catch(e => console.error("Failed to send initial error response:", e));
+          } else if (interaction.isRepliable() && interaction.deferred && !interaction.replied) {
+            // Interaction was deferred but not replied to yet
+            await interaction.editReply({
+              content: "An error occurred while processing this command."
+            }).catch(e => console.error("Failed to edit reply with error message:", e));
+          } else if (interaction.isRepliable()) {
+            // Interaction was already replied to, try to follow up
+            await interaction.followUp({
+              content: "An error occurred while processing this command.",
+              ephemeral: true
+            }).catch(e => console.error("Failed to send follow-up error message:", e));
           }
         } catch (replyError) {
           console.error("Error sending error reply:", replyError);
