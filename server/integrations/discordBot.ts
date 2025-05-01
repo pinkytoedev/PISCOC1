@@ -1728,14 +1728,14 @@ async function handleButtonInteraction(
     }
     // Handle Instagram image upload button
     else if (interaction.customId.startsWith("upload_insta_image_")) {
-      // Extract article ID from the custom ID - be careful with the exact string match
+      // Extract article ID from the custom ID
       const fullId = interaction.customId;
-      // Properly extract the ID part by taking everything after the prefix
-      const prefix = "upload_insta_image_";
-      const idPart = fullId.slice(prefix.length);
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      
       console.log("Instagram image upload - full ID:", fullId);
-      console.log("Instagram image upload - extracted ID part:", idPart);
-      const articleId = parseInt(idPart, 10);
+      console.log("Instagram image upload - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
         await interaction.reply({
