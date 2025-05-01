@@ -1650,8 +1650,8 @@ export function setupAirtableRoutes(app: Express) {
       }
       
       const fieldName = req.params.fieldName;
-      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto')) {
-        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'instaPhoto'" });
+      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto' && fieldName !== 'MainImageLink' && fieldName !== 'InstaPhotoLink')) {
+        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage', 'MainImageLink', 'instaPhoto', or 'InstaPhotoLink'" });
       }
       
       // Get the article from the database
@@ -1843,8 +1843,8 @@ export function setupAirtableRoutes(app: Express) {
       }
       
       const fieldName = req.params.fieldName;
-      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'InstaPhotoLink' && fieldName !== 'instaPhoto')) {
-        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'InstaPhotoLink'" });
+      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto' && fieldName !== 'MainImageLink' && fieldName !== 'InstaPhotoLink')) {
+        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage', 'MainImageLink', 'instaPhoto', or 'InstaPhotoLink'" });
       }
       
       const { imageUrl, filename } = req.body;

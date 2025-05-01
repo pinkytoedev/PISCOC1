@@ -1969,7 +1969,10 @@ async function handleButtonInteraction(
                 "https://placehold.co/600x400?text=Upload+Failed",
             )
             .setColor("#00C4B4")
-            .setTimestamp();
+            .setTimestamp()
+            .setFooter({
+              text: "Image will be used for Instagram posts. All uploads are processed through ImgBB."
+            });
 
           await interaction.followUp({
             embeds: [embed],
@@ -2104,7 +2107,10 @@ async function handleButtonInteraction(
                 "https://placehold.co/600x400?text=Upload+Failed",
             )
             .setColor("#00C4B4")
-            .setTimestamp();
+            .setTimestamp()
+            .setFooter({
+              text: "Image will be used as the main web image. All uploads are processed through ImgBB."
+            });
 
           await interaction.followUp({
             embeds: [embed],
@@ -3889,8 +3895,8 @@ async function processDiscordAttachment(
     return {
       success: true,
       message: airtableResult
-        ? `${displayName} uploaded successfully to ImgBB and Airtable link field.`
-        : `${displayName} uploaded successfully to ImgBB.`,
+        ? `${displayName} uploaded successfully to ImgBB and synced to Airtable's ${fieldName} field.`
+        : `${displayName} uploaded successfully to ImgBB but not synced to Airtable.`,
       url: imgbbResult.url,
     };
   } catch (error) {
