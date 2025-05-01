@@ -5,8 +5,22 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { apiRequest } from '@/lib/queryClient';
+import { queryClient } from '@/lib/queryClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+interface InstagramMediaResponse {
+  id?: string;
+  error?: boolean;
+  message?: string;
+  success?: boolean;
+}
+
+interface InstagramAccountResponse {
+  id: string;
+  name?: string;
+  username?: string;
+  success: boolean;
+}
 
 export default function InstagramTestPage() {
   const { toast } = useToast();
@@ -28,22 +42,34 @@ export default function InstagramTestPage() {
 
     try {
       setIsLoading(true);
-      const response = await apiRequest('/api/instagram/media', {
+      const response = await fetch('/api/instagram/media', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           imageUrl,
           caption: caption || 'Test post from our content management system'
-        })
+        }),
+        credentials: 'include'
       });
-
-      setResult(response);
-      toast({
-        title: response.error ? "Error" : "Success",
-        description: response.error 
-          ? `Failed to post to Instagram: ${response.message}` 
-          : `Successfully posted to Instagram! Post ID: ${response.id}`,
-        variant: response.error ? "destructive" : "default"
-      });
+      
+      const data: InstagramMediaResponse = await response.json();
+      setResult(data);
+      
+      if (!response.ok || data.error) {
+        toast({
+          title: "Error",
+          description: `Failed to post to Instagram: ${data.message || response.statusText}`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: `Successfully posted to Instagram! Post ID: ${data.id || 'Unknown'}`,
+          variant: "default"
+        });
+      }
     } catch (error: any) {
       setResult({ error: true, message: error.message });
       toast({
@@ -59,16 +85,27 @@ export default function InstagramTestPage() {
   const handleGetMedia = async () => {
     try {
       setIsLoading(true);
-      const response = await apiRequest('/api/instagram/media', {
+      const response = await fetch('/api/instagram/media', {
         method: 'GET',
+        credentials: 'include'
       });
-
-      setResult(response);
-      toast({
-        title: "Media Retrieved",
-        description: `Successfully fetched ${response.length} Instagram posts`,
-        variant: "default"
-      });
+      
+      const data = await response.json();
+      setResult(data);
+      
+      if (!response.ok) {
+        toast({
+          title: "Error",
+          description: `Failed to fetch Instagram media: ${response.statusText}`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Media Retrieved",
+          description: `Successfully fetched ${Array.isArray(data) ? data.length : 0} Instagram posts`,
+          variant: "default"
+        });
+      }
     } catch (error: any) {
       setResult({ error: true, message: error.message });
       toast({
@@ -84,16 +121,27 @@ export default function InstagramTestPage() {
   const handleGetAccount = async () => {
     try {
       setIsLoading(true);
-      const response = await apiRequest('/api/instagram/account', {
+      const response = await fetch('/api/instagram/account', {
         method: 'GET',
+        credentials: 'include'
       });
-
-      setResult(response);
-      toast({
-        title: "Account Info Retrieved",
-        description: `Successfully fetched Instagram account info`,
-        variant: "default"
-      });
+      
+      const data: InstagramAccountResponse = await response.json();
+      setResult(data);
+      
+      if (!response.ok) {
+        toast({
+          title: "Error",
+          description: `Failed to fetch Instagram account: ${response.statusText}`,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Account Info Retrieved",
+          description: `Successfully fetched Instagram account info`,
+          variant: "default"
+        });
+      }
     } catch (error: any) {
       setResult({ error: true, message: error.message });
       toast({
