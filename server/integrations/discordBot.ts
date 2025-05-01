@@ -958,85 +958,31 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
 
-      try {
-        // Generate a token for public Instagram upload
-        const generateInstagramToken = async () => {
-          try {
-            // Create a token valid for 7 days with 5 uses
-            const expirationDays = 7;
-            const maxUses = 5;
+      // Create buttons for different options
+      const uploadButton = new ButtonBuilder()
+        .setCustomId(`upload_insta_image_${articleId}`)
+        .setLabel("Upload via Bot")
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji("📸");
 
-            // Generate unique token using the helper function
-            const token = await generateUniqueToken(
-              async (tokenToCheck: string) => {
-                const existingToken =
-                  await storage.getUploadTokenByToken(tokenToCheck);
-                return !!existingToken;
-              },
-            );
+      const dashboardButton = new ButtonBuilder()
+        .setLabel("Open in Dashboard")
+        .setStyle(ButtonStyle.Link)
+        .setURL(
+          `${process.env.BASE_URL || "http://piscoc.pinnkytoepaper"}/articles?id=${articleId}`,
+        )
+        .setEmoji("🔗");
 
-            // Calculate expiration date
-            const expiresAt = calculateExpirationDate(expirationDays);
+      const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        dashboardButton,
+        uploadButton,
+      );
 
-            // Create token record with discord user in the name
-            const uploadToken = await storage.createUploadToken({
-              token,
-              articleId: article.id,
-              uploadType: "instagram-image",
-              createdById: null, // No user ID since this is from Discord
-              expiresAt,
-              maxUses,
-              active: true,
-              name: `Discord: ${interaction.user.username}'s Instagram Image Upload`,
-              notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`,
-            });
-
-            // Return the token URL
-            return {
-              token: uploadToken.token,
-              // Use getBaseUrl() helper for consistent URL generation
-              url: `${getBaseUrl()}/public-upload/instagram-image/${uploadToken.token}`,
-            };
-          } catch (error) {
-            console.error("Error generating Instagram upload token:", error);
-            throw error;
-          }
-        };
-
-        // Generate token for Instagram upload
-        const instagramTokenData = await generateInstagramToken();
-
-        // Create a button that will take the user to the public upload page
-        const publicUploadButton = new ButtonBuilder()
-          .setLabel("Upload via Browser")
-          .setStyle(ButtonStyle.Link)
-          .setURL(instagramTokenData.url)
-          .setEmoji("🔗");
-
-        // Create an "Upload Image" button for immediate attachment
-        const uploadNowButton = new ButtonBuilder()
-          .setCustomId(`upload_insta_image_now_${articleId}`)
-          .setLabel("Upload via Discord")
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji("📸");
-
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-          publicUploadButton,
-          uploadNowButton,
-        );
-
-        await interaction.followUp({
-          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required, opens in new tab, this Discord prompt will remain active)\n2. Use the "Upload via Discord" button to upload directly through Discord\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.\n\n**Note:** If you choose option 1, you can safely dismiss this Discord prompt once you're on the web interface.`,
-          components: [buttonRow],
-          ephemeral: true,
-        });
-      } catch (error) {
-        console.error("Error processing Instagram image upload:", error);
-        await interaction.followUp({
-          content: `Error uploading image: ${error instanceof Error ? error.message : "Unknown error"}\n\nPlease try again or use the website to upload images.`,
-          ephemeral: true,
-        });
-      }
+      // Confirm selection and provide options
+      await interaction.editReply({
+        content: `Selected article: **${article.title}**\n\nOptions for uploading an Instagram image:\n\n1. Use the "Upload via Bot" button to attach an image directly through Discord\n2. Use the dashboard link to upload through the website`,
+        components: [buttonRow],
+      });
     }
     // Handle article selection for Web image upload
     else if (interaction.customId === "select_article_for_web_image") {
@@ -1913,57 +1859,63 @@ async function handleButtonInteraction(
     }
     // Handle Instagram image upload now button
     else if (interaction.customId.startsWith("upload_insta_image_now_")) {
-      try {
-        // Immediately acknowledge the interaction to prevent timeout
-        await interaction.deferReply({ ephemeral: true });
-        
-        // Extract article ID from the custom ID - be careful with the exact string match
-        const fullId = interaction.customId;
-        // Extract the ID directly with a regex that finds all digits at the end of the string
-        const matches = fullId.match(/(\d+)$/);
-        const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
-        
-        console.log("Instagram image upload NOW - full ID:", fullId);
-        console.log("Instagram image upload NOW - matched article ID:", articleId);
+      // Extract article ID from the custom ID - be careful with the exact string match
+      const fullId = interaction.customId;
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      
+      console.log("Instagram image upload NOW - full ID:", fullId);
+      console.log("Instagram image upload NOW - matched article ID:", articleId);
 
-        if (isNaN(articleId)) {
-          await interaction.editReply({
+      if (isNaN(articleId)) {
+        try {
+          await interaction.reply({
             content: `Invalid article ID from "${fullId}". Please try again.`,
+            ephemeral: true,
           });
-          return;
+        } catch (error) {
+          console.error("Error replying to Instagram image upload interaction:", error);
         }
+        return;
+      }
 
-        console.log(
-          "Processing Instagram image upload NOW for article ID:",
-          articleId,
-        );
+      console.log(
+        "Processing Instagram image upload NOW for article ID:",
+        articleId,
+      );
 
-        // Get the article to make sure it exists and is not published
-        const article = await storage.getArticle(articleId);
+      // Get the article to make sure it exists and is not published
+      const article = await storage.getArticle(articleId);
 
-        if (!article) {
-          await interaction.editReply({
-            content: "Article not found. It may have been deleted.",
-          });
-          return;
-        }
-
-        if (article.status === "published") {
-          await interaction.editReply({
-            content:
-              "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
-          });
-          return;
-        }
-
-        // Create a unique identifier for this upload request
-        const uploadId = `insta_${articleId}_${Date.now()}`;
-
-        // Tell the user to upload an image
-        await interaction.editReply({
-          content: `Please upload an image for Instagram for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
+      if (!article) {
+        await interaction.reply({
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
+        return;
+      }
 
+      if (article.status === "published") {
+        await interaction.reply({
+          content:
+            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Create a unique identifier for this upload request
+      const uploadId = `insta_${articleId}_${Date.now()}`;
+
+      // Tell the user to upload an image
+      await interaction.reply({
+        content: `Please upload an image for Instagram for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
+        ephemeral: true,
+      });
+
+      // Listen for messages from this user that contain attachments
+      try {
         // Set up a collector to watch for the next message from this user with an attachment
         const filter = (m: Message) =>
           m.author.id === interaction.user.id && m.attachments.size > 0;
@@ -2039,64 +1991,66 @@ async function handleButtonInteraction(
         }
       } catch (error) {
         console.error("Error handling image upload:", error);
-        try {
-          await interaction.followUp({
-            content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
-            ephemeral: true,
-          });
-        } catch (followUpError) {
-          console.error("Error sending followUp error message:", followUpError);
-        }
+        await interaction.followUp({
+          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
+          ephemeral: true,
+        });
       }
     }
     // Handle Web image upload now button
     else if (interaction.customId.startsWith("upload_web_image_now_")) {
-      try {
-        // Immediately acknowledge the interaction to prevent timeout
-        await interaction.deferReply({ ephemeral: true });
-        
-        // Extract article ID from the custom ID - be careful with the exact string match
-        const fullId = interaction.customId;
-        // Extract the ID directly with a regex that finds all digits at the end of the string
-        const matches = fullId.match(/(\d+)$/);
-        const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
-        
-        console.log("Web image upload NOW - full ID:", fullId);
-        console.log("Web image upload NOW - matched article ID:", articleId);
+      // Extract article ID from the custom ID - be careful with the exact string match
+      const fullId = interaction.customId;
+      // Extract the ID directly with a regex that finds all digits at the end of the string
+      const matches = fullId.match(/(\d+)$/);
+      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+      
+      console.log("Web image upload NOW - full ID:", fullId);
+      console.log("Web image upload NOW - matched article ID:", articleId);
 
-        if (isNaN(articleId)) {
-          await interaction.editReply({
+      if (isNaN(articleId)) {
+        try {
+          await interaction.reply({
             content: `Invalid article ID from "${fullId}". Please try again.`,
+            ephemeral: true,
           });
-          return;
+        } catch (error) {
+          console.error("Error replying to Web image upload interaction:", error);
         }
+        return;
+      }
 
-        // Get the article to make sure it exists and is not published
-        const article = await storage.getArticle(articleId);
+      // Get the article to make sure it exists and is not published
+      const article = await storage.getArticle(articleId);
 
-        if (!article) {
-          await interaction.editReply({
-            content: "Article not found. It may have been deleted.",
-          });
-          return;
-        }
-
-        if (article.status === "published") {
-          await interaction.editReply({
-            content:
-              "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
-          });
-          return;
-        }
-
-        // Create a unique identifier for this upload request
-        const uploadId = `web_${articleId}_${Date.now()}`;
-
-        // Tell the user to upload an image
-        await interaction.editReply({
-          content: `Please upload a main web image for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
+      if (!article) {
+        await interaction.reply({
+          content: "Article not found. It may have been deleted.",
+          ephemeral: true,
         });
+        return;
+      }
 
+      if (article.status === "published") {
+        await interaction.reply({
+          content:
+            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Create a unique identifier for this upload request
+      const uploadId = `web_${articleId}_${Date.now()}`;
+
+      // Tell the user to upload an image
+      await interaction.reply({
+        content: `Please upload a main web image for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
+        ephemeral: true,
+      });
+
+      // Listen for messages from this user that contain attachments
+      try {
         // Set up a collector to watch for the next message from this user with an attachment
         const filter = (m: Message) =>
           m.author.id === interaction.user.id && m.attachments.size > 0;
@@ -2172,14 +2126,10 @@ async function handleButtonInteraction(
         }
       } catch (error) {
         console.error("Error handling image upload:", error);
-        try {
-          await interaction.followUp({
-            content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
-            ephemeral: true,
-          });
-        } catch (followUpError) {
-          console.error("Error sending followUp error message:", followUpError);
-        }
+        await interaction.followUp({
+          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
+          ephemeral: true,
+        });
       }
     }
     // Handle content file upload button
