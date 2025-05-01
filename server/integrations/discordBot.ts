@@ -1913,63 +1913,57 @@ async function handleButtonInteraction(
     }
     // Handle Instagram image upload now button
     else if (interaction.customId.startsWith("upload_insta_image_now_")) {
-      // Extract article ID from the custom ID - be careful with the exact string match
-      const fullId = interaction.customId;
-      // Extract the ID directly with a regex that finds all digits at the end of the string
-      const matches = fullId.match(/(\d+)$/);
-      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
-      
-      console.log("Instagram image upload NOW - full ID:", fullId);
-      console.log("Instagram image upload NOW - matched article ID:", articleId);
-
-      if (isNaN(articleId)) {
-        try {
-          await interaction.reply({
-            content: `Invalid article ID from "${fullId}". Please try again.`,
-            ephemeral: true,
-          });
-        } catch (error) {
-          console.error("Error replying to Instagram image upload interaction:", error);
-        }
-        return;
-      }
-
-      console.log(
-        "Processing Instagram image upload NOW for article ID:",
-        articleId,
-      );
-
-      // Get the article to make sure it exists and is not published
-      const article = await storage.getArticle(articleId);
-
-      if (!article) {
-        await interaction.reply({
-          content: "Article not found. It may have been deleted.",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      if (article.status === "published") {
-        await interaction.reply({
-          content:
-            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // Create a unique identifier for this upload request
-      const uploadId = `insta_${articleId}_${Date.now()}`;
-
-      // Tell the user to upload an image
-      await interaction.reply({
-        content: `Please upload an image for Instagram for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
-        ephemeral: true,
-      });
-
-      // Listen for messages from this user that contain attachments
       try {
+        // Immediately acknowledge the interaction to prevent timeout
+        await interaction.deferReply({ ephemeral: true });
+        
+        // Extract article ID from the custom ID - be careful with the exact string match
+        const fullId = interaction.customId;
+        // Extract the ID directly with a regex that finds all digits at the end of the string
+        const matches = fullId.match(/(\d+)$/);
+        const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+        
+        console.log("Instagram image upload NOW - full ID:", fullId);
+        console.log("Instagram image upload NOW - matched article ID:", articleId);
+
+        if (isNaN(articleId)) {
+          await interaction.editReply({
+            content: `Invalid article ID from "${fullId}". Please try again.`,
+          });
+          return;
+        }
+
+        console.log(
+          "Processing Instagram image upload NOW for article ID:",
+          articleId,
+        );
+
+        // Get the article to make sure it exists and is not published
+        const article = await storage.getArticle(articleId);
+
+        if (!article) {
+          await interaction.editReply({
+            content: "Article not found. It may have been deleted.",
+          });
+          return;
+        }
+
+        if (article.status === "published") {
+          await interaction.editReply({
+            content:
+              "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          });
+          return;
+        }
+
+        // Create a unique identifier for this upload request
+        const uploadId = `insta_${articleId}_${Date.now()}`;
+
+        // Tell the user to upload an image
+        await interaction.editReply({
+          content: `Please upload an image for Instagram for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
+        });
+
         // Set up a collector to watch for the next message from this user with an attachment
         const filter = (m: Message) =>
           m.author.id === interaction.user.id && m.attachments.size > 0;
@@ -2045,66 +2039,64 @@ async function handleButtonInteraction(
         }
       } catch (error) {
         console.error("Error handling image upload:", error);
-        await interaction.followUp({
-          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
-          ephemeral: true,
-        });
+        try {
+          await interaction.followUp({
+            content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
+            ephemeral: true,
+          });
+        } catch (followUpError) {
+          console.error("Error sending followUp error message:", followUpError);
+        }
       }
     }
     // Handle Web image upload now button
     else if (interaction.customId.startsWith("upload_web_image_now_")) {
-      // Extract article ID from the custom ID - be careful with the exact string match
-      const fullId = interaction.customId;
-      // Extract the ID directly with a regex that finds all digits at the end of the string
-      const matches = fullId.match(/(\d+)$/);
-      const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
-      
-      console.log("Web image upload NOW - full ID:", fullId);
-      console.log("Web image upload NOW - matched article ID:", articleId);
-
-      if (isNaN(articleId)) {
-        try {
-          await interaction.reply({
-            content: `Invalid article ID from "${fullId}". Please try again.`,
-            ephemeral: true,
-          });
-        } catch (error) {
-          console.error("Error replying to Web image upload interaction:", error);
-        }
-        return;
-      }
-
-      // Get the article to make sure it exists and is not published
-      const article = await storage.getArticle(articleId);
-
-      if (!article) {
-        await interaction.reply({
-          content: "Article not found. It may have been deleted.",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      if (article.status === "published") {
-        await interaction.reply({
-          content:
-            "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // Create a unique identifier for this upload request
-      const uploadId = `web_${articleId}_${Date.now()}`;
-
-      // Tell the user to upload an image
-      await interaction.reply({
-        content: `Please upload a main web image for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
-        ephemeral: true,
-      });
-
-      // Listen for messages from this user that contain attachments
       try {
+        // Immediately acknowledge the interaction to prevent timeout
+        await interaction.deferReply({ ephemeral: true });
+        
+        // Extract article ID from the custom ID - be careful with the exact string match
+        const fullId = interaction.customId;
+        // Extract the ID directly with a regex that finds all digits at the end of the string
+        const matches = fullId.match(/(\d+)$/);
+        const articleId = matches && matches[1] ? parseInt(matches[1], 10) : NaN;
+        
+        console.log("Web image upload NOW - full ID:", fullId);
+        console.log("Web image upload NOW - matched article ID:", articleId);
+
+        if (isNaN(articleId)) {
+          await interaction.editReply({
+            content: `Invalid article ID from "${fullId}". Please try again.`,
+          });
+          return;
+        }
+
+        // Get the article to make sure it exists and is not published
+        const article = await storage.getArticle(articleId);
+
+        if (!article) {
+          await interaction.editReply({
+            content: "Article not found. It may have been deleted.",
+          });
+          return;
+        }
+
+        if (article.status === "published") {
+          await interaction.editReply({
+            content:
+              "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
+          });
+          return;
+        }
+
+        // Create a unique identifier for this upload request
+        const uploadId = `web_${articleId}_${Date.now()}`;
+
+        // Tell the user to upload an image
+        await interaction.editReply({
+          content: `Please upload a main web image for the article **${article.title}**. Upload it as an attachment to your next message in this channel. The upload will time out after 5 minutes if no image is received.`,
+        });
+
         // Set up a collector to watch for the next message from this user with an attachment
         const filter = (m: Message) =>
           m.author.id === interaction.user.id && m.attachments.size > 0;
@@ -2180,10 +2172,14 @@ async function handleButtonInteraction(
         }
       } catch (error) {
         console.error("Error handling image upload:", error);
-        await interaction.followUp({
-          content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
-          ephemeral: true,
-        });
+        try {
+          await interaction.followUp({
+            content: `An error occurred while processing your image: ${error instanceof Error ? error.message : "Unknown error"}`,
+            ephemeral: true,
+          });
+        } catch (followUpError) {
+          console.error("Error sending followUp error message:", followUpError);
+        }
       }
     }
     // Handle content file upload button
