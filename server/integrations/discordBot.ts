@@ -43,6 +43,7 @@ import {
 import {
   uploadImageToAirtable,
   uploadImageUrlToAirtable,
+  uploadImageUrlAsLinkField,
 } from "../utils/imageUploader";
 import { marked } from "marked";
 import extract from "extract-zip";
@@ -3769,34 +3770,46 @@ async function processDiscordAttachment(
       `Processing Discord attachment for article ID ${articleId}, title "${article.title}", field ${fieldName}`,
     );
 
-    // Upload directly to Imgur using the URL from Discord
-    const imgurResult = await uploadImageUrlToImgBB(
+    // Upload directly to ImgBB using the URL from Discord
+    const imgbbResult = await uploadImageUrlToImgBB(
       attachment.url,
       attachment.name || `discord_upload_${Date.now()}.jpg`,
     );
 
-    if (!imgurResult) {
+    if (!imgbbResult) {
       return {
         success: false,
         message: "Failed to upload image to ImgBB.",
       };
     }
 
-    // For Airtable articles, upload to Airtable as well
+    // For Airtable articles, upload to Airtable using link fields
     let airtableResult = null;
     if (article.source === "airtable" && article.externalId) {
-      airtableResult = await uploadImageUrlToAirtable(
-        imgurResult.url,
+      // Map the field names to their link field equivalents
+      const fieldMappings = {
+        'MainImage': 'MainImageLink',
+        'instaPhoto': 'InstaPhotoLink'
+      };
+      
+      // Use the mapped field name for Airtable
+      const targetFieldName = fieldMappings[fieldName] || fieldName;
+      
+      console.log(`Using Airtable link field: ${fieldName} → ${targetFieldName}`);
+      
+      // Use uploadImageUrlAsLinkField instead of uploadImageUrlToAirtable
+      // This sets the URL directly in a text field instead of as an attachment
+      airtableResult = await uploadImageUrlAsLinkField(
+        imgbbResult.url,
         article.externalId,
-        fieldName,
-        attachment.name || `discord_upload_${Date.now()}.jpg`,
+        targetFieldName
       );
 
       if (!airtableResult) {
         return {
           success: true,
-          message: `Image uploaded to ImgBB (${imgurResult.url}) but failed to attach to Airtable record. The article will be updated with the ImgBB URL.`,
-          url: imgurResult.url,
+          message: `Image uploaded to ImgBB (${imgbbResult.url}) but failed to update Airtable ${targetFieldName} field. The article will be updated with the ImgBB URL.`,
+          url: imgbbResult.url,
         };
       }
     }
@@ -3805,14 +3818,14 @@ async function processDiscordAttachment(
     const updateData: Partial<Article> = {};
 
     if (fieldName === "MainImage") {
-      updateData.imageUrl = imgurResult.url;
+      updateData.imageUrl = imgbbResult.url;
       console.log(
-        `Updating article ${articleId} with MainImage URL: ${imgurResult.url}`,
+        `Updating article ${articleId} with MainImage URL: ${imgbbResult.url}`,
       );
     } else if (fieldName === "instaPhoto") {
-      updateData.instagramImageUrl = imgurResult.url;
+      updateData.instagramImageUrl = imgbbResult.url;
       console.log(
-        `Updating article ${articleId} with Instagram image URL: ${imgurResult.url}`,
+        `Updating article ${articleId} with Instagram image URL: ${imgbbResult.url}`,
       );
     }
 
@@ -3823,12 +3836,19 @@ async function processDiscordAttachment(
       updatedArticle ? "Success" : "Failed",
     );
 
+    // Map field names for user-friendly messages
+    const fieldDisplayNames = {
+      'MainImage': 'web image',
+      'instaPhoto': 'Instagram image'
+    };
+    const displayName = fieldDisplayNames[fieldName] || fieldName;
+
     return {
       success: true,
       message: airtableResult
-        ? `Image uploaded successfully to ImgBB and Airtable for field ${fieldName}.`
-        : `Image uploaded successfully to ImgBB for field ${fieldName}.`,
-      url: imgurResult.url,
+        ? `${displayName} uploaded successfully to ImgBB and Airtable link field.`
+        : `${displayName} uploaded successfully to ImgBB.`,
+      url: imgbbResult.url,
     };
   } catch (error) {
     console.error("Error processing Discord attachment:", error);
