@@ -442,6 +442,32 @@ export function setupPublicUploadRoutes(app: Express) {
         return res.status(500).json({ message: 'Failed to update article with Instagram image URL' });
       }
       
+      // For Airtable-sourced articles, update the Airtable link field
+      if (article.source === 'airtable' && article.externalId) {
+        try {
+          console.log(`Updating Airtable with Instagram image URL for article: ${article.title} (${article.externalId})`);
+          
+          // Import the function to update Airtable link fields
+          const { uploadImageUrlAsLinkField } = require('../utils/airtableLink');
+          
+          // Update the InstaPhotoLink field directly with the ImgBB URL
+          const airtableResult = await uploadImageUrlAsLinkField(
+            imgbbResult.url,
+            article.externalId,
+            'InstaPhotoLink' // Use InstaPhotoLink field instead of instaPhoto
+          );
+          
+          if (airtableResult) {
+            console.log(`Successfully updated Airtable InstaPhotoLink field for article: ${article.title}`);
+          } else {
+            console.error(`Failed to update Airtable InstaPhotoLink field for article: ${article.title}`);
+          }
+        } catch (airtableError) {
+          console.error('Error updating Airtable with Instagram image URL:', airtableError);
+          // Don't fail the overall process if Airtable update fails
+        }
+      }
+      
       // Increment token usage
       await storage.incrementUploadTokenUses(uploadToken.id);
       
@@ -451,7 +477,7 @@ export function setupPublicUploadRoutes(app: Express) {
         resourceType: 'image',
         resourceId: article.id.toString(),
         details: {
-          fieldName: 'instaPhoto',
+          fieldName: 'InstaPhotoLink',
           imgbbId: imgbbResult.id,
           imgbbUrl: imgbbResult.url,
           filename: req.file.originalname,
