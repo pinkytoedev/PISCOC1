@@ -1739,7 +1739,7 @@ async function handleButtonInteraction(
 
       if (isNaN(articleId)) {
         await interaction.reply({
-          content: `Invalid article ID: "${idPart}" from "${fullId}". Please try again.`,
+          content: `Invalid article ID from "${fullId}". Please try again.`,
           ephemeral: true,
         });
         return;
