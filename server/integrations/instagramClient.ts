@@ -465,210 +465,44 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
   try {
     log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
     
-    // First try our standard image processing approach
+    // Get Instagram account ID and access token - these are required for all approaches
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
+    }
+    
+    const accessToken = await getUserAccessToken();
+    if (!accessToken) {
+      throw new Error('User access token missing');
+    }
+    
+    log(`Using Instagram account ID: ${instagramAccountId}`, 'instagram');
+    
+    // APPROACH 1: Direct base64 image upload (most reliable method)
+    // This approach works by:
+    // 1. Downloading the image
+    // 2. Processing it to meet Instagram requirements
+    // 3. Sending it as a base64 data URL
     try {
-      // Process the image URL to ensure it's compatible with Instagram
-      const processedImageUrl = await prepareImageForInstagram(imageUrl);
+      log('APPROACH 1: Using direct base64 image processing', 'instagram');
       
-      // Get Instagram account ID
-      const instagramAccountId = await getInstagramAccountId();
-      if (!instagramAccountId) {
-        throw new Error('Instagram account ID not found');
-      }
+      // Import the specialized image processor for Instagram
+      const { processImageForInstagram } = await import('../utils/instagramImageProcessor');
       
-      // Get user access token
-      const accessToken = await getUserAccessToken();
-      if (!accessToken) {
-        throw new Error('User access token missing');
-      }
-      
-      // Rate limit the API call
-      const endpoint = 'media/container';
-      try {
-        return await executeRateLimitedRequest(endpoint, async () => {
-          // Set up the request to create a media container
-          const formData = new URLSearchParams();
-          formData.append('image_url', processedImageUrl);
-          formData.append('caption', caption);
-          formData.append('access_token', accessToken);
-          
-          // Log the actual URL being sent (for debugging)
-          log(`Sending image URL to Instagram: ${processedImageUrl}`, 'instagram');
-          
-          // Log additional debugging information
-          log(`Instagram API request: POST https://graph.facebook.com/v18.0/${instagramAccountId}/media`, 'instagram');
-          log(`Instagram API request body: image_url=${processedImageUrl.substring(0, 100)}... caption=${caption}`, 'instagram');
-          
-          try {
-            // Verify the image URL is publicly accessible with a HEAD request
-            const urlCheckResponse = await fetch(processedImageUrl, { method: 'HEAD' });
-            log(`Image URL accessibility check: ${urlCheckResponse.status} ${urlCheckResponse.statusText}`, 'instagram');
-            log(`Image content type: ${urlCheckResponse.headers.get('content-type')}`, 'instagram');
-          } catch (urlCheckError) {
-            log(`Warning: Could not verify image URL accessibility: ${urlCheckError}`, 'instagram');
-          }
-          
-          // Make the API call to Instagram Graph API
-          const response = await fetch(
-            `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-              },
-              body: formData.toString()
-            }
-          );
-          
-          // Get the full response text for debugging
-          const responseText = await response.text();
-          log(`Instagram API response status: ${response.status}`, 'instagram');
-          log(`Instagram API response: ${responseText}`, 'instagram');
-          
-          if (!response.ok) {
-            // Check for specific error codes in the response
-            try {
-              const errorJson = JSON.parse(responseText);
-              const errorCode = errorJson.error?.code || 'unknown';
-              const errorMessage = errorJson.error?.message || 'Unknown error';
-              
-              log(`Instagram API error code: ${errorCode}`, 'instagram');
-              
-              // Provide more detailed error messages for common issues
-              if (errorCode === 9004) {
-                throw new Error(`Instagram cannot access the image URL (error 9004). The URL must be publicly accessible and in JPEG format: ${errorMessage}`);
-              } else {
-                throw new Error(`API returned ${response.status}: ${errorMessage} (code: ${errorCode})`);
-              }
-            } catch (jsonError) {
-              // If response is not valid JSON, use the raw text
-              throw new Error(`API returned ${response.status}: ${responseText}`);
-            }
-          }
-          
-          // Parse the response JSON
-          let data;
-          try {
-            data = JSON.parse(responseText);
-          } catch (parseError) {
-            throw new Error(`Failed to parse API response JSON: ${responseText}`);
-          }
-          
-          if (!data.id) {
-            throw new Error('No container ID returned');
-          }
-          
-          return data.id;
-        });
-      } catch (containerError) {
-        // If container creation fails, try the fallback approach
-        throw containerError;
-      }
-    } catch (processingError) {
-      // If image processing fails, log the error and try fallback method
-      log(`Standard image processing failed: ${processingError}. Trying fallback method...`, 'instagram');
-      
-      log(`Standard approach failed, trying to upload to ImgBB as intermediary...`, 'instagram');
-      
-      // Upload to ImgBB first to get a publicly accessible URL
-      // ImgBB provides URLs that are more reliable with Instagram's API
-      const { uploadToImgBB } = await import('../utils/imageDownloader');
-      
-      try {
-        // Try uploading to ImgBB
-        const imgbbUrl = await uploadToImgBB(imageUrl);
-        
-        if (imgbbUrl) {
-          log(`Successfully uploaded to ImgBB, trying Instagram with ImgBB URL: ${imgbbUrl}`, 'instagram');
-          
-          // Get Instagram account ID
-          const instagramAccountId = await getInstagramAccountId();
-          if (!instagramAccountId) {
-            throw new Error('Instagram account ID not found');
-          }
-          
-          // Get user access token
-          const accessToken = await getUserAccessToken();
-          if (!accessToken) {
-            throw new Error('User access token missing');
-          }
-          
-          // Rate limit this API call
-          const endpoint = 'media/container/imgbb';
-          return await executeRateLimitedRequest(endpoint, async () => {
-            // Set up the request to create a media container
-            const formData = new URLSearchParams();
-            formData.append('image_url', imgbbUrl);
-            formData.append('caption', caption);
-            formData.append('access_token', accessToken);
-            
-            // Make the API call to Instagram Graph API with ImgBB URL
-            const response = await fetch(
-              `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: formData.toString()
-              }
-            );
-            
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(`API returned ${response.status}: ${errorText}`);
-            }
-            
-            const data = await response.json();
-            
-            if (!data.id) {
-              throw new Error('No container ID returned');
-            }
-            
-            return data.id;
-          });
-        }
-      } catch (imgbbError) {
-        log(`ImgBB approach failed: ${imgbbError}. Trying direct base64 method...`, 'instagram');
-      }
-      
-      // If ImgBB approach failed, try base64 approach as fallback
-      log(`Trying direct base64 upload approach for Instagram...`, 'instagram');
-      
-      // Import the URL utilities
-      const { downloadImage } = await import('../utils/imageDownloader');
-      
-      // Download the image and get a local file path
-      const { filePath } = await downloadImage(imageUrl);
-      
-      // Get the Instagram account ID and token
-      const instagramAccountId = await getInstagramAccountId();
-      if (!instagramAccountId) {
-        throw new Error('Instagram account ID not found');
-      }
-      
-      const accessToken = await getUserAccessToken();
-      if (!accessToken) {
-        throw new Error('User access token missing');
-      }
+      // Process the image to meet Instagram's requirements and convert to base64 data URL
+      const dataUrl = await processImageForInstagram(imageUrl);
       
       // Rate limit this API call
-      const endpoint = 'media/container/fallback';
-      return await executeRateLimitedRequest(endpoint, async () => {
-        // Create a new FormData object for multipart/form-data
-        const fs = await import('fs');
+      return await executeRateLimitedRequest('media/container/base64', async () => {
+        log('Sending base64 image data to Instagram API', 'instagram');
+        
+        // Create the form data
         const formData = new URLSearchParams();
-        
-        // Convert image to base64
-        const imageBuffer = fs.readFileSync(filePath);
-        const base64Image = Buffer.from(imageBuffer).toString('base64');
-        
-        // Post the base64 encoded image
-        formData.append('image_url', `data:image/jpeg;base64,${base64Image}`);
+        formData.append('image_url', dataUrl);
         formData.append('caption', caption);
         formData.append('access_token', accessToken);
         
-        // Call the API
+        // Make API call
         const response = await fetch(
           `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
           {
@@ -680,19 +514,138 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
           }
         );
         
+        // Get response text for parsing and debugging
+        const responseText = await response.text();
+        log(`Instagram API response status: ${response.status}`, 'instagram');
+        
         if (!response.ok) {
-          throw new Error(`API returned ${response.status}: ${await response.text()}`);
+          log(`Base64 approach failed: ${responseText}`, 'instagram');
+          throw new Error(`Base64 approach failed: ${responseText}`);
         }
         
-        const data = await response.json();
+        try {
+          const data = JSON.parse(responseText);
+          
+          if (!data.id) {
+            throw new Error('No container ID returned');
+          }
+          
+          log(`Successfully created media container with ID: ${data.id}`, 'instagram');
+          return data.id;
+        } catch (parseError) {
+          throw new Error(`Failed to parse response: ${responseText}`);
+        }
+      });
+    } catch (base64Error) {
+      // If base64 approach fails, log the error and continue to next approach
+      log(`Base64 approach failed: ${base64Error}. Trying ImgBB approach...`, 'instagram');
+    }
+    
+    // APPROACH 2: ImgBB-based approach
+    // This approach uses ImgBB as an intermediary hosting service
+    try {
+      log('APPROACH 2: Using ImgBB as intermediary host', 'instagram');
+      
+      // Upload to ImgBB to get a publicly accessible URL
+      const { uploadToImgBB } = await import('../utils/imageDownloader');
+      const imgbbUrl = await uploadToImgBB(imageUrl);
+      
+      if (!imgbbUrl) {
+        throw new Error('Failed to get ImgBB URL');
+      }
+      
+      log(`Successfully uploaded to ImgBB: ${imgbbUrl}`, 'instagram');
+      
+      // Rate limit this API call
+      return await executeRateLimitedRequest('media/container/imgbb', async () => {
+        const formData = new URLSearchParams();
+        formData.append('image_url', imgbbUrl);
+        formData.append('caption', caption);
+        formData.append('access_token', accessToken);
+        
+        // Make API call with ImgBB URL
+        const response = await fetch(
+          `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData.toString()
+          }
+        );
+        
+        // Get response text for parsing and debugging
+        const responseText = await response.text();
+        log(`Instagram API response status: ${response.status}`, 'instagram');
+        
+        if (!response.ok) {
+          log(`ImgBB approach failed: ${responseText}`, 'instagram');
+          throw new Error(`ImgBB approach failed: ${responseText}`);
+        }
+        
+        try {
+          const data = JSON.parse(responseText);
+          
+          if (!data.id) {
+            throw new Error('No container ID returned');
+          }
+          
+          log(`Successfully created media container with ID: ${data.id}`, 'instagram');
+          return data.id;
+        } catch (parseError) {
+          throw new Error(`Failed to parse response: ${responseText}`);
+        }
+      });
+    } catch (imgbbError) {
+      // If ImgBB approach fails, log the error and continue to final approach
+      log(`ImgBB approach failed: ${imgbbError}. Trying direct URL approach...`, 'instagram');
+    }
+    
+    // APPROACH 3: Direct URL approach (least reliable, but try as last resort)
+    log('APPROACH 3: Trying direct image URL as last resort', 'instagram');
+    
+    // Rate limit this API call
+    return await executeRateLimitedRequest('media/container/direct', async () => {
+      const formData = new URLSearchParams();
+      formData.append('image_url', imageUrl);
+      formData.append('caption', caption);
+      formData.append('access_token', accessToken);
+      
+      // Make API call with original URL
+      const response = await fetch(
+        `https://graph.facebook.com/v18.0/${instagramAccountId}/media`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: formData.toString()
+        }
+      );
+      
+      // Get response text for parsing and debugging
+      const responseText = await response.text();
+      log(`Instagram API response status: ${response.status}`, 'instagram');
+      
+      if (!response.ok) {
+        log(`Direct URL approach failed: ${responseText}`, 'instagram');
+        throw new Error(`All approaches failed. Instagram API error: ${responseText}`);
+      }
+      
+      try {
+        const data = JSON.parse(responseText);
         
         if (!data.id) {
           throw new Error('No container ID returned');
         }
         
+        log(`Successfully created media container with ID: ${data.id}`, 'instagram');
         return data.id;
-      });
-    }
+      } catch (parseError) {
+        throw new Error(`Failed to parse response: ${responseText}`);
+      }
+    });
   } catch (error) {
     log(`Error creating Instagram media container: ${error}`, 'instagram');
     throw error;
