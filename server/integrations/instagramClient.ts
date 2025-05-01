@@ -395,7 +395,7 @@ export function clearInstagramCaches(): void {
 /**
  * Process and prepare an image URL for Instagram
  * This ensures the image meets Instagram's API requirements
- * Downloads remote images to our server for reliable Instagram API access
+ * Uses ImgBB for reliable image hosting that Instagram can access
  * 
  * @param imageUrl Original image URL
  * @returns Processed image URL that is compatible with Instagram API
@@ -404,28 +404,21 @@ export async function prepareImageForInstagram(imageUrl: string): Promise<string
   try {
     log(`Preparing image for Instagram: ${imageUrl}`, 'instagram');
     
-    // Import the image downloader module
-    const { downloadImage, getFullImageUrl } = await import('../utils/imageDownloader');
+    // Import the image utilities
+    const { uploadToImgBB } = await import('../utils/imageDownloader');
     
-    // Always download the image to our server for reliable Instagram access
+    // Method 1: Use ImgBB's service to host the image (most reliable)
     try {
-      // Download the image to our local server
-      const { fileUrl } = await downloadImage(imageUrl);
+      // Upload the image to ImgBB
+      const imgbbUrl = await uploadToImgBB(imageUrl);
+      log(`Image uploaded to ImgBB for Instagram: ${imgbbUrl}`, 'instagram');
+      return imgbbUrl;
+    } catch (imgbbError) {
+      log(`ImgBB upload failed, trying alternative methods: ${imgbbError}`, 'instagram');
       
-      // Convert to a full URL with domain
-      const fullUrl = getFullImageUrl(fileUrl);
-      
-      log(`Image downloaded and prepared for Instagram: ${fullUrl}`, 'instagram');
-      return fullUrl;
-    } catch (downloadError) {
-      log(`Error downloading image, falling back to direct URL processing: ${downloadError}`, 'instagram');
-      
-      // If download fails, try direct URL processing as fallback
-      // Check if URL is from imgBB (common source of issues)
+      // Method 2: If ImgBB fails, clean up the URL if it's already an imgBB URL
       if (imageUrl.includes('i.ibb.co')) {
         // For imgBB URLs we need to ensure they are direct image links
-        // Sometimes these are truncated or have additional parameters
-        
         // 1. Remove any query parameters if they exist
         const cleanUrl = imageUrl.split('?')[0];
         
@@ -440,6 +433,7 @@ export async function prepareImageForInstagram(imageUrl: string): Promise<string
     }
     
     // Return original URL as last resort
+    // Some image URLs may already be Instagram-compatible
     return imageUrl;
   } catch (error) {
     log(`Error preparing image for Instagram: ${error}`, 'instagram');
