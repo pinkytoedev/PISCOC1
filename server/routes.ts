@@ -6,12 +6,14 @@ import { setupDiscordRoutes } from "./integrations/discord";
 import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot } from "./integrations/discordBot";
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
+import { postArticleToInstagram } from "./integrations/instagram";
 import { setupImgBBRoutes } from "./integrations/imgbb";
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
 import { setupPublicUploadRoutes } from "./integrations/publicUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
+import { log } from "./vite";
 import * as path from "path";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema, insertAdminRequestSchema } from "@shared/schema";
 import { ZodError } from "zod";
@@ -217,6 +219,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const validatedData = insertArticleSchema.partial().parse(req.body);
       
+      // Check if this is a status change to "published"
+      const statusChangedToPublished = validatedData.status === 'published';
+      
+      // Get the existing article before updating it, if we need to check status
+      let previousArticle = null;
+      if (statusChangedToPublished) {
+        previousArticle = await storage.getArticle(id);
+        
+        if (!previousArticle) {
+          return res.status(404).json({ message: "Article not found" });
+        }
+      }
+      
+      // Update the article
       const updatedArticle = await storage.updateArticle(id, validatedData);
       
       if (!updatedArticle) {
@@ -232,6 +248,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: { article: updatedArticle }
       });
       
+      // If status was changed to "published" from a different status, trigger Instagram post
+      if (statusChangedToPublished && 
+          previousArticle && 
+          previousArticle.status !== 'published') {
+        
+        log(`Article status changed to published, triggering Instagram post for article ID ${id}`, 'instagram');
+        
+        // Post to Instagram
+        const instagramResult = await postArticleToInstagram(updatedArticle);
+        
+        // Log the result of the Instagram post attempt 
+        if (instagramResult.success) {
+          log(`Successfully posted article to Instagram: ${updatedArticle.title}`, 'instagram');
+          
+          // Add Instagram posting result to the response
+          const responseWithInstagram = {
+            ...updatedArticle,
+            _instagram: {
+              posted: true,
+              mediaId: instagramResult.mediaId
+            }
+          };
+          
+          return res.json(responseWithInstagram);
+        } else {
+          log(`Failed to post article to Instagram: ${instagramResult.error}`, 'instagram');
+          
+          // Still return the updated article but include the error information
+          const responseWithInstagramError = {
+            ...updatedArticle,
+            _instagram: {
+              posted: false,
+              error: instagramResult.error
+            }
+          };
+          
+          return res.json(responseWithInstagramError);
+        }
+      }
+      
+      // Return the updated article (if we didn't already return with Instagram info)
       res.json(updatedArticle);
     } catch (error) {
       if (error instanceof ZodError) {
