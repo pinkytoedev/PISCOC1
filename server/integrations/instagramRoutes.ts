@@ -19,49 +19,12 @@ import {
   publishInstagramMedia
 } from './instagramClient';
 
-// Import the image handler utility
-import { cleanupOldImages } from '../utils/instagramImageHandler';
-
 /**
  * Setup routes for Instagram webhooks and API integration
  * 
  * @param app Express application instance
  */
 export function setupInstagramRoutes(app: Express) {
-  // Set up an interval to clean up old images every 2 hours
-  const CLEANUP_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
-  const IMAGE_MAX_AGE_HOURS = 24; // Keep images for 24 hours max
-  
-  // Start the cleanup timer
-  const cleanupTimer = setInterval(() => {
-    try {
-      const deletedCount = cleanupOldImages(IMAGE_MAX_AGE_HOURS);
-      if (deletedCount > 0) {
-        log(`Cleaned up ${deletedCount} old Instagram images`, 'instagram');
-      }
-    } catch (error) {
-      log(`Error cleaning up old Instagram images: ${error}`, 'instagram');
-    }
-  }, CLEANUP_INTERVAL_MS);
-  
-  // Add a route to manually trigger cleanup for testing
-  app.post('/api/instagram/cleanup-images', async (req: Request, res: Response) => {
-    try {
-      const maxAgeHours = req.body.maxAgeHours || IMAGE_MAX_AGE_HOURS;
-      const deletedCount = cleanupOldImages(maxAgeHours);
-      res.status(200).json({
-        success: true,
-        deletedCount,
-        message: `Cleaned up ${deletedCount} old Instagram images`
-      });
-    } catch (error) {
-      log(`Error cleaning up old Instagram images: ${error}`, 'instagram');
-      res.status(500).json({
-        error: 'Failed to clean up images',
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
   // Instagram webhook verification endpoint
   // This endpoint is called by Facebook when you try to subscribe to a webhook
   app.get('/api/instagram/webhooks/callback', async (req: Request, res: Response) => {
@@ -362,36 +325,13 @@ export function setupInstagramRoutes(app: Express) {
         });
       }
       
-      // Log detailed image information for debugging
-      try {
-        // Try to access the image to check if it's public
-        const imageResponse = await fetch(imageUrl, { method: 'HEAD' });
-        const contentType = imageResponse.headers.get('content-type');
-        
-        log(`Image URL check: status=${imageResponse.status}, content-type=${contentType}`, 'instagram');
-        
-        if (!contentType || !contentType.startsWith('image/')) {
-          log(`Warning: URL does not appear to be an image: ${contentType}`, 'instagram');
-        }
-      } catch (imageCheckError) {
-        log(`Warning: Could not check image URL accessibility: ${imageCheckError}`, 'instagram');
-      }
-      
-      // Two-step process: First create a container with our improved client
+      // Two-step process: First create a container
       log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
       const containerId = await createInstagramMediaContainer(imageUrl, caption || '');
-      
-      if (!containerId) {
-        throw new Error('Failed to create media container');
-      }
-      
-      log(`Successfully created Instagram media container: ${containerId}`, 'instagram');
       
       // Then publish it
       log(`Publishing Instagram media container: ${containerId}`, 'instagram');
       const mediaId = await publishInstagramMedia(containerId);
-      
-      log(`Successfully published Instagram media: ${mediaId}`, 'instagram');
       
       // Log the activity
       await storage.createActivityLog({
@@ -402,16 +342,13 @@ export function setupInstagramRoutes(app: Express) {
         details: {
           timestamp: new Date().toISOString(),
           containerId,
-          mediaId,
-          originalImageUrl: imageUrl,
-          captionLength: caption ? caption.length : 0
+          mediaId
         }
       });
       
       // Return the result
       res.status(201).json({
         success: true,
-        id: mediaId,
         mediaId,
         message: 'Instagram post created successfully'
       });
