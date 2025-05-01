@@ -395,6 +395,7 @@ export function clearInstagramCaches(): void {
 /**
  * Process and prepare an image URL for Instagram
  * This ensures the image meets Instagram's API requirements
+ * Downloads remote images to our server for reliable Instagram API access
  * 
  * @param imageUrl Original image URL
  * @returns Processed image URL that is compatible with Instagram API
@@ -403,24 +404,42 @@ export async function prepareImageForInstagram(imageUrl: string): Promise<string
   try {
     log(`Preparing image for Instagram: ${imageUrl}`, 'instagram');
     
-    // Check if URL is from imgBB (common source of issues)
-    if (imageUrl.includes('i.ibb.co')) {
-      // For imgBB URLs we need to ensure they are direct image links
-      // Sometimes these are truncated or have additional parameters
+    // Import the image downloader module
+    const { downloadImage, getFullImageUrl } = await import('../utils/imageDownloader');
+    
+    // Always download the image to our server for reliable Instagram access
+    try {
+      // Download the image to our local server
+      const { fileUrl } = await downloadImage(imageUrl);
       
-      // 1. Remove any query parameters if they exist
-      const cleanUrl = imageUrl.split('?')[0];
+      // Convert to a full URL with domain
+      const fullUrl = getFullImageUrl(fileUrl);
       
-      // 2. Ensure the URL has an image extension
-      if (!cleanUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
-        // If no extension, append .jpg as fallback
-        return `${cleanUrl}.jpg`;
+      log(`Image downloaded and prepared for Instagram: ${fullUrl}`, 'instagram');
+      return fullUrl;
+    } catch (downloadError) {
+      log(`Error downloading image, falling back to direct URL processing: ${downloadError}`, 'instagram');
+      
+      // If download fails, try direct URL processing as fallback
+      // Check if URL is from imgBB (common source of issues)
+      if (imageUrl.includes('i.ibb.co')) {
+        // For imgBB URLs we need to ensure they are direct image links
+        // Sometimes these are truncated or have additional parameters
+        
+        // 1. Remove any query parameters if they exist
+        const cleanUrl = imageUrl.split('?')[0];
+        
+        // 2. Ensure the URL has an image extension
+        if (!cleanUrl.match(/\.(jpg|jpeg|png|gif)$/i)) {
+          // If no extension, append .jpg as fallback
+          return `${cleanUrl}.jpg`;
+        }
+        
+        return cleanUrl;
       }
-      
-      return cleanUrl;
     }
     
-    // Return original URL for other sources
+    // Return original URL as last resort
     return imageUrl;
   } catch (error) {
     log(`Error preparing image for Instagram: ${error}`, 'instagram');
