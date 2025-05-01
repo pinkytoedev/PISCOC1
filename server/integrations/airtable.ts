@@ -1843,8 +1843,8 @@ export function setupAirtableRoutes(app: Express) {
       }
       
       const fieldName = req.params.fieldName;
-      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto')) {
-        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'instaPhoto'" });
+      if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'InstaPhotoLink' && fieldName !== 'instaPhoto')) {
+        return res.status(400).json({ message: "Invalid field name. Must be 'MainImage' or 'InstaPhotoLink'" });
       }
       
       const { imageUrl, filename } = req.body;
@@ -1957,9 +1957,11 @@ export function setupAirtableRoutes(app: Express) {
       });
       
       // Map the field names to their link field equivalents
-      const fieldMappings = {
+      const fieldMappings: Record<string, string> = {
         'MainImage': 'MainImageLink',
-        'instaPhoto': 'InstaPhotoLink'
+        'instaPhoto': 'InstaPhotoLink',
+        'InstaPhotoLink': 'InstaPhotoLink',
+        'MainImageLink': 'MainImageLink'
       };
       
       // Use the mapped field name or fallback to original
@@ -1997,10 +1999,10 @@ export function setupAirtableRoutes(app: Express) {
       // For link fields, result is a boolean, so we use the original imageUrl
       const updateData: Partial<InsertArticle> = {};
       
-      if (fieldName === 'MainImage') {
+      if (fieldName === 'MainImage' || fieldName === 'MainImageLink') {
         updateData.imageUrl = imageUrl;
         updateData.imageType = 'url';
-      } else if (fieldName === 'instaPhoto') {
+      } else if (fieldName === 'instaPhoto' || fieldName === 'InstaPhotoLink') {
         updateData.instagramImageUrl = imageUrl;
       }
       
