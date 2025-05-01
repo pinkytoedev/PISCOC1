@@ -1861,7 +1861,14 @@ async function handleButtonInteraction(
       
       console.log("Instagram image upload NOW - full ID:", fullId);
       console.log("Instagram image upload NOW - extracted ID part:", idPart);
-      const articleId = parseInt(idPart, 10);
+      
+      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
+      // Extract just the numeric part using regex
+      const numericMatch = idPart.match(/^\d+/);
+      const numericId = numericMatch ? numericMatch[0] : idPart;
+      
+      console.log("Instagram image upload NOW - numeric ID part:", numericId);
+      const articleId = parseInt(numericId, 10);
 
       if (isNaN(articleId)) {
         await interaction.reply({
@@ -1998,7 +2005,14 @@ async function handleButtonInteraction(
       
       console.log("Web image upload NOW - full ID:", fullId);
       console.log("Web image upload NOW - extracted ID part:", idPart);
-      const articleId = parseInt(idPart, 10);
+      
+      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
+      // Extract just the numeric part using regex
+      const numericMatch = idPart.match(/^\d+/);
+      const numericId = numericMatch ? numericMatch[0] : idPart;
+      
+      console.log("Web image upload NOW - numeric ID part:", numericId);
+      const articleId = parseInt(numericId, 10);
 
       if (isNaN(articleId)) {
         await interaction.reply({
@@ -2129,7 +2143,14 @@ async function handleButtonInteraction(
       const idPart = fullId.slice(prefix.length);
       console.log("Content upload - full ID:", fullId);
       console.log("Content upload - extracted ID part:", idPart);
-      const articleId = parseInt(idPart, 10);
+      
+      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
+      // Extract just the numeric part using regex
+      const numericMatch = idPart.match(/^\d+/);
+      const numericId = numericMatch ? numericMatch[0] : idPart;
+      
+      console.log("Content upload - numeric ID part:", numericId);
+      const articleId = parseInt(numericId, 10);
 
       if (isNaN(articleId)) {
         await interaction.reply({
@@ -2206,7 +2227,14 @@ async function handleButtonInteraction(
       const idPart = fullId.slice(prefix.length);
       console.log("Web image upload - full ID:", fullId);
       console.log("Web image upload - extracted ID part:", idPart);
-      const articleId = parseInt(idPart, 10);
+      
+      // Ensure we're parsing just the numeric ID (in case there's any non-numeric suffix)
+      // Extract just the numeric part using regex
+      const numericMatch = idPart.match(/^\d+/);
+      const numericId = numericMatch ? numericMatch[0] : idPart;
+      
+      console.log("Web image upload - numeric ID part:", numericId);
+      const articleId = parseInt(numericId, 10);
 
       if (isNaN(articleId)) {
         await interaction.reply({
@@ -3803,7 +3831,10 @@ async function processDiscordAttachment(
       // Map the field names to their link field equivalents
       const fieldMappings = {
         'MainImage': 'MainImageLink',
-        'instaPhoto': 'InstaPhotoLink'
+        'instaPhoto': 'InstaPhotoLink',
+        // Include the link field names themselves to ensure they pass through correctly
+        'MainImageLink': 'MainImageLink',
+        'InstaPhotoLink': 'InstaPhotoLink'
       };
       
       // Use the mapped field name for Airtable
