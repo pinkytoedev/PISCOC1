@@ -39,16 +39,25 @@ export async function uploadToImgBB(imageUrl: string): Promise<string> {
     // Get the image data as an array buffer
     const imageBuffer = await response.arrayBuffer();
     
-    // Create multipart form data with the image
-    const form = new FormData();
-    const blob = new Blob([Buffer.from(imageBuffer)]);
-    form.append('image', blob);
+    // Create form data with base64 encoded image
+    const urlParams = new URLSearchParams();
+    // Convert the buffer to base64 string that ImgBB API accepts
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    urlParams.append('image', base64Image);
     
     // Use a reliable image hosting service API
     // ImgBB provides direct image URLs that Instagram can access
-    const apiResponse = await fetch('https://api.imgbb.com/1/upload?key=c15894dfd9fb11c0dd539e0880ad9eb5', {
+    const imgbbApiKey = process.env.IMGBB_API_KEY;
+    if (!imgbbApiKey) {
+      throw new Error('ImgBB API key is missing, please set the IMGBB_API_KEY environment variable');
+    }
+    
+    const apiResponse = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
       method: 'POST',
-      body: form
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: urlParams.toString()
     });
     
     if (!apiResponse.ok) {

@@ -84,7 +84,12 @@ export async function downloadAndUploadToImgBB(imageUrl: string): Promise<string
     
     // Upload to ImgBB
     log(`Uploading image to ImgBB...`, 'instagramImage');
-    const imgbbResponse = await fetch('https://api.imgbb.com/1/upload?key=c15894dfd9fb11c0dd539e0880ad9eb5', {
+    const imgbbApiKey = process.env.IMGBB_API_KEY;
+    if (!imgbbApiKey) {
+      throw new Error('ImgBB API key is missing, please set the IMGBB_API_KEY environment variable');
+    }
+    
+    const imgbbResponse = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
