@@ -758,7 +758,7 @@ export async function publishInstagramMedia(containerId: string): Promise<string
 /**
  * Posts an article to Instagram when it's published
  * Uses the article's instagramImageUrl (InstaPhotoLink) and hashtags for the post
- * Includes retry mechanism for rate limit resilience
+ * Uses the same implementation as the manual post creation to ensure consistency
  *
  * @param article The article to post to Instagram
  * @returns Object with success status and mediaId if successful
@@ -789,80 +789,46 @@ export async function postArticleToInstagram(article: any): Promise<{success: bo
     log(`Creating Instagram post with image: ${article.instagramImageUrl}`, 'instagram');
     log(`Caption: ${caption}`, 'instagram');
     
-    // Add a short delay before API calls to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Create an Instagram media container with retries
-    let containerId: string | null = null;
-    let retryCount = 0;
-    const maxRetries = 3;
-    
-    while (retryCount < maxRetries && !containerId) {
-      try {
-        if (retryCount > 0) {
-          // Exponential backoff - wait longer between each retry
-          const delay = 2000 * Math.pow(2, retryCount - 1);
-          log(`Retry ${retryCount}/${maxRetries} for creating media container, waiting ${delay}ms...`, 'instagram');
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-        containerId = await createInstagramMediaContainer(article.instagramImageUrl, caption);
-        
-        if (containerId) {
-          log(`Successfully created Instagram media container: ${containerId}`, 'instagram');
-        }
-      } catch (containerError) {
-        retryCount++;
-        log(`Error creating Instagram media container (attempt ${retryCount}/${maxRetries}): ${containerError}`, 'instagram');
-        
-        // If it's the last retry, rethrow to be caught by the outer catch
-        if (retryCount >= maxRetries) {
-          throw containerError;
-        }
-      }
+    // Get Instagram account ID
+    const instagramAccountId = await getInstagramAccountId();
+    if (!instagramAccountId) {
+      throw new Error('Instagram account ID not found');
     }
+    
+    // Get user access token
+    const accessToken = await getUserAccessToken();
+    if (!accessToken) {
+      throw new Error('User access token missing');
+    }
+    
+    // IMPORTANT: Use the exact same approach as the manual post creation to ensure consistency
+    
+    // Import the Instagram client module (which has the working implementation)
+    const { createInstagramMediaContainer: clientCreateContainer, publishInstagramMedia: clientPublishMedia } = 
+      await import('./instagramClient');
+    
+    log(`Using Instagram client module for post creation`, 'instagram');
+    
+    // Two-step process: First create a container (same as manual posting)
+    log(`Creating Instagram media container for image: ${article.instagramImageUrl}`, 'instagram');
+    const containerId = await clientCreateContainer(article.instagramImageUrl, caption || '');
     
     if (!containerId) {
-      throw new Error('Failed to create Instagram media container after multiple attempts');
+      throw new Error('Failed to create Instagram media container');
     }
+    
+    log(`Successfully created Instagram media container: ${containerId}`, 'instagram');
     
     // Wait a moment before publishing to avoid rate limits
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Publish the media with retries
-    let mediaId: string | null = null;
-    retryCount = 0;
+    // Then publish it (same as manual posting)
+    log(`Publishing Instagram media container: ${containerId}`, 'instagram');
+    const mediaId = await clientPublishMedia(containerId);
     
-    while (retryCount < maxRetries && !mediaId) {
-      try {
-        if (retryCount > 0) {
-          // Exponential backoff - wait longer between each retry
-          const delay = 2000 * Math.pow(2, retryCount - 1);
-          log(`Retry ${retryCount}/${maxRetries} for publishing media, waiting ${delay}ms...`, 'instagram');
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-        
-        mediaId = await publishInstagramMedia(containerId);
-        
-        if (mediaId) {
-          log(`Successfully published Instagram media: ${mediaId}`, 'instagram');
-        }
-      } catch (publishError) {
-        retryCount++;
-        log(`Error publishing Instagram media (attempt ${retryCount}/${maxRetries}): ${publishError}`, 'instagram');
-        
-        // If it's the last retry, rethrow to be caught by the outer catch
-        if (retryCount >= maxRetries) {
-          throw publishError;
-        }
-      }
-    }
+    log(`Successfully published Instagram media: ${mediaId}`, 'instagram');
     
-    if (!mediaId) {
-      throw new Error('Failed to publish Instagram media after multiple attempts');
-    }
-    
-    // Log the activity
+    // Log the activity (same as manual posting)
     await storage.createActivityLog({
       action: 'instagram_article_published',
       userId: null,
@@ -873,7 +839,7 @@ export async function postArticleToInstagram(article: any): Promise<{success: bo
         containerId,
         mediaId,
         articleTitle: article.title,
-        caption: caption, // Store the caption for verification
+        caption: caption,
         imageUrl: article.instagramImageUrl
       }
     });
