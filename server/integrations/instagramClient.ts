@@ -395,7 +395,7 @@ export function clearInstagramCaches(): void {
 /**
  * Process and prepare an image URL for Instagram
  * This ensures the image meets Instagram's API requirements
- * Downloads the image locally and serves it from our own server to ensure compatibility
+ * Downloads the image locally and re-uploads to ImgBB to ensure compatibility
  * 
  * @param imageUrl Original image URL
  * @returns Processed image URL that is compatible with Instagram API
@@ -405,30 +405,26 @@ export async function prepareImageForInstagram(imageUrl: string): Promise<string
     log(`Preparing image for Instagram: ${imageUrl}`, 'instagram');
     
     // Import the image handler utilities
-    const { downloadAndStoreImage, getPublicImageUrl } = await import('../utils/instagramImageHandler');
+    const { downloadAndUploadToImgBB } = await import('../utils/instagramImageHandler');
     const { uploadToImgBB } = await import('../utils/imageDownloader');
     
-    // Step 1: Try to download and store the image locally first (most reliable)
+    // Step 1: First try our optimized approach - download locally then upload to ImgBB
     try {
-      // Download and store the image
-      const localPath = await downloadAndStoreImage(imageUrl);
-      
-      // Get the full public URL
-      const publicUrl = getPublicImageUrl(localPath);
-      
-      log(`Image downloaded and stored locally for Instagram: ${publicUrl}`, 'instagram');
-      return publicUrl;
+      // Download and upload to ImgBB
+      const imgbbUrl = await downloadAndUploadToImgBB(imageUrl);
+      log(`Image processed and uploaded to ImgBB for Instagram: ${imgbbUrl}`, 'instagram');
+      return imgbbUrl;
     } catch (downloadError) {
-      log(`Local image storage failed, trying ImgBB as fallback: ${downloadError}`, 'instagram');
+      log(`Local download and ImgBB upload failed, trying direct ImgBB upload: ${downloadError}`, 'instagram');
       
-      // Step 2: Fallback to ImgBB if local download fails
+      // Step 2: Fallback to direct ImgBB upload if our optimized approach fails
       try {
-        // Upload the image to ImgBB
+        // Upload the image directly to ImgBB
         const imgbbUrl = await uploadToImgBB(imageUrl);
-        log(`Image uploaded to ImgBB for Instagram: ${imgbbUrl}`, 'instagram');
+        log(`Image uploaded directly to ImgBB for Instagram: ${imgbbUrl}`, 'instagram');
         return imgbbUrl;
       } catch (imgbbError) {
-        log(`ImgBB upload failed, trying alternative methods: ${imgbbError}`, 'instagram');
+        log(`All ImgBB upload methods failed, trying alternative methods: ${imgbbError}`, 'instagram');
         
         // Step 3: If ImgBB fails, clean up the URL if it's already an imgBB URL
         if (imageUrl.includes('i.ibb.co')) {

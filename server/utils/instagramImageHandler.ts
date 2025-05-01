@@ -59,15 +59,82 @@ export async function downloadAndStoreImage(imageUrl: string): Promise<string> {
 }
 
 /**
+ * Download an image from a URL, save it locally, and then upload to ImgBB
+ * @param imageUrl URL of the image to download
+ * @returns ImgBB URL that Instagram can access
+ */
+export async function downloadAndUploadToImgBB(imageUrl: string): Promise<string> {
+  try {
+    // First download the image locally
+    const localPath = await downloadAndStoreImage(imageUrl);
+    log(`Image downloaded locally at: ${localPath}`, 'instagramImage');
+    
+    // Get the full local file path
+    const fullPath = path.join(process.cwd(), localPath.startsWith('/') ? localPath.substring(1) : localPath);
+    
+    // Read the image file
+    const imageBuffer = fs.readFileSync(fullPath);
+    
+    // Create a form with multipart/form-data
+    const formData = new URLSearchParams();
+    
+    // Base64 encode the image
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    formData.append('image', base64Image);
+    
+    // Upload to ImgBB
+    log(`Uploading image to ImgBB...`, 'instagramImage');
+    const imgbbResponse = await fetch('https://api.imgbb.com/1/upload?key=c15894dfd9fb11c0dd539e0880ad9eb5', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formData.toString()
+    });
+    
+    if (!imgbbResponse.ok) {
+      throw new Error(`ImgBB API error: ${imgbbResponse.status} ${imgbbResponse.statusText}`);
+    }
+    
+    const imgbbResult = await imgbbResponse.json();
+    
+    if (!imgbbResult.success) {
+      throw new Error('ImgBB upload failed');
+    }
+    
+    const imgbbUrl = imgbbResult.data.url;
+    log(`Successfully uploaded to ImgBB: ${imgbbUrl}`, 'instagramImage');
+    
+    return imgbbUrl;
+  } catch (error) {
+    log(`Error uploading to ImgBB: ${error}`, 'instagramImage');
+    throw error;
+  }
+}
+
+/**
  * Get the full public URL for a locally stored image
  * @param localPath Local path returned by downloadAndStoreImage
  * @returns Full public URL including hostname
  */
 export function getPublicImageUrl(localPath: string): string {
-  // Get the host from environment or use a default
-  const host = process.env.PUBLIC_URL || 
-               process.env.REPLIT_URL || 
-               `http://localhost:5000`;
+  // For Replit environment, get the domain from headers
+  let host = '';
+  try {
+    // Try to get the Replit domain which is publicly accessible
+    const replitDomain = process.env.REPL_SLUG && process.env.REPL_OWNER
+      ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+      : null;
+      
+    // Get any explicitly set PUBLIC_URL
+    const publicUrl = process.env.PUBLIC_URL;
+    
+    // Use the first available option
+    host = publicUrl || replitDomain || 'https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev';
+  } catch (error) {
+    // If we can't determine the host, use a fallback
+    host = 'https://7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev';
+  }
   
   // Ensure the path starts with a slash
   const normalizedPath = localPath.startsWith('/') ? localPath : `/${localPath}`;
