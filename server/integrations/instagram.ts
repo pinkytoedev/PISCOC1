@@ -600,6 +600,7 @@ export async function unsubscribeFromWebhook(subscriptionId: string): Promise<{ 
 export async function createInstagramMediaContainer(imageUrl: string, caption: string): Promise<string> {
   try {
     log(`Creating Instagram media container for image: ${imageUrl}`, 'instagram');
+    log(`Using caption: ${caption}`, 'instagram');
     
     // Get Instagram account ID
     const instagramAccountId = await getInstagramAccountId();
@@ -613,11 +614,23 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
       throw new Error('User access token missing');
     }
     
+    // Clean up and encode the caption properly
+    const sanitizedCaption = caption.trim();
+    log(`Sanitized caption: ${sanitizedCaption}`, 'instagram');
+    
     // Set up the request to create a media container
     const formData = new URLSearchParams();
     formData.append('image_url', imageUrl);
-    formData.append('caption', caption);
+    formData.append('caption', sanitizedCaption);
     formData.append('access_token', accessToken);
+    
+    // Log the request payload (excluding token for security)
+    const debugPayload = {
+      image_url: imageUrl,
+      caption: sanitizedCaption,
+      // Omit access_token for security reasons
+    };
+    log(`Instagram API request payload: ${JSON.stringify(debugPayload)}`, 'instagram');
     
     // Make the API call to Instagram Graph API
     const response = await fetch(
@@ -631,16 +644,33 @@ export async function createInstagramMediaContainer(imageUrl: string, caption: s
       }
     );
     
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}: ${await response.text()}`);
+    // Get the response data, even if it's an error
+    let responseText;
+    try {
+      responseText = await response.text();
+    } catch (readError) {
+      responseText = 'Could not read response body';
     }
     
-    const data = await response.json();
+    if (!response.ok) {
+      log(`Instagram API error response: ${responseText}`, 'instagram');
+      throw new Error(`API returned ${response.status}: ${responseText}`);
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      log(`Error parsing Instagram API response: ${responseText}`, 'instagram');
+      throw new Error(`Could not parse API response: ${responseText}`);
+    }
     
     if (!data.id) {
+      log(`Instagram API returned unexpected data: ${JSON.stringify(data)}`, 'instagram');
       throw new Error('No container ID returned');
     }
     
+    log(`Successfully created Instagram media container with ID: ${data.id}`, 'instagram');
     return data.id;
   } catch (error) {
     log(`Error creating Instagram media container: ${error}`, 'instagram');
@@ -676,6 +706,9 @@ export async function publishInstagramMedia(containerId: string): Promise<string
     formData.append('creation_id', containerId);
     formData.append('access_token', accessToken);
     
+    // Log the request (excluding token for security)
+    log(`Publishing Instagram media with creation_id: ${containerId}`, 'instagram');
+    
     // Make the API call to Instagram Graph API
     const response = await fetch(
       `https://graph.facebook.com/v18.0/${instagramAccountId}/media_publish`,
@@ -688,16 +721,33 @@ export async function publishInstagramMedia(containerId: string): Promise<string
       }
     );
     
-    if (!response.ok) {
-      throw new Error(`API returned ${response.status}: ${await response.text()}`);
+    // Get the response data, even if it's an error
+    let responseText;
+    try {
+      responseText = await response.text();
+    } catch (readError) {
+      responseText = 'Could not read response body';
     }
     
-    const data = await response.json();
+    if (!response.ok) {
+      log(`Instagram API publish error response: ${responseText}`, 'instagram');
+      throw new Error(`API returned ${response.status}: ${responseText}`);
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      log(`Error parsing Instagram API publish response: ${responseText}`, 'instagram');
+      throw new Error(`Could not parse API response: ${responseText}`);
+    }
     
     if (!data.id) {
+      log(`Instagram API publish returned unexpected data: ${JSON.stringify(data)}`, 'instagram');
       throw new Error('No media ID returned');
     }
     
+    log(`Successfully published Instagram media with ID: ${data.id}`, 'instagram');
     return data.id;
   } catch (error) {
     log(`Error publishing Instagram media: ${error}`, 'instagram');
@@ -708,6 +758,7 @@ export async function publishInstagramMedia(containerId: string): Promise<string
 /**
  * Posts an article to Instagram when it's published
  * Uses the article's instagramImageUrl (InstaPhotoLink) and hashtags for the post
+ * Includes retry mechanism for rate limit resilience
  *
  * @param article The article to post to Instagram
  * @returns Object with success status and mediaId if successful
@@ -738,11 +789,78 @@ export async function postArticleToInstagram(article: any): Promise<{success: bo
     log(`Creating Instagram post with image: ${article.instagramImageUrl}`, 'instagram');
     log(`Caption: ${caption}`, 'instagram');
     
-    // Create an Instagram media container
-    const containerId = await createInstagramMediaContainer(article.instagramImageUrl, caption);
+    // Add a short delay before API calls to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // Publish the media
-    const mediaId = await publishInstagramMedia(containerId);
+    // Create an Instagram media container with retries
+    let containerId: string | null = null;
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && !containerId) {
+      try {
+        if (retryCount > 0) {
+          // Exponential backoff - wait longer between each retry
+          const delay = 2000 * Math.pow(2, retryCount - 1);
+          log(`Retry ${retryCount}/${maxRetries} for creating media container, waiting ${delay}ms...`, 'instagram');
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        containerId = await createInstagramMediaContainer(article.instagramImageUrl, caption);
+        
+        if (containerId) {
+          log(`Successfully created Instagram media container: ${containerId}`, 'instagram');
+        }
+      } catch (containerError) {
+        retryCount++;
+        log(`Error creating Instagram media container (attempt ${retryCount}/${maxRetries}): ${containerError}`, 'instagram');
+        
+        // If it's the last retry, rethrow to be caught by the outer catch
+        if (retryCount >= maxRetries) {
+          throw containerError;
+        }
+      }
+    }
+    
+    if (!containerId) {
+      throw new Error('Failed to create Instagram media container after multiple attempts');
+    }
+    
+    // Wait a moment before publishing to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Publish the media with retries
+    let mediaId: string | null = null;
+    retryCount = 0;
+    
+    while (retryCount < maxRetries && !mediaId) {
+      try {
+        if (retryCount > 0) {
+          // Exponential backoff - wait longer between each retry
+          const delay = 2000 * Math.pow(2, retryCount - 1);
+          log(`Retry ${retryCount}/${maxRetries} for publishing media, waiting ${delay}ms...`, 'instagram');
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+        
+        mediaId = await publishInstagramMedia(containerId);
+        
+        if (mediaId) {
+          log(`Successfully published Instagram media: ${mediaId}`, 'instagram');
+        }
+      } catch (publishError) {
+        retryCount++;
+        log(`Error publishing Instagram media (attempt ${retryCount}/${maxRetries}): ${publishError}`, 'instagram');
+        
+        // If it's the last retry, rethrow to be caught by the outer catch
+        if (retryCount >= maxRetries) {
+          throw publishError;
+        }
+      }
+    }
+    
+    if (!mediaId) {
+      throw new Error('Failed to publish Instagram media after multiple attempts');
+    }
     
     // Log the activity
     await storage.createActivityLog({
@@ -754,7 +872,9 @@ export async function postArticleToInstagram(article: any): Promise<{success: bo
         timestamp: new Date().toISOString(),
         containerId,
         mediaId,
-        articleTitle: article.title
+        articleTitle: article.title,
+        caption: caption, // Store the caption for verification
+        imageUrl: article.instagramImageUrl
       }
     });
     
