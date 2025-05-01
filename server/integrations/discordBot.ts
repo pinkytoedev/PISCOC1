@@ -1746,7 +1746,7 @@ async function handleButtonInteraction(
       }
 
       console.log(
-        "Processing Instagram image upload for article ID:",
+        "Preparing Instagram image upload options for article ID:",
         articleId,
       );
 
@@ -3829,18 +3829,20 @@ async function processDiscordAttachment(
 
     // For Airtable articles, upload to Airtable using link fields
     let airtableResult = null;
+    
+    // Map the field names to their link field equivalents
+    const fieldMappings = {
+      'MainImage': 'MainImageLink',
+      'instaPhoto': 'InstaPhotoLink',
+      // Include the link field names themselves to ensure they pass through correctly
+      'MainImageLink': 'MainImageLink',
+      'InstaPhotoLink': 'InstaPhotoLink'
+    };
+    
+    // Use the mapped field name for Airtable
+    const targetFieldName = fieldMappings[fieldName] || fieldName;
+    
     if (article.source === "airtable" && article.externalId) {
-      // Map the field names to their link field equivalents
-      const fieldMappings = {
-        'MainImage': 'MainImageLink',
-        'instaPhoto': 'InstaPhotoLink',
-        // Include the link field names themselves to ensure they pass through correctly
-        'MainImageLink': 'MainImageLink',
-        'InstaPhotoLink': 'InstaPhotoLink'
-      };
-      
-      // Use the mapped field name for Airtable
-      const targetFieldName = fieldMappings[fieldName] || fieldName;
       
       console.log(`Using Airtable link field: ${fieldName} → ${targetFieldName}`);
       
