@@ -257,13 +257,13 @@ export function setupDirectUploadRoutes(app: Express) {
             // Prepare Airtable update
             const updatePayload = {
               fields: {
-                instaPhotoLink: imgbbResult.url
+                InstaPhotoLink: imgbbResult.url
               }
             };
             
             // Call Airtable API
             const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${tableIdSetting.value}/${article.externalId}`;
-            console.log('Setting instaPhotoLink:', imgbbResult.url);
+            console.log('Setting InstaPhotoLink:', imgbbResult.url);
             console.log('Airtable API request:', 'PATCH', airtableUrl);
             
             const airtableResponse = await fetch(airtableUrl, {
@@ -292,7 +292,7 @@ export function setupDirectUploadRoutes(app: Express) {
         resourceType: 'image',
         resourceId: articleId.toString(),
         details: {
-          fieldName: 'instaPhoto',
+          fieldName: 'InstaPhotoLink',
           imgbbId: imgbbResult.id,
           imgbbUrl: imgbbResult.url,
           filename: req.file.originalname
