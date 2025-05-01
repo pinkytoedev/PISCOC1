@@ -3905,6 +3905,7 @@ async function processDiscordAttachment(
 /**
  * Handler for the /insta command
  * Allows users to select an unpublished article and upload an Instagram image to it
+ * Users can choose between browser upload or direct Discord upload
  */
 async function handleInstaImageCommand(interaction: any) {
   await interaction.deferReply({ ephemeral: true });
@@ -3912,13 +3913,14 @@ async function handleInstaImageCommand(interaction: any) {
   try {
     // Create a select menu for article selection
     const articles = await storage.getArticles();
-    const unpublishedArticles = articles.filter(
-      (article) => article.status !== "published",
+    // Specifically filter for draft articles as requested
+    const draftArticles = articles.filter(
+      (article) => article.status === "draft",
     );
 
-    if (unpublishedArticles.length === 0) {
+    if (draftArticles.length === 0) {
       await interaction.editReply(
-        "No unpublished articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.",
+        "No draft articles found to upload images to. Create a new article using `/create_article` or use the website to create draft articles first.",
       );
       return;
     }
@@ -3926,9 +3928,9 @@ async function handleInstaImageCommand(interaction: any) {
     // Create a select menu for article selection
     const selectMenu = new StringSelectMenuBuilder()
       .setCustomId("select_article_for_insta_image")
-      .setPlaceholder("Select an article to add Instagram image")
+      .setPlaceholder("Select a draft article to add Instagram image")
       .addOptions(
-        unpublishedArticles.slice(0, 25).map((article) => ({
+        draftArticles.slice(0, 25).map((article) => ({
           label: article.title.substring(0, 100), // Max 100 chars for option label
           description: `Status: ${article.status} | ID: ${article.id}`,
           value: article.id.toString(),
@@ -3941,12 +3943,12 @@ async function handleInstaImageCommand(interaction: any) {
 
     // Show the selection menu to the user
     await interaction.editReply({
-      content: "Please select an article to upload an Instagram image to.",
+      content: "Please select a draft article to upload an Instagram image to.",
       components: [row],
     });
 
-    // We'll handle the selection in the handleStringSelectMenuInteraction function
-    // which will check for the 'select_article_for_insta_image' custom ID
+    // The selection will be handled in handleStringSelectMenuInteraction function
+    // which checks for the 'select_article_for_insta_image' custom ID
   } catch (error) {
     console.error("Error handling Instagram image command:", error);
     await interaction.editReply(
