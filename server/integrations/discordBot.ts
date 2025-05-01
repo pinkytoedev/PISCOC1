@@ -958,31 +958,85 @@ async function handleStringSelectMenuInteraction(interaction: any) {
         return;
       }
 
-      // Create buttons for different options
-      const uploadButton = new ButtonBuilder()
-        .setCustomId(`upload_insta_image_${articleId}`)
-        .setLabel("Upload via Bot")
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji("📸");
+      try {
+        // Generate a token for public Instagram upload
+        const generateInstagramToken = async () => {
+          try {
+            // Create a token valid for 7 days with 5 uses
+            const expirationDays = 7;
+            const maxUses = 5;
 
-      const dashboardButton = new ButtonBuilder()
-        .setLabel("Open in Dashboard")
-        .setStyle(ButtonStyle.Link)
-        .setURL(
-          `${process.env.BASE_URL || "http://piscoc.pinnkytoepaper"}/articles?id=${articleId}`,
-        )
-        .setEmoji("🔗");
+            // Generate unique token using the helper function
+            const token = await generateUniqueToken(
+              async (tokenToCheck: string) => {
+                const existingToken =
+                  await storage.getUploadTokenByToken(tokenToCheck);
+                return !!existingToken;
+              },
+            );
 
-      const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        dashboardButton,
-        uploadButton,
-      );
+            // Calculate expiration date
+            const expiresAt = calculateExpirationDate(expirationDays);
 
-      // Confirm selection and provide options
-      await interaction.editReply({
-        content: `Selected article: **${article.title}**\n\nOptions for uploading an Instagram image:\n\n1. Use the "Upload via Bot" button to attach an image directly through Discord\n2. Use the dashboard link to upload through the website`,
-        components: [buttonRow],
-      });
+            // Create token record with discord user in the name
+            const uploadToken = await storage.createUploadToken({
+              token,
+              articleId: article.id,
+              uploadType: "instagram-image",
+              createdById: null, // No user ID since this is from Discord
+              expiresAt,
+              maxUses,
+              active: true,
+              name: `Discord: ${interaction.user.username}'s Instagram Image Upload`,
+              notes: `Generated via Discord bot by ${interaction.user.username} on ${new Date().toLocaleString()}`,
+            });
+
+            // Return the token URL
+            return {
+              token: uploadToken.token,
+              // Use getBaseUrl() helper for consistent URL generation
+              url: `${getBaseUrl()}/public-upload/instagram-image/${uploadToken.token}`,
+            };
+          } catch (error) {
+            console.error("Error generating Instagram upload token:", error);
+            throw error;
+          }
+        };
+
+        // Generate token for Instagram upload
+        const instagramTokenData = await generateInstagramToken();
+
+        // Create a button that will take the user to the public upload page
+        const publicUploadButton = new ButtonBuilder()
+          .setLabel("Upload via Browser")
+          .setStyle(ButtonStyle.Link)
+          .setURL(instagramTokenData.url)
+          .setEmoji("🔗");
+
+        // Create an "Upload Image" button for immediate attachment
+        const uploadNowButton = new ButtonBuilder()
+          .setCustomId(`upload_insta_image_now_${articleId}`)
+          .setLabel("Upload via Discord")
+          .setStyle(ButtonStyle.Primary)
+          .setEmoji("📸");
+
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          publicUploadButton,
+          uploadNowButton,
+        );
+
+        await interaction.followUp({
+          content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required, opens in new tab, this Discord prompt will remain active)\n2. Use the "Upload via Discord" button to upload directly through Discord\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.\n\n**Note:** If you choose option 1, you can safely dismiss this Discord prompt once you're on the web interface.`,
+          components: [buttonRow],
+          ephemeral: true,
+        });
+      } catch (error) {
+        console.error("Error processing Instagram image upload:", error);
+        await interaction.followUp({
+          content: `Error uploading image: ${error instanceof Error ? error.message : "Unknown error"}\n\nPlease try again or use the website to upload images.`,
+          ephemeral: true,
+        });
+      }
     }
     // Handle article selection for Web image upload
     else if (interaction.customId === "select_article_for_web_image") {
