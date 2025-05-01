@@ -1738,7 +1738,8 @@ async function handleButtonInteraction(
       console.log("Instagram image upload - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content: `Invalid article ID from "${fullId}". Please try again.`,
           ephemeral: true,
         });
@@ -1754,7 +1755,8 @@ async function handleButtonInteraction(
       const article = await storage.getArticle(articleId);
 
       if (!article) {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content: "Article not found. It may have been deleted.",
           ephemeral: true,
         });
@@ -1762,7 +1764,8 @@ async function handleButtonInteraction(
       }
 
       if (article.status === "published") {
-        await interaction.reply({
+        await interaction.deferUpdate();
+        await interaction.followUp({
           content:
             "This article is already published. Image uploads through the bot are only allowed for draft or pending articles.",
           ephemeral: true,
@@ -1770,14 +1773,8 @@ async function handleButtonInteraction(
         return;
       }
 
-      // Defer the reply since image upload may take time
-      try {
-        await interaction.deferReply({ ephemeral: true });
-      } catch (error) {
-        // Discord interaction might have expired
-        console.error("Error deferring Instagram upload reply:", error);
-        return; // Exit early if we can't defer
-      }
+      // Defer the update to acknowledge the interaction
+      await interaction.deferUpdate();
 
       try {
         // Generate a token for public Instagram upload
@@ -1846,14 +1843,16 @@ async function handleButtonInteraction(
           uploadNowButton,
         );
 
-        await interaction.editReply({
+        await interaction.followUp({
           content: `Ready to upload an Instagram image for article **${article.title}**.\n\nYou can either:\n1. Use the "Upload via Browser" button to upload your image using a web browser (no login required, opens in new tab, this Discord prompt will remain active)\n2. Use the "Upload via Discord" button to upload directly through Discord\n\nUploaded images will be stored on ImgBB and linked to your article${article.source === "airtable" ? " and Airtable" : ""}.\n\n**Note:** If you choose option 1, you can safely dismiss this Discord prompt once you're on the web interface.`,
           components: [buttonRow],
+          ephemeral: true,
         });
       } catch (error) {
         console.error("Error processing Instagram image upload:", error);
-        await interaction.editReply({
+        await interaction.followUp({
           content: `Error uploading image: ${error instanceof Error ? error.message : "Unknown error"}\n\nPlease try again or use the website to upload images.`,
+          ephemeral: true
         });
       }
     }
