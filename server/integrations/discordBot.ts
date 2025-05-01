@@ -1771,7 +1771,13 @@ async function handleButtonInteraction(
       }
 
       // Defer the reply since image upload may take time
-      await interaction.deferReply({ ephemeral: true });
+      try {
+        await interaction.deferReply({ ephemeral: true });
+      } catch (error) {
+        // Discord interaction might have expired
+        console.error("Error deferring Instagram upload reply:", error);
+        return; // Exit early if we can't defer
+      }
 
       try {
         // Generate a token for public Instagram upload
@@ -1863,10 +1869,14 @@ async function handleButtonInteraction(
       console.log("Instagram image upload NOW - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
-        await interaction.reply({
-          content: `Invalid article ID from "${fullId}". Please try again.`,
-          ephemeral: true,
-        });
+        try {
+          await interaction.reply({
+            content: `Invalid article ID from "${fullId}". Please try again.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error("Error replying to Instagram image upload interaction:", error);
+        }
         return;
       }
 
@@ -1999,10 +2009,14 @@ async function handleButtonInteraction(
       console.log("Web image upload NOW - matched article ID:", articleId);
 
       if (isNaN(articleId)) {
-        await interaction.reply({
-          content: `Invalid article ID from "${fullId}". Please try again.`,
-          ephemeral: true,
-        });
+        try {
+          await interaction.reply({
+            content: `Invalid article ID from "${fullId}". Please try again.`,
+            ephemeral: true,
+          });
+        } catch (error) {
+          console.error("Error replying to Web image upload interaction:", error);
+        }
         return;
       }
 
@@ -2160,7 +2174,13 @@ async function handleButtonInteraction(
       }
 
       // Defer the reply since file processing may take time
-      await interaction.deferReply({ ephemeral: true });
+      try {
+        await interaction.deferReply({ ephemeral: true });
+      } catch (error) {
+        // Discord interaction might have expired
+        console.error("Error deferring content upload reply:", error);
+        return; // Exit early if we can't defer
+      }
 
       try {
         // Create a button that will take the user to the article in the dashboard
@@ -2235,7 +2255,13 @@ async function handleButtonInteraction(
       }
 
       // Defer the reply since image upload may take time
-      await interaction.deferReply({ ephemeral: true });
+      try {
+        await interaction.deferReply({ ephemeral: true });
+      } catch (error) {
+        // Discord interaction might have expired
+        console.error("Error deferring web image upload reply:", error);
+        return; // Exit early if we can't defer
+      }
 
       try {
         // Create a button that will take the user to the article in the dashboard
