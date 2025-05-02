@@ -70,18 +70,23 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         if (response.ok) {
           const settings = await response.json();
           const apiKeySetting = settings.find((s: any) => s.key === 'api_key');
-          const enabledSetting = settings.find((s: any) => s.key === 'enabled');
           
           if (apiKeySetting) {
             setImgBBApiKey(apiKeySetting.value);
-          }
-          
-          if (enabledSetting) {
-            setImgBBEnabled(enabledSetting.value === 'true');
+            // Consider ImgBB enabled if we have a valid API key and it's not disabled
+            setImgBBEnabled(!!apiKeySetting.value && apiKeySetting.enabled !== false);
+            console.log('ImgBB integration status:', {
+              enabled: !!apiKeySetting.value && apiKeySetting.enabled !== false,
+              apiKey: apiKeySetting.value ? `${apiKeySetting.value.substring(0, 5)}...` : 'none'
+            });
+          } else {
+            setImgBBEnabled(false);
+            console.log('ImgBB integration disabled: No API key found');
           }
         }
       } catch (error) {
         console.error('Failed to fetch ImgBB settings:', error);
+        setImgBBEnabled(false);
       }
     };
     
