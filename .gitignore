@@ -32,3 +32,11 @@ yarn-error.log*
 # Temporary files
 .tmp
 .temp
+
+# Replit files (removed for local development)
+.replit
+replit.nix
+.replit.toml
+
+# Docker volumes
+postgres_data/

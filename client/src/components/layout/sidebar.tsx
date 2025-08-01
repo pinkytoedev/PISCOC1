@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Upload,
   Bug,
+  Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,6 +89,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
       section: "Integrations",
       adminOnly: true, // This section is admin-only
       items: [
+        {
+          name: "API Keys",
+          path: "/keys",
+          icon: <Key className="w-5 h-5" />,
+          adminOnly: true,
+        },
         {
           name: "Discord",
           path: "/integrations/discord",

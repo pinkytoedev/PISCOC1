@@ -945,6 +945,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Integration status endpoint for Keys page
+  app.get('/api/integration-status', isAuthenticated, async (req, res) => {
+    try {
+      const apiStatuses = await getAllApiStatuses();
+      
+      // Transform the API status data to match what the Keys page expects
+      const integrationStatuses = apiStatuses.statuses.map(status => ({
+        name: status.name.toLowerCase(),
+        configured: status.status === 'online' || status.status === 'unknown',
+        lastChecked: status.lastChecked.toISOString(),
+        error: status.message
+      }));
+      
+      res.json(integrationStatuses);
+    } catch (error) {
+      console.error('Error fetching integration statuses:', error);
+      res.status(500).json({ 
+        message: 'Failed to fetch integration statuses',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Expose Facebook App ID to frontend
   app.get('/api/config/facebook', (req, res) => {
     const appId = process.env.FACEBOOK_APP_ID;

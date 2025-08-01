@@ -27,6 +27,7 @@ import ImgBBPage from "@/pages/integrations/imgbb-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TestPage from "@/pages/test-page";
 import PublicUploadPage from "@/pages/public-upload";
+import KeysPage from "@/pages/keys-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -52,6 +53,7 @@ function Router() {
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
       <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
+      <AdminProtectedRoute path="/keys" component={KeysPage} />
       {/* Redirect Documentation to Debug Center */}
       <Route path="/docs">
         {() => {
