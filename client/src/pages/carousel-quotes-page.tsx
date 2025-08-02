@@ -86,9 +86,10 @@ export default function CarouselQuotesPage() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
+      const results = data?.results || { created: 0, updated: 0 };
       toast({
         title: "Quotes pulled from Airtable",
-        description: `Successfully synced quotes: ${data.results.created} created, ${data.results.updated} updated`,
+        description: `Successfully synced quotes: ${results.created} created, ${results.updated} updated`,
       });
     },
     onError: (error) => {

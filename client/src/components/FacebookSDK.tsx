@@ -240,10 +240,23 @@ export function FacebookSDK({
       js.id = id;
       js.src = `https://connect.facebook.net/en_US/sdk.js`;
       js.onerror = handleScriptError;
-      if (fjs && fjs.parentNode) {
-        fjs.parentNode.insertBefore(js, fjs);
-      } else {
-        // If we can't find a reference node, append to head
+      
+      try {
+        if (fjs && fjs.parentNode) {
+          // Double-check that fjs is still a child of its parent before inserting
+          if (Array.from(fjs.parentNode.childNodes).includes(fjs)) {
+            fjs.parentNode.insertBefore(js, fjs);
+          } else {
+            // If fjs is no longer a child, append to head instead
+            d.getElementsByTagName('head')[0].appendChild(js);
+          }
+        } else {
+          // If we can't find a reference node, append to head
+          d.getElementsByTagName('head')[0].appendChild(js);
+        }
+      } catch (e) {
+        // If insertBefore fails for any reason, fall back to appendChild
+        console.warn('Failed to insert Facebook SDK script normally, appending to head instead:', e);
         d.getElementsByTagName('head')[0].appendChild(js);
       }
     }(document, 'script', 'facebook-jssdk'));

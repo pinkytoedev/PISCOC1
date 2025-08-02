@@ -12,13 +12,13 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting } from "@shared/schema";
 import { SiAirtable } from "react-icons/si";
-import { 
-  CheckCircle, 
-  AlertCircle, 
-  Loader2, 
-  RefreshCw, 
-  Database, 
-  ShieldCheck, 
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  Database,
+  ShieldCheck,
   Server,
   Users,
   Newspaper,
@@ -35,11 +35,11 @@ export default function AirtablePage() {
     base?: { id: string; name: string; permissionLevel: string };
     error?: string;
   } | null>(null);
-  
+
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/airtable/settings'],
   });
-  
+
   const testConnectionMutation = useMutation({
     mutationFn: async () => {
       setTestingConnection(true);
@@ -77,7 +77,7 @@ export default function AirtablePage() {
       setTestingConnection(false);
     }
   });
-  
+
   const updateSettingMutation = useMutation({
     mutationFn: async ({ key, value, enabled }: { key: string; value: string; enabled?: boolean }) => {
       const res = await apiRequest("POST", "/api/airtable/settings", { key, value, enabled });
@@ -98,20 +98,21 @@ export default function AirtablePage() {
       });
     },
   });
-  
+
   const syncMutation = useMutation({
     mutationFn: async (type: string) => {
       const res = await apiRequest("POST", `/api/airtable/sync/${type}`);
       return await res.json();
     },
     onSuccess: (data) => {
+      const results = data?.results || { created: 0, updated: 0, errors: 0, details: [] };
       toast({
         title: "Sync completed",
-        description: `Sync completed successfully: ${data.results.created} created, ${data.results.updated} updated, ${data.results.errors} errors.`,
+        description: `Sync completed successfully: ${results.created} created, ${results.updated} updated, ${results.errors} errors.`,
       });
-      
-      if (data.results.errors > 0) {
-        console.error("Sync errors:", data.results.details);
+
+      if (results.errors > 0) {
+        console.error("Sync errors:", results.details);
       }
     },
     onError: (error) => {
@@ -122,7 +123,7 @@ export default function AirtablePage() {
       });
     },
   });
-  
+
   const updateApiKeyFromEnvMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/airtable/update-api-key");
@@ -143,38 +144,38 @@ export default function AirtablePage() {
       });
     },
   });
-  
+
   const getSettingValue = (key: string): string => {
     const setting = settings?.find(s => s.key === key);
     return setting?.value || "";
   };
-  
+
   const getSettingEnabled = (key: string): boolean => {
     const setting = settings?.find(s => s.key === key);
     return setting?.enabled ?? true;
   };
-  
+
   const handleSettingChange = (key: string, value: string) => {
     updateSettingMutation.mutate({ key, value });
   };
-  
+
   const handleToggleEnabled = (key: string, enabled: boolean) => {
     const value = getSettingValue(key);
     updateSettingMutation.mutate({ key, value, enabled });
   };
-  
+
   const handleSync = (type: string) => {
     syncMutation.mutate(type);
   };
-  
+
   // Check if core settings are configured
   const hasApiKey = !!getSettingValue('api_key');
   const hasBaseId = !!getSettingValue('base_id');
   const hasBasicConfig = hasApiKey && hasBaseId;
-  
+
   // Determine connection status based on test results and config
   const isConfigured = connectionStatus?.success === true || hasBasicConfig;
-  
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="Airtable Integration" />
@@ -249,7 +250,7 @@ export default function AirtablePage() {
                     <TabsTrigger value="settings">Settings</TabsTrigger>
                     <TabsTrigger value="sync">Sync Data</TabsTrigger>
                   </TabsList>
-                  
+
                   <TabsContent value="settings" className="space-y-6 mt-6">
                     {/* Airtable API Configuration */}
                     <Card>
@@ -285,9 +286,9 @@ export default function AirtablePage() {
                             <p className="text-xs text-gray-500">
                               You can find your API key in your Airtable account settings.
                             </p>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
+                            <Button
+                              size="sm"
+                              variant="outline"
                               className="text-xs"
                               onClick={() => updateApiKeyFromEnvMutation.mutate()}
                               disabled={updateApiKeyFromEnvMutation.isPending}
@@ -306,7 +307,7 @@ export default function AirtablePage() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="grid gap-2">
                           <Label htmlFor="base_id">Base ID</Label>
                           <div className="flex gap-2">
@@ -335,7 +336,7 @@ export default function AirtablePage() {
                       </CardContent>
                       <CardFooter className="flex flex-col items-start gap-4">
                         <div className="w-full">
-                          <Button 
+                          <Button
                             onClick={() => testConnectionMutation.mutate()}
                             disabled={testingConnection || !hasApiKey || !hasBaseId}
                             variant="outline"
@@ -354,13 +355,12 @@ export default function AirtablePage() {
                             )}
                           </Button>
                         </div>
-                        
+
                         {connectionStatus && (
-                          <div className={`w-full p-4 rounded-md border ${
-                            connectionStatus.success 
-                              ? 'bg-green-50 border-green-200 text-green-700' 
+                          <div className={`w-full p-4 rounded-md border ${connectionStatus.success
+                              ? 'bg-green-50 border-green-200 text-green-700'
                               : 'bg-red-50 border-red-200 text-red-700'
-                          }`}>
+                            }`}>
                             <div className="flex items-center">
                               {connectionStatus.success ? (
                                 <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
@@ -368,8 +368,8 @@ export default function AirtablePage() {
                                 <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
                               )}
                               <h5 className="text-sm font-medium">
-                                {connectionStatus.success 
-                                  ? 'Connection Successful' 
+                                {connectionStatus.success
+                                  ? 'Connection Successful'
                                   : 'Connection Failed'}
                               </h5>
                             </div>
@@ -391,7 +391,7 @@ export default function AirtablePage() {
                         )}
                       </CardFooter>
                     </Card>
-                    
+
                     {/* Table Configuration */}
                     <Card>
                       <CardHeader>
@@ -423,7 +423,7 @@ export default function AirtablePage() {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="grid gap-2">
                           <Label htmlFor="team_members_table">Team Members Table</Label>
                           <div className="flex gap-2">
@@ -446,7 +446,7 @@ export default function AirtablePage() {
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="grid gap-2">
                           <Label htmlFor="quotes_table">Carousel Quotes Table</Label>
                           <div className="flex gap-2">
@@ -472,7 +472,7 @@ export default function AirtablePage() {
                       </CardContent>
                     </Card>
                   </TabsContent>
-                  
+
                   <TabsContent value="sync" className="space-y-6 mt-6">
                     <Card>
                       <CardHeader>
@@ -517,11 +517,11 @@ export default function AirtablePage() {
                                   </p>
                                 </div>
                               </div>
-                              <Button 
+                              <Button
                                 onClick={() => handleSync('articles')}
                                 disabled={
-                                  syncMutation.isPending || 
-                                  !getSettingEnabled('articles_table') || 
+                                  syncMutation.isPending ||
+                                  !getSettingEnabled('articles_table') ||
                                   !getSettingValue('articles_table')
                                 }
                               >
@@ -538,7 +538,7 @@ export default function AirtablePage() {
                                 )}
                               </Button>
                             </div>
-                            
+
                             {/* Team Members Sync */}
                             <div className="flex items-center justify-between p-4 border rounded-md">
                               <div className="flex items-center">
@@ -552,11 +552,11 @@ export default function AirtablePage() {
                                   </p>
                                 </div>
                               </div>
-                              <Button 
+                              <Button
                                 onClick={() => handleSync('team-members')}
                                 disabled={
-                                  syncMutation.isPending || 
-                                  !getSettingEnabled('team_members_table') || 
+                                  syncMutation.isPending ||
+                                  !getSettingEnabled('team_members_table') ||
                                   !getSettingValue('team_members_table')
                                 }
                               >
@@ -573,7 +573,7 @@ export default function AirtablePage() {
                                 )}
                               </Button>
                             </div>
-                            
+
                             {/* Carousel Quotes Sync */}
                             <div className="flex items-center justify-between p-4 border rounded-md">
                               <div className="flex items-center">
@@ -587,11 +587,11 @@ export default function AirtablePage() {
                                   </p>
                                 </div>
                               </div>
-                              <Button 
+                              <Button
                                 onClick={() => handleSync('carousel-quotes')}
                                 disabled={
-                                  syncMutation.isPending || 
-                                  !getSettingEnabled('quotes_table') || 
+                                  syncMutation.isPending ||
+                                  !getSettingEnabled('quotes_table') ||
                                   !getSettingValue('quotes_table')
                                 }
                               >
