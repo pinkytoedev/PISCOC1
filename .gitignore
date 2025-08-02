@@ -40,3 +40,4 @@ replit.nix
 
 # Docker volumes
 postgres_data/piscoc_backup.sql
+.vercelignore
