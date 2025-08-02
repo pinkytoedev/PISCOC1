@@ -13,8 +13,16 @@ jobs:
     
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        node-version: [20.x, 21.x]
+        os: [ubuntu-latest]
+        node-version: [18.x, 20.x, 22.x]
+        include:
+          # Test on other platforms without database requirements
+          - os: macos-latest
+            node-version: 20.x
+            skip-db: true
+          - os: windows-latest  
+            node-version: 20.x
+            skip-db: true
     
     services:
       postgres:
@@ -72,13 +80,14 @@ jobs:
       run: npm run test:setup
       env:
         NODE_ENV: test
+        SKIP_DB_TESTS: ${{ matrix.skip-db && 'true' || 'false' }}
 
     - name: Run TypeScript check
       run: npm run check
 
     - name: Test database migration
       run: npm run db:push
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.skip-db != true
 
     - name: Test build process
       run: npm run build
