@@ -39,4 +39,4 @@ replit.nix
 .replit.toml
 
 # Docker volumes
-postgres_data/
+postgres_data/piscoc_backup.sql
