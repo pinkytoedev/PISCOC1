@@ -212,7 +212,7 @@ export function FacebookSDK({
             console.log('Facebook SDK fully ready, triggering onReady callback');
             onReady();
           }
-        }, true); // Force fresh status check
+        }); // FB.getLoginStatus only accepts one parameter
       } catch (error) {
         console.error('Error initializing Facebook SDK:', error);
         if (onError) {

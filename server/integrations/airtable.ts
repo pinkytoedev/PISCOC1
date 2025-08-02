@@ -727,9 +727,9 @@ export function setupAirtableRoutes(app: Express) {
           if (!fields.Name) {
             // Check if there might be a lowercase version or different field name
             const possibleNameFields = ['name', 'title', 'Title', 'NAME'];
-            const foundNameField = possibleNameFields.find(f => fields[f]);
+            const foundNameField = possibleNameFields.find(f => (fields as any)[f]);
             if (foundNameField) {
-              fields.Name = fields[foundNameField];
+              fields.Name = (fields as any)[foundNameField];
               console.log(`Record ${record.id}: Using '${foundNameField}' field for Name`);
             } else {
               fields.Name = defaultTitle;
@@ -740,9 +740,9 @@ export function setupAirtableRoutes(app: Express) {
           if (!fields.Body) {
             // Check for alternative field names
             const possibleBodyFields = ['body', 'content', 'Content', 'BODY'];
-            const foundBodyField = possibleBodyFields.find(f => fields[f]);
+            const foundBodyField = possibleBodyFields.find(f => (fields as any)[f]);
             if (foundBodyField) {
-              fields.Body = fields[foundBodyField];
+              fields.Body = (fields as any)[foundBodyField];
               console.log(`Record ${record.id}: Using '${foundBodyField}' field for Body`);
             } else {
               fields.Body = defaultContent;
@@ -753,9 +753,9 @@ export function setupAirtableRoutes(app: Express) {
           if (!fields.Description) {
             // Check for alternative field names
             const possibleDescFields = ['description', 'desc', 'Desc', 'DESCRIPTION'];
-            const foundDescField = possibleDescFields.find(f => fields[f]);
+            const foundDescField = possibleDescFields.find(f => (fields as any)[f]);
             if (foundDescField) {
-              fields.Description = fields[foundDescField];
+              fields.Description = (fields as any)[foundDescField];
               console.log(`Record ${record.id}: Using '${foundDescField}' field for Description`);
             } else {
               fields.Description = defaultDescription;
