@@ -236,8 +236,7 @@ function checkEnvironmentVariables() {
 
     // Optional environment variables
     const optionalVars = [
-        'IMGUR_CLIENT_ID',
-        'IMGUR_CLIENT_SECRET',
+        'IMGBB_API_KEY',
         'INSTAGRAM_ACCESS_TOKEN',
         'INSTAGRAM_ACCOUNT_ID',
         'BASE_URL'

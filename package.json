@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server/index.ts",
     "dev:https": "NODE_ENV=development tsx server/index.ts",
-    "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "vite build && node build.config.js",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push",
@@ -76,7 +76,6 @@
     "form-data": "^4.0.2",
     "framer-motion": "^11.13.1",
     "fs-extra": "^11.3.0",
-    "imgur": "^2.4.3",
     "input-otp": "^1.2.4",
     "lucide-react": "^0.453.0",
     "marked": "^15.0.8",

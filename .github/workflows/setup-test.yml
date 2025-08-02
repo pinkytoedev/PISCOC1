@@ -61,8 +61,7 @@ jobs:
         FACEBOOK_APP_SECRET=test_facebook_secret
         INSTAGRAM_APP_ID=test_instagram_id
         INSTAGRAM_APP_SECRET=test_instagram_secret
-        IMGUR_CLIENT_ID=test_imgur_id
-        IMGUR_CLIENT_SECRET=test_imgur_secret
+        IMGBB_API_KEY=test_imgbb_key
         BASE_URL=http://localhost:3000
         EOF
       shell: bash
@@ -128,8 +127,7 @@ jobs:
         FACEBOOK_APP_SECRET=test_facebook_secret
         INSTAGRAM_APP_ID=test_instagram_id
         INSTAGRAM_APP_SECRET=test_instagram_secret
-        IMGUR_CLIENT_ID=test_imgur_id
-        IMGUR_CLIENT_SECRET=test_imgur_secret
+        IMGBB_API_KEY=test_imgbb_key
         BASE_URL=http://localhost:3000
         EOF
       shell: bash

@@ -122,7 +122,19 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
         console.log('Marking FB.init as complete');
         setFbInitComplete(true);
         setIsInitialized(true);
-        setStatus('unknown'); // Let the SDK determine the actual status
+
+        // Check login status after initialization is complete
+        try {
+          window.FB.getLoginStatus((response) => {
+            console.log('Initial login status check:', response);
+            if (response && response.status) {
+              handleStatusChange(response.status, response);
+            }
+          });
+        } catch (error) {
+          console.error('Error checking initial login status:', error);
+          setStatus('unknown');
+        }
       }
     }, 500); // Give FB.init extra time to complete
   };
@@ -148,8 +160,9 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
     }
 
     // Wait for SDK to be properly initialized AND FB.init to be complete
-    if (!sdkReady || !isInitialized || !fbInitComplete) {
+    if (!sdkReady || !isInitialized || !fbInitComplete || !(window as any).fbInitialized) {
       console.warn('Facebook SDK initialization in progress, waiting...');
+      console.log('Current state - sdkReady:', sdkReady, 'isInitialized:', isInitialized, 'fbInitComplete:', fbInitComplete, 'window.fbInitialized:', (window as any).fbInitialized);
 
       // Wait for SDK to be ready with exponential backoff
       let retryCount = 0;
@@ -165,13 +178,13 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
           return;
         }
 
-        if (window.FB && sdkReady && isInitialized && fbInitComplete) {
+        if (window.FB && sdkReady && isInitialized && fbInitComplete && (window as any).fbInitialized) {
           console.log(`SDK now ready after ${retryCount} attempts, proceeding with login...`);
           // Recursively call login now that SDK should be ready
           login(onSuccess, onError);
         } else {
           console.log(`Retry ${retryCount}/${maxRetries}: Waiting for SDK to be ready...`);
-          console.log(`FB exists: ${!!window.FB}, SDK ready: ${sdkReady}, Initialized: ${isInitialized}, FB.init complete: ${fbInitComplete}`);
+          console.log(`FB exists: ${!!window.FB}, SDK ready: ${sdkReady}, Initialized: ${isInitialized}, FB.init complete: ${fbInitComplete}, window.fbInitialized: ${!!(window as any).fbInitialized}`);
 
           // Exponential backoff: 1s, 2s, 4s, 8s, 16s
           const delay = Math.pow(2, retryCount) * 1000;
@@ -193,65 +206,76 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
       return;
     }
 
+    // Check global initialization flag
+    if (!(window as any).fbInitialized) {
+      console.warn('Facebook SDK loaded but FB.init not yet called, waiting...');
+
+      // Wait a bit and retry
+      setTimeout(() => {
+        if ((window as any).fbInitialized) {
+          console.log('FB.init now complete, proceeding with login');
+          login(onSuccess, onError);
+        } else {
+          const error = 'Facebook SDK failed to initialize properly. Please refresh the page.';
+          console.error(error);
+          setInitializationError(error);
+          onError && onError(error);
+        }
+      }, 1000);
+      return;
+    }
+
     // Enhanced login flow for iframe environments like Replit
     try {
       console.log('Attempting Facebook login with fully initialized SDK');
+      console.log('SDK states - FB exists:', !!window.FB, 'fbInitialized:', !!(window as any).fbInitialized, 'isInitialized:', isInitialized, 'fbInitComplete:', fbInitComplete);
 
-      // Use a try-catch block to handle potential errors with FB.login
+      // If we're already connected, just return success
+      if (status === 'connected' && accessToken) {
+        console.log('User already connected with valid access token');
+        onSuccess && onSuccess();
+        return;
+      }
+
+      // Replit-specific handling for iframe environments
+      const isInIframe = window !== window.parent;
+      console.log('Is in iframe:', isInIframe);
+
+      // Alert user to authenticate on a separate window for Replit environment
+      if (isInIframe) {
+        alert('The Facebook login popup may be blocked in the Replit environment. If it does not open, please try using this app outside of Replit or check for popup blockers.');
+      }
+
       try {
-        // First check if we are already logged in
-        window.FB.getLoginStatus((statusResponse) => {
-          console.log('Pre-login status check:', statusResponse);
+        console.log('Calling FB.login directly...');
 
-          if (statusResponse.status === 'connected') {
-            // Already logged in
-            console.log('User already connected, using existing session');
-            handleStatusChange('connected', statusResponse);
+        // Direct login call - SDK initialization has been confirmed at this point
+        window.FB.login((response) => {
+          console.log('Facebook login response:', response);
+
+          if (response.status === 'connected') {
+            handleStatusChange('connected', response);
             onSuccess && onSuccess();
           } else {
-            // Replit-specific handling for iframe environments
-            // Open login in a new tab/window to avoid cross-domain issues
-            const isInIframe = window !== window.parent;
-            console.log('Is in iframe:', isInIframe);
-
-            // Alert user to authenticate on a separate window for Replit environment
-            if (isInIframe) {
-              alert('The Facebook login popup may be blocked in the Replit environment. If it does not open, please try using this app outside of Replit or check for popup blockers.');
-            }
-
-            try {
-              // Need to log in - use a popup that should work better in iframe environments
-              window.FB.login((response) => {
-                console.log('Facebook login response:', response);
-
-                if (response.status === 'connected') {
-                  handleStatusChange('connected', response);
-                  onSuccess && onSuccess();
-                } else {
-                  // Handle auth failure but don't trigger error for user cancellations
-                  if (response.status === 'not_authorized') {
-                    console.log('User cancelled login or did not fully authorize.');
-                  } else {
-                    console.error('Login failed:', response);
-                    onError && onError(response);
-                  }
-                }
-              }, {
-                scope: 'email,public_profile,instagram_basic,pages_show_list,pages_read_engagement,instagram_content_publish',
-                auth_type: 'rerequest',       // Ask for login even if previously denied
-                return_scopes: true,          // Return granted scopes in response
-                display: 'popup'              // Force popup mode to avoid iframe issues
-                // Note: enable_profile_selector is not a valid option in the Facebook SDK type definition
-              });
-            } catch (fbLoginError) {
-              console.error('Error during FB.login call:', fbLoginError);
-              onError && onError(fbLoginError);
+            // Handle auth failure but don't trigger error for user cancellations
+            if (response.status === 'not_authorized') {
+              console.log('User cancelled login or did not fully authorize.');
+              handleStatusChange('not_authorized', response);
+            } else {
+              console.error('Login failed:', response);
+              handleStatusChange('unknown', response);
+              onError && onError(response);
             }
           }
+        }, {
+          scope: 'email,public_profile,instagram_basic,pages_show_list,pages_read_engagement,instagram_content_publish',
+          auth_type: 'rerequest',       // Ask for login even if previously denied
+          return_scopes: true,          // Return granted scopes in response
+          display: 'popup'              // Force popup mode to avoid iframe issues
         });
-      } catch (fbError) {
-        console.error('Facebook SDK login error:', fbError);
-        onError && onError(fbError);
+      } catch (fbLoginError) {
+        console.error('Error during FB.login call:', fbLoginError);
+        onError && onError(fbLoginError);
       }
     } catch (error) {
       console.error('Login function error:', error);

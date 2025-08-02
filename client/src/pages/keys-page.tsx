@@ -142,19 +142,19 @@ export default function KeysPage() {
       ]
     },
     {
-      name: "Imgur API",
-      envVar: "IMGUR_CLIENT_ID",
-      description: "Imgur API credentials for image hosting and management",
+      name: "ImgBB API",
+      envVar: "IMGBB_API_KEY",
+      description: "ImgBB API credentials for image hosting and management",
       required: false,
       configured: integrations?.find(i => i.name === "imgbb")?.configured ?? false,
-      setupUrl: "https://api.imgur.com/oauth2/addclient",
+      setupUrl: "https://api.imgbb.com/",
       icon: <Image className="h-5 w-5" />,
       category: "storage",
       instructions: [
-        "Register an application with Imgur API",
-        "Copy Client ID for IMGUR_CLIENT_ID",
-        "Copy Client Secret for IMGUR_CLIENT_SECRET",
-        "Set appropriate authorization callback URL"
+        "Register an account at ImgBB",
+        "Go to https://api.imgbb.com/",
+        "Get your API key",
+        "Copy API key for IMGBB_API_KEY"
       ]
     },
     {
@@ -234,7 +234,7 @@ export default function KeysPage() {
   console.log('API Keys mapping:', apiKeys.map(key => ({
     name: key.name,
     configured: key.configured,
-    lookingFor: key.name === "Imgur API" ? "imgbb" : key.name.toLowerCase()
+    lookingFor: key.name === "ImgBB API" ? "imgbb" : key.name.toLowerCase()
   })));
   console.log('Configured count:', configuredKeysCount);
   console.log('Total count:', apiKeys.length);

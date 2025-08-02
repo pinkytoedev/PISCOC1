@@ -7,6 +7,7 @@ import { setupStaticServing } from "./middleware/staticMiddleware";
 import { setupHTTPS } from "./https-dev";
 
 const app = express();
+export { app };
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -75,7 +76,7 @@ app.use((req, res, next) => {
         return;
       }
 
-      const port = tryPorts[portIndex];
+      const port = process.env.PORT ? parseInt(process.env.PORT) : tryPorts[portIndex];
 
       const serverInstance = server.listen({
         port,

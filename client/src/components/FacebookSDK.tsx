@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 declare global {
   interface Window {
     fbAsyncInit: () => void;
+    fbInitialized?: boolean; // Track if FB.init has been called
     FB: {
       init: (options: {
         appId: string;
@@ -36,6 +37,10 @@ declare global {
       }) => void;
       logout: (callback: (response: any) => void) => void;
       api: (path: string, callback: (response: any) => void) => void;
+      Event?: {
+        subscribe: (event: string, callback: (response: any) => void) => void;
+        unsubscribe: (event: string, callback: (response: any) => void) => void;
+      };
     };
   }
 }
@@ -70,6 +75,9 @@ export function FacebookSDK({
   onReady
 }: FacebookSDKProps) {
   useEffect(() => {
+    // Track if initialization has been called to prevent duplicates
+    let initializationCalled = false;
+
     // Check if we already have the FB SDK script
     const existingScript = document.getElementById('facebook-jssdk');
 
@@ -92,9 +100,19 @@ export function FacebookSDK({
     if (existingScript) {
       // If the script is already loaded and FB is available, initialize
       if (window.FB) {
-        console.log('Facebook SDK already loaded, initializing...');
-        initializeFacebookSDK();
-        clearTimeout(loadTimeout);
+        console.log('Facebook SDK already loaded, checking initialization status...');
+        // Check if already initialized
+        if (window.fbInitialized) {
+          console.log('Facebook SDK already initialized, triggering ready callback');
+          clearTimeout(loadTimeout);
+          if (onReady) {
+            setTimeout(() => onReady(), 100);
+          }
+        } else {
+          console.log('Facebook SDK loaded but not initialized, initializing now...');
+          initializeFacebookSDK();
+          clearTimeout(loadTimeout);
+        }
       } else if (onError) {
         onError('Facebook SDK script was found but FB object is not available.');
       }
@@ -104,12 +122,32 @@ export function FacebookSDK({
     // Initialize Facebook SDK when it loads
     window.fbAsyncInit = function () {
       console.log('fbAsyncInit triggered');
-      initializeFacebookSDK();
+      // Additional check to ensure FB object exists
+      if (typeof window.FB !== 'undefined') {
+        initializeFacebookSDK();
+      } else {
+        console.error('FB object not available in fbAsyncInit');
+        // Retry after a short delay
+        setTimeout(() => {
+          if (typeof window.FB !== 'undefined') {
+            initializeFacebookSDK();
+          } else if (onError) {
+            onError('Facebook SDK failed to load properly');
+          }
+        }, 500);
+      }
       clearTimeout(loadTimeout);
     };
 
     // Function to initialize the SDK
     function initializeFacebookSDK() {
+      // Prevent duplicate initialization
+      if (initializationCalled) {
+        console.log('Facebook SDK initialization already called, skipping duplicate');
+        return;
+      }
+      initializationCalled = true;
+
       console.log('Initializing Facebook SDK...', { appId, value: appId, length: appId.length });
 
       // Make sure we have a valid App ID before initializing
@@ -136,30 +174,45 @@ export function FacebookSDK({
           frictionlessRequests: true // Make requests smoother
         });
 
-        // Add special login options for iframe environments
-        console.log('Setting up Facebook SDK for iframe environment');
-        console.log('SDK initialized with App ID:', appId);
+        console.log('FB.init called with App ID:', appId);
 
-        // Log page view
-        window.FB.AppEvents.logPageView();
+        // Use FB.Event.subscribe to know when SDK is truly ready
+        if (window.FB.Event && window.FB.Event.subscribe) {
+          window.FB.Event.subscribe('auth.statusChange', function (response) {
+            console.log('FB auth.statusChange event:', response);
+            if (!window.fbInitialized) {
+              window.fbInitialized = true;
+              console.log('FB SDK initialization confirmed via auth.statusChange');
+            }
+          });
+        }
 
-        // Check login status
+        // Also check login status to ensure SDK is ready
         window.FB.getLoginStatus(function (response) {
-          console.log('FB login status response:', response);
-          if (onStatusChange) {
-            onStatusChange(response.status, response);
+          console.log('Initial FB.getLoginStatus response:', response);
+
+          // Mark FB as initialized globally after successful status check
+          window.fbInitialized = true;
+          console.log('window.fbInitialized set to:', window.fbInitialized);
+
+          // Log page view
+          try {
+            window.FB.AppEvents.logPageView();
+          } catch (e) {
+            console.warn('Failed to log page view:', e);
           }
-        });
 
-        // Trigger init callback
-        if (onInit) {
-          onInit();
-        }
+          // Trigger init callback
+          if (onInit) {
+            onInit();
+          }
 
-        // Trigger ready callback - this means SDK is fully initialized and ready for use
-        if (onReady) {
-          onReady();
-        }
+          // Trigger ready callback - SDK is now truly ready
+          if (onReady) {
+            console.log('Facebook SDK fully ready, triggering onReady callback');
+            onReady();
+          }
+        }, true); // Force fresh status check
       } catch (error) {
         console.error('Error initializing Facebook SDK:', error);
         if (onError) {
@@ -201,7 +254,7 @@ export function FacebookSDK({
       // FB SDK doesn't have a direct cleanup method, but we could remove the script if needed
       // In practice, this is rarely necessary as the SDK is typically needed throughout the app
     };
-  }, [appId, version, onStatusChange, onInit, onError]);
+  }, [appId, version, onStatusChange, onInit, onError, onReady]);
 
   return null; // This component doesn't render anything
 }

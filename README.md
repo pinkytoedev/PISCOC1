@@ -89,7 +89,7 @@ A comprehensive platform for managing content across multiple social media and c
 
 ## 📊 Features
 
-- **Multi-Platform Integration**: Connect with Discord, Airtable, Instagram, and Imgur
+- **Multi-Platform Integration**: Connect with Discord, Airtable, Instagram, and ImgBB
 - **Content Management**: Create, edit, and manage articles across platforms
 - **Team Collaboration**: Manage team members and permissions
 - **API Key Management**: Centralized configuration page for all integrations
@@ -125,11 +125,11 @@ This application integrates with multiple external services. You'll need to obta
 4. Copy App ID for `FACEBOOK_APP_ID`
 5. Copy App Secret for `FACEBOOK_APP_SECRET`
 
-#### Imgur
-1. Go to [Imgur API](https://api.imgur.com/oauth2/addclient)
-2. Register your application
-3. Copy Client ID for `IMGUR_CLIENT_ID`
-4. Copy Client Secret for `IMGUR_CLIENT_SECRET`
+#### ImgBB
+1. Go to [ImgBB](https://imgbb.com/)
+2. Create an account and go to [API](https://api.imgbb.com/)
+3. Get your API key
+4. Copy API key for `IMGBB_API_KEY`
 
 ### Managing API Keys
 
