@@ -104,15 +104,21 @@ export default function AirtablePage() {
       const res = await apiRequest("POST", `/api/airtable/sync/${type}`);
       return await res.json();
     },
-    onSuccess: (data) => {
+        onSuccess: (data) => {
       const results = data?.results || { created: 0, updated: 0, errors: 0, details: [] };
+      const message = data?.message || "Sync completed";
       toast({
-        title: "Sync completed",
-        description: `Sync completed successfully: ${results.created} created, ${results.updated} updated, ${results.errors} errors.`,
+        title: message,
+        description: `${results.created} created, ${results.updated} updated, ${results.errors} errors.`,
       });
-
+      
       if (results.errors > 0) {
         console.error("Sync errors:", results.details);
+      }
+      
+      // Log details for debugging
+      if (results.details && results.details.length > 0) {
+        console.log("Sync details:", results.details);
       }
     },
     onError: (error) => {

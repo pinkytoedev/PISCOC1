@@ -676,6 +676,8 @@ export function setupAirtableRoutes(app: Express) {
       // Fetch articles from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
 
+      console.log(`Airtable sync: Received ${response.records.length} records from Airtable`);
+
       const syncResults = {
         created: 0,
         updated: 0,
@@ -787,6 +789,12 @@ export function setupAirtableRoutes(app: Express) {
 
           // Check if article already exists
           const existingArticle = await storage.getArticleByExternalId(record.id);
+          
+          if (existingArticle) {
+            console.log(`Found existing article with external ID ${record.id}: ${existingArticle.title}`);
+          } else {
+            console.log(`No existing article found for external ID ${record.id}, will create new`);
+          }
 
           const articleData: InsertArticle = {
             title: fields.Name,
@@ -842,7 +850,7 @@ export function setupAirtableRoutes(app: Express) {
       });
 
       res.json({
-        message: "Articles synced from Airtable",
+        message: `Articles synced from Airtable (${response.records.length} total records processed)`,
         results: syncResults
       });
     } catch (error) {
