@@ -1733,7 +1733,7 @@ async function handleButtonInteraction(
       // Get everything after "upload_insta_image_"
       const articleIdStr = fullId.replace("upload_insta_image_", "");
       const articleId = parseInt(articleIdStr, 10);
-      
+
       console.log("Instagram image upload - full ID:", fullId);
       console.log("Instagram image upload - extracted article ID:", articleIdStr);
       console.log("Instagram image upload - parsed article ID:", articleId);
@@ -1865,7 +1865,7 @@ async function handleButtonInteraction(
       // Get everything after "upload_insta_image_now_"
       const articleIdStr = fullId.replace("upload_insta_image_now_", "");
       const articleId = parseInt(articleIdStr, 10);
-      
+
       console.log("Instagram image upload NOW - full ID:", fullId);
       console.log("Instagram image upload NOW - extracted article ID:", articleIdStr);
       console.log("Instagram image upload NOW - parsed article ID:", articleId);
@@ -1967,8 +1967,8 @@ async function handleButtonInteraction(
             .setDescription(result.message)
             .setImage(
               result.url ||
-                article.instagramImageUrl ||
-                "https://placehold.co/600x400?text=Upload+Failed",
+              article.instagramImageUrl ||
+              "https://placehold.co/600x400?text=Upload+Failed",
             )
             .setColor("#00C4B4")
             .setTimestamp()
@@ -2009,7 +2009,7 @@ async function handleButtonInteraction(
       // Get everything after "upload_web_image_now_"
       const articleIdStr = fullId.replace("upload_web_image_now_", "");
       const articleId = parseInt(articleIdStr, 10);
-      
+
       console.log("Web image upload NOW - full ID:", fullId);
       console.log("Web image upload NOW - extracted article ID:", articleIdStr);
       console.log("Web image upload NOW - parsed article ID:", articleId);
@@ -2106,8 +2106,8 @@ async function handleButtonInteraction(
             .setDescription(result.message)
             .setImage(
               result.url ||
-                article.imageUrl ||
-                "https://placehold.co/600x400?text=Upload+Failed",
+              article.imageUrl ||
+              "https://placehold.co/600x400?text=Upload+Failed",
             )
             .setColor("#00C4B4")
             .setTimestamp()
@@ -2148,7 +2148,7 @@ async function handleButtonInteraction(
       // Get everything after "upload_content_"
       const articleIdStr = fullId.replace("upload_content_", "");
       const articleId = parseInt(articleIdStr, 10);
-      
+
       console.log("Content upload - full ID:", fullId);
       console.log("Content upload - extracted article ID:", articleIdStr);
       console.log("Content upload - parsed article ID:", articleId);
@@ -2232,7 +2232,7 @@ async function handleButtonInteraction(
       // Get everything after "upload_web_image_"
       const articleIdStr = fullId.replace("upload_web_image_", "");
       const articleId = parseInt(articleIdStr, 10);
-      
+
       console.log("Web image upload - full ID:", fullId);
       console.log("Web image upload - extracted article ID:", articleIdStr);
       console.log("Web image upload - parsed article ID:", articleId);
@@ -2428,8 +2428,17 @@ async function handleButtonInteraction(
       }
 
       try {
+        // Check if channel supports awaitMessages
+        if (!('awaitMessages' in channel)) {
+          await interaction.followUp({
+            content: "Error: This channel does not support file uploads. Please use a text channel.",
+            ephemeral: true,
+          });
+          return;
+        }
+
         // Use awaitMessages to wait for a file upload
-        const collected = await channel.awaitMessages({
+        const collected = await (channel as TextChannel).awaitMessages({
           filter,
           max: 1,
           time: 300000, // 5 minute timeout
@@ -2447,8 +2456,8 @@ async function handleButtonInteraction(
         }
 
         // Get the zip attachment
-        const zipAttachment = message.attachments.find((attachment) =>
-          attachment.name.toLowerCase().endsWith(".zip"),
+        const zipAttachment = message.attachments.find((attachment: any) =>
+          attachment.name?.toLowerCase().endsWith(".zip"),
         );
 
         if (!zipAttachment) {
@@ -2465,7 +2474,12 @@ async function handleButtonInteraction(
           ephemeral: true,
         });
 
-        const result = await processZipFile(zipAttachment, articleId);
+        const result = await processZipFile({
+          url: zipAttachment.url,
+          contentType: zipAttachment.contentType || undefined,
+          name: zipAttachment.name || 'attachment.zip',
+          size: zipAttachment.size
+        }, articleId);
 
         // Delete the uploaded message to keep the channel clean
         try {
@@ -3529,7 +3543,7 @@ async function processContentFile(
       attachment.contentType &&
       validContentTypes.includes(attachment.contentType);
     const hasValidExtension = validExtensions.some((ext) =>
-      attachment.name.toLowerCase().endsWith(ext),
+      attachment.name?.toLowerCase().endsWith(ext),
     );
 
     console.log("Validation results:", {
@@ -3640,20 +3654,20 @@ async function processContentFile(
 
     // Set content format based on file extension
     if (
-      attachment.name.toLowerCase().endsWith(".html") ||
+      attachment.name?.toLowerCase().endsWith(".html") ||
       attachment.contentType === "text/html"
     ) {
       contentFormat = "html";
       console.log("Detected HTML format");
     } else if (
-      attachment.name.toLowerCase().endsWith(".rtf") ||
+      attachment.name?.toLowerCase().endsWith(".rtf") ||
       attachment.contentType === "text/rtf" ||
       attachment.contentType === "application/rtf"
     ) {
       contentFormat = "rtf";
       console.log("Detected RTF format");
     } else if (
-      attachment.name.toLowerCase().endsWith(".txt") ||
+      attachment.name?.toLowerCase().endsWith(".txt") ||
       attachment.contentType === "text/plain"
     ) {
       contentFormat = "plaintext";
@@ -3679,7 +3693,7 @@ async function processContentFile(
     };
 
     // Special handling for .txt files to ensure they're always marked as plaintext
-    if (attachment.name.toLowerCase().endsWith(".txt")) {
+    if (attachment.name?.toLowerCase().endsWith(".txt")) {
       console.log('TXT file detected - forcing contentFormat to "plaintext"');
       updateData.contentFormat = "plaintext";
     }
@@ -3858,7 +3872,7 @@ async function processDiscordAttachment(
 
     // For Airtable articles, upload to Airtable using link fields
     let airtableResult = null;
-    
+
     // Map the field names to their link field equivalents
     const fieldMappings = {
       'MainImage': 'MainImageLink',
@@ -3867,14 +3881,14 @@ async function processDiscordAttachment(
       'MainImageLink': 'MainImageLink',
       'InstaPhotoLink': 'InstaPhotoLink'
     };
-    
+
     // Use the mapped field name for Airtable
     const targetFieldName = fieldMappings[fieldName] || fieldName;
-    
+
     if (article.source === "airtable" && article.externalId) {
-      
+
       console.log(`Using Airtable link field: ${fieldName} → ${targetFieldName}`);
-      
+
       // Use uploadImageUrlAsLinkField instead of uploadImageUrlToAirtable
       // This sets the URL directly in a text field instead of as an attachment
       airtableResult = await uploadImageUrlAsLinkField(

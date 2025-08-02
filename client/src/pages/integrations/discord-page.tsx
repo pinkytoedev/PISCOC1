@@ -10,35 +10,35 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { IntegrationSetting } from "@shared/schema";
 import { SiDiscord } from "react-icons/si";
-import { 
-  CheckCircle, 
-  AlertCircle, 
-  Loader2, 
-  Copy, 
-  RefreshCw, 
-  Webhook, 
-  Bot, 
-  Shield, 
-  PowerOff, 
+import {
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Copy,
+  RefreshCw,
+  Webhook,
+  Bot,
+  Shield,
+  PowerOff,
   Terminal,
   Server,
   UserPlus,
@@ -96,7 +96,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
   const [message, setMessage] = useState("");
   const [selectedChannelId, setSelectedChannelId] = useState("");
   const [isSending, setIsSending] = useState(false);
-  
+
   // Query for getting available channels in the server
   const { data: channelsData, isLoading: isLoadingChannels } = useQuery<{
     success: boolean;
@@ -107,7 +107,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
     queryKey: [`/api/discord/bot/server/${serverId}/channels`],
     enabled: open,
   });
-  
+
   // Mutation for sending a message to a channel
   const sendMessageMutation = useMutation({
     mutationFn: async () => {
@@ -138,7 +138,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
       setIsSending(false);
     }
   });
-  
+
   const handleSendMessage = () => {
     if (!selectedChannelId) {
       toast({
@@ -148,7 +148,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
       });
       return;
     }
-    
+
     if (!message.trim()) {
       toast({
         title: "Message required",
@@ -157,11 +157,11 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
       });
       return;
     }
-    
+
     setIsSending(true);
     sendMessageMutation.mutate();
   };
-  
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -177,14 +177,14 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
             Send a message directly to a channel in {serverName} server.
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="channel" className="text-right">
               Channel
             </Label>
-            <Select 
-              value={selectedChannelId} 
+            <Select
+              value={selectedChannelId}
               onValueChange={setSelectedChannelId}
               disabled={isLoadingChannels}
             >
@@ -211,7 +211,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="message" className="text-right">
               Message
@@ -228,7 +228,7 @@ function SendChannelMessageDialog({ serverId, serverName }: { serverId: string, 
             </div>
           </div>
         </div>
-        
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
@@ -259,66 +259,70 @@ export default function DiscordPage() {
   const [discordMessage, setDiscordMessage] = useState("");
   const [webhookUsername, setWebhookUsername] = useState("Website User");
   const [selectedWebhookId, setSelectedWebhookId] = useState<string>("default");
-  
+
   const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
     queryKey: ['/api/discord/settings'],
   });
-  
+
   const { data: botStatus, isLoading: isLoadingBotStatus, refetch: refetchBotStatus } = useQuery<BotStatus>({
     queryKey: ['/api/discord/bot/status'],
     refetchInterval: () => tab === "bot" ? 10000 : 0, // Only refresh status when on bot tab
   });
-  
-  const { data: serverData, refetch: refetchServers } = useQuery<{guilds: GuildInfo[], webhooks: WebhookInfo[]}>({
+
+  const { data: serverData, refetch: refetchServers } = useQuery<{ guilds: GuildInfo[], webhooks: WebhookInfo[] }>({
     queryKey: ['/api/discord/bot/servers'],
     enabled: tab === "bot" && botStatus?.connected === true,
     refetchInterval: () => tab === "bot" ? 30000 : 0, // Refresh every 30 seconds when on bot tab
   });
-  
+
   // Query to get all available Discord webhooks from settings
-  const { data: webhooks, isLoading: isLoadingWebhooks, refetch: refetchWebhooks } = useQuery<DiscordWebhook[]>({
+  const { data: webhooks = [], isLoading: isLoadingWebhooks, refetch: refetchWebhooks } = useQuery<DiscordWebhook[]>({
     queryKey: ['/api/discord/webhooks'],
     refetchInterval: 60000, // Refresh webhooks every minute
-    retry: 3,
-    onSuccess: (data) => {
-      console.log("Successfully loaded webhooks:", data);
-    }
+    retry: 3
   });
-  
+
+  // Log successful webhook loads
+  useEffect(() => {
+    if (webhooks && webhooks.length > 0) {
+      console.log("Successfully loaded webhooks:", webhooks);
+    }
+  }, [webhooks]);
+
   // When settings are loaded, set the bot token and client ID fields
   useEffect(() => {
     if (settings) {
       const tokenSetting = settings.find(s => s.key === 'bot_token');
       const clientIdSetting = settings.find(s => s.key === 'bot_client_id');
-      
+
       if (tokenSetting) {
         setBotToken(tokenSetting.value);
       }
-      
+
       if (clientIdSetting) {
         setClientId(clientIdSetting.value);
       }
     }
   }, [settings]);
-  
+
   // Debug effect to check webhook data
   useEffect(() => {
     if (webhooks) {
       console.log("Loaded webhooks:", webhooks);
-      
+
       // If we have a 'default' webhook, ensure it's selected by default
       const defaultWebhook = webhooks.find(w => w.id === 'default');
       if (defaultWebhook && !selectedWebhookId) {
         setSelectedWebhookId('default');
       }
-      
+
       // If we have other webhooks but no default, select the first one
       if (webhooks.length > 0 && !selectedWebhookId) {
         setSelectedWebhookId(webhooks[0].id);
       }
     }
   }, [webhooks, selectedWebhookId]);
-  
+
   const updateSettingMutation = useMutation({
     mutationFn: async ({ key, value, enabled }: { key: string; value: string; enabled?: boolean }) => {
       const res = await apiRequest("POST", "/api/discord/settings", { key, value, enabled });
@@ -339,7 +343,7 @@ export default function DiscordPage() {
       });
     },
   });
-  
+
   const testDiscordMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/discord/test");
@@ -359,7 +363,7 @@ export default function DiscordPage() {
       });
     },
   });
-  
+
   const initializeBotMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/discord/bot/initialize", {
@@ -383,7 +387,7 @@ export default function DiscordPage() {
       });
     },
   });
-  
+
   const startBotMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/discord/bot/start");
@@ -404,7 +408,7 @@ export default function DiscordPage() {
       });
     },
   });
-  
+
   const stopBotMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/discord/bot/stop");
@@ -425,7 +429,7 @@ export default function DiscordPage() {
       });
     },
   });
-  
+
   const sendDiscordMessageMutation = useMutation({
     mutationFn: async ({ message, username, webhookId }: { message: string, username: string, webhookId?: string }) => {
       const res = await apiRequest("POST", "/api/discord/send-message", { message, username, webhookId });
@@ -446,35 +450,35 @@ export default function DiscordPage() {
       });
     },
   });
-  
+
   const getSettingValue = (key: string): string => {
     const setting = settings?.find(s => s.key === key);
     return setting?.value || "";
   };
-  
+
   const getSettingEnabled = (key: string): boolean => {
     const setting = settings?.find(s => s.key === key);
     return setting?.enabled ?? true;
   };
-  
+
   const handleSettingChange = (key: string, value: string) => {
     updateSettingMutation.mutate({ key, value });
   };
-  
+
   const handleToggleEnabled = (key: string, enabled: boolean) => {
     const value = getSettingValue(key);
     updateSettingMutation.mutate({ key, value, enabled });
   };
-  
+
   const handleTestDiscord = () => {
     testDiscordMutation.mutate();
   };
-  
+
   const handleSendDiscordMessage = () => {
     if (discordMessage.trim()) {
       // Log webhook info for debugging
       console.log("Sending message with webhook:", selectedWebhookId);
-      
+
       sendDiscordMessageMutation.mutate({
         message: discordMessage,
         username: webhookUsername,
@@ -482,7 +486,7 @@ export default function DiscordPage() {
       });
     }
   };
-  
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       toast({
@@ -491,7 +495,7 @@ export default function DiscordPage() {
       });
     });
   };
-  
+
   const generateRandomSecret = () => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
@@ -500,14 +504,14 @@ export default function DiscordPage() {
     }
     handleSettingChange('webhook_secret', result);
   };
-  
+
   // Get our webhook URL for content submission
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const webhookUrl = `${baseUrl}/api/discord/webhook`;
-  
+
   // Check if webhook_url is configured
   const hasWebhook = !!getSettingValue('webhook_url');
-  
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="Discord Integration" />
@@ -579,9 +583,9 @@ export default function DiscordPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                <Tabs 
-                  defaultValue="webhook" 
-                  value={tab} 
+                <Tabs
+                  defaultValue="webhook"
+                  value={tab}
                   onValueChange={setTab}
                   className="w-full"
                 >
@@ -595,7 +599,7 @@ export default function DiscordPage() {
                       Discord Bot
                     </TabsTrigger>
                   </TabsList>
-                  
+
                   {/* Webhook Tab */}
                   <TabsContent value="webhook" className="space-y-6 mt-6">
                     {/* Discord Webhook Configuration */}
@@ -632,10 +636,10 @@ export default function DiscordPage() {
                             Create a webhook in your Discord server settings and paste the URL here.
                           </p>
                         </div>
-                        
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={handleTestDiscord}
                           disabled={!getSettingValue('webhook_url') || testDiscordMutation.isPending}
                         >
@@ -653,7 +657,7 @@ export default function DiscordPage() {
                         </Button>
                       </CardContent>
                     </Card>
-                    
+
                     {/* Content Submission Webhook */}
                     <Card>
                       <CardHeader>
@@ -671,8 +675,8 @@ export default function DiscordPage() {
                               readOnly
                               className="flex-1 bg-gray-50"
                             />
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="icon"
                               onClick={() => copyToClipboard(webhookUrl)}
                             >
@@ -683,7 +687,7 @@ export default function DiscordPage() {
                             Use this URL in your Discord bot or third-party integrations to submit content.
                           </p>
                         </div>
-                        
+
                         <div className="grid gap-2">
                           <Label htmlFor="webhook_secret">Webhook Secret (Optional)</Label>
                           <div className="flex gap-2">
@@ -695,8 +699,8 @@ export default function DiscordPage() {
                               onChange={(e) => handleSettingChange('webhook_secret', e.target.value)}
                               className="flex-1"
                             />
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={generateRandomSecret}
                             >
                               Generate
@@ -708,7 +712,7 @@ export default function DiscordPage() {
                         </div>
                       </CardContent>
                     </Card>
-                    
+
                     {/* Send Message to Discord */}
                     <Card>
                       <CardHeader>
@@ -727,8 +731,8 @@ export default function DiscordPage() {
                               <span className="text-sm text-gray-500">Loading webhooks...</span>
                             </div>
                           ) : webhooks && webhooks.length > 0 ? (
-                            <Select 
-                              value={selectedWebhookId} 
+                            <Select
+                              value={selectedWebhookId}
                               onValueChange={setSelectedWebhookId}
                             >
                               <SelectTrigger id="webhook_selection" className="w-full">
@@ -736,8 +740,8 @@ export default function DiscordPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 {webhooks.map((webhook) => (
-                                  <SelectItem 
-                                    key={webhook.id} 
+                                  <SelectItem
+                                    key={webhook.id}
                                     value={webhook.id}
                                     disabled={!webhook.enabled}
                                   >
@@ -755,7 +759,7 @@ export default function DiscordPage() {
                             Choose which Discord webhook to use for sending this message.
                           </p>
                         </div>
-                        
+
                         <div className="grid gap-2">
                           <Label htmlFor="webhook_username">Display Name</Label>
                           <Input
@@ -770,7 +774,7 @@ export default function DiscordPage() {
                             The name that will appear as the sender in Discord.
                           </p>
                         </div>
-                      
+
                         <div className="grid gap-2">
                           <Label htmlFor="discord_message">Message</Label>
                           <Input
@@ -785,10 +789,10 @@ export default function DiscordPage() {
                             This message will be sent to the Discord channel associated with your webhook URL.
                           </p>
                         </div>
-                        
-                        <Button 
-                          variant="default" 
-                          size="sm" 
+
+                        <Button
+                          variant="default"
+                          size="sm"
                           onClick={handleSendDiscordMessage}
                           disabled={!selectedWebhookId || !discordMessage || sendDiscordMessageMutation.isPending}
                         >
@@ -807,7 +811,7 @@ export default function DiscordPage() {
                       </CardContent>
                     </Card>
                   </TabsContent>
-                  
+
                   {/* Bot Tab */}
                   <TabsContent value="bot" className="space-y-6 mt-6">
                     {/* Discord Bot Configuration */}
@@ -838,7 +842,7 @@ export default function DiscordPage() {
                             Create a bot in the Discord Developer Portal and paste its token here.
                           </p>
                         </div>
-                        
+
                         <div className="grid gap-2">
                           <Label htmlFor="bot_client_id">Application ID</Label>
                           <div className="flex gap-2">
@@ -855,11 +859,11 @@ export default function DiscordPage() {
                             The application ID from your Discord Developer Portal.
                           </p>
                         </div>
-                        
+
                         <div className="flex flex-wrap gap-2 pt-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => initializeBotMutation.mutate()}
                             disabled={!botToken || !clientId || initializeBotMutation.isPending}
                           >
@@ -875,10 +879,10 @@ export default function DiscordPage() {
                               </>
                             )}
                           </Button>
-                          
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => startBotMutation.mutate()}
                             disabled={startBotMutation.isPending}
                           >
@@ -894,10 +898,10 @@ export default function DiscordPage() {
                               </>
                             )}
                           </Button>
-                          
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
+
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => stopBotMutation.mutate()}
                             disabled={stopBotMutation.isPending || !botStatus?.connected}
                           >
@@ -916,7 +920,7 @@ export default function DiscordPage() {
                         </div>
                       </CardContent>
                     </Card>
-                    
+
                     {/* Bot Status */}
                     <Card>
                       <CardHeader>
@@ -947,7 +951,7 @@ export default function DiscordPage() {
                                 </div>
                               )}
                             </div>
-                            
+
                             <div>
                               <h3 className="text-sm font-medium mb-2">Available Commands</h3>
                               <div className="bg-gray-900 text-gray-100 p-3 rounded-md font-mono text-sm space-y-2">
@@ -988,7 +992,7 @@ export default function DiscordPage() {
                                 </div>
                               </div>
                             </div>
-                            
+
                             {botStatus?.connected && ((serverData?.guilds && serverData.guilds.length > 0) || (botStatus.guildsList && botStatus.guildsList.length > 0)) && (
                               <div className="mt-6">
                                 <div className="flex justify-between items-center mb-2">
@@ -1011,9 +1015,9 @@ export default function DiscordPage() {
                                           <td className="px-4 py-3 whitespace-nowrap">
                                             <div className="flex items-center">
                                               {guild.icon && (
-                                                <img 
-                                                  src={guild.icon} 
-                                                  alt={guild.name} 
+                                                <img
+                                                  src={guild.icon}
+                                                  alt={guild.name}
                                                   className="h-6 w-6 rounded-full mr-3"
                                                 />
                                               )}
@@ -1040,9 +1044,9 @@ export default function DiscordPage() {
                                 </div>
                               </div>
                             )}
-                            
 
-                            
+
+
                             <div className="mt-6">
                               <h3 className="text-sm font-medium mb-2">Add Bot to Server</h3>
                               <AddBotToServerButton />
@@ -1053,7 +1057,7 @@ export default function DiscordPage() {
                     </Card>
                   </TabsContent>
                 </Tabs>
-                
+
                 {/* Integration Guide */}
                 <Card>
                   <CardHeader>
@@ -1067,13 +1071,13 @@ export default function DiscordPage() {
                       <div>
                         <h3 className="text-sm font-medium">Step 1: Create Discord Application</h3>
                         <p className="text-sm text-gray-500 mt-1">
-                          Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Discord Developer Portal</a>, 
+                          Go to the <a href="https://discord.com/developers/applications" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Discord Developer Portal</a>,
                           create a new application, and add a bot to it. Copy your bot token and application ID.
                         </p>
                       </div>
-                      
+
                       <Separator />
-                      
+
                       <div>
                         <h3 className="text-sm font-medium">Step 2: Send Direct Messages</h3>
                         <p className="text-sm text-gray-500 mt-1">
@@ -1081,9 +1085,9 @@ export default function DiscordPage() {
                           Simply select a server and channel, then type your message and send.
                         </p>
                       </div>
-                      
+
                       <Separator />
-                      
+
                       <div>
                         <h3 className="text-sm font-medium">Step 3: Add Bot to Your Server</h3>
                         <p className="text-sm text-gray-500 mt-1">
@@ -1091,15 +1095,15 @@ export default function DiscordPage() {
                           then add it to your server. Make sure to give it the necessary permissions.
                         </p>
                       </div>
-                      
+
                       <Separator />
-                      
+
                       <div>
                         <h3 className="text-sm font-medium">Step 4: Initialize and Test</h3>
                         <p className="text-sm text-gray-500 mt-1">
                           Enter your bot token and application ID, initialize the bot, and test the commands in your Discord server.
                           Try the <span className="font-mono text-xs bg-gray-100 px-1 rounded">/ping</span> command to verify it's working.
-                          The bot offers multiple commands including <span className="font-mono text-xs bg-gray-100 px-1 rounded">/create_article</span>, 
+                          The bot offers multiple commands including <span className="font-mono text-xs bg-gray-100 px-1 rounded">/create_article</span>,
                           <span className="font-mono text-xs bg-gray-100 px-1 rounded">/list_articles</span>, and more for managing content directly from Discord.
                         </p>
                       </div>
@@ -1107,18 +1111,18 @@ export default function DiscordPage() {
                   </CardContent>
                   <CardFooter className="bg-gray-50 border-t">
                     <div className="flex space-x-4">
-                      <a 
-                        href="https://discord.com/developers/docs/intro" 
-                        target="_blank" 
+                      <a
+                        href="https://discord.com/developers/docs/intro"
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline text-sm flex items-center"
                       >
                         <Bot className="h-4 w-4 mr-1" />
                         Bot Documentation
                       </a>
-                      <a 
-                        href="https://discord.com/developers/docs/topics/gateway" 
-                        target="_blank" 
+                      <a
+                        href="https://discord.com/developers/docs/topics/gateway"
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary hover:underline text-sm flex items-center"
                       >
@@ -1142,13 +1146,13 @@ function AddBotToServerButton() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [inviteUrl, setInviteUrl] = useState("");
-  
+
   const getInviteUrl = async () => {
     setIsLoading(true);
     try {
       const response = await apiRequest("GET", "/api/discord/bot/invite-url");
       const data = await response.json();
-      
+
       if (data.success && data.invite_url) {
         setInviteUrl(data.invite_url);
         window.open(data.invite_url, '_blank');
@@ -1169,15 +1173,15 @@ function AddBotToServerButton() {
       setIsLoading(false);
     }
   };
-  
+
   return (
     <div className="flex flex-col space-y-2">
       <p className="text-sm text-gray-500">
         Add the bot to your Discord server to enable automatic commands and article management.
       </p>
       <div className="flex items-center space-x-2">
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           onClick={getInviteUrl}
           disabled={isLoading}
           className="flex items-center"
@@ -1195,8 +1199,8 @@ function AddBotToServerButton() {
           )}
         </Button>
         {inviteUrl && (
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => {
               navigator.clipboard.writeText(inviteUrl);

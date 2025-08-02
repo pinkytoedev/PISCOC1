@@ -100,32 +100,8 @@ A comprehensive platform for managing content across multiple social media and c
 
 This application integrates with multiple external services. You'll need to obtain API keys for each service you want to use:
 
-### Required Environment Variables
+### Required Environment Variables (SEE .env.example)
 
-```env
-# Database
-DATABASE_URL=postgresql://postgres:password@localhost:5432/multi_platform_integration
-
-# Discord Integration
-DISCORD_BOT_TOKEN=your_discord_bot_token
-DISCORD_CLIENT_ID=your_discord_client_id
-
-# Airtable Integration
-AIRTABLE_API_KEY=your_airtable_api_key
-
-# Instagram Integration (via Facebook)
-FACEBOOK_APP_ID=your_facebook_app_id
-FACEBOOK_APP_SECRET=your_facebook_app_secret
-
-# Imgur Integration
-IMGUR_CLIENT_ID=your_imgur_client_id
-IMGUR_CLIENT_SECRET=your_imgur_client_secret
-
-# Session Secret (generate a random string)
-SESSION_SECRET=random_secure_session_string
-
-# Frontend variables
-VITE_FACEBOOK_APP_ID=${FACEBOOK_APP_ID}
 ```
 
 ### Obtaining API Keys
@@ -194,6 +170,8 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 - `npm run start` - Start production server
 - `npm run check` - Run TypeScript type checking
 - `npm run db:push` - Push database schema changes
+-`npm run test:setup` - Check if you are ready to start dev session
+-`npm run test:neon` - Checks Database configuration from env file
 
 ### 🔒 HTTPS Setup for Facebook Integration
 
@@ -227,17 +205,18 @@ See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed API endpoint doc
 
 ## 🔧 Database
 
-This application uses PostgreSQL with Drizzle ORM. Database schema is defined in the `server/db.ts` file.
+This application uses NEON PostgreSQL with Drizzle ORM. Database schema is defined in the `server/db.ts` file.
 
-## 🚀 Deployment
+## 🚀 Development
 
-The application is designed to run on a single port (5000) serving both the API and frontend. Ensure your deployment environment:
+The application is designed to run on a single port (3000) serving both the API and frontend. Ensure your deployment environment:
 
 1. Has Node.js 20+ installed
 2. Has PostgreSQL database available
 3. Has all required environment variables set
-4. Runs `npm run build` before starting
-5. Starts with `npm run start`
+4. run `npm run test:setup` & `npm run test:neon`
+4. Run `npm start dev` before 
+5. Vist to localhost page
 
 ## 🤝 Contributing
 

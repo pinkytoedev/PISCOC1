@@ -22,16 +22,16 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
   // Function to format dates
   const formatDate = (date: string | Date | null) => {
     if (!date) return "Not available";
-    
+
     try {
       const dateObj = date instanceof Date ? date : new Date(date);
-      
+
       // Check if date is valid
       if (isNaN(dateObj.getTime())) return "Invalid date";
-      
+
       return dateObj.toLocaleDateString('en-US', {
-        year: 'numeric', 
-        month: 'long', 
+        year: 'numeric',
+        month: 'long',
         day: 'numeric'
       });
     } catch (error) {
@@ -50,27 +50,27 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
   // Function to render content based on format
   const renderContent = (content: string | null, format: string | null) => {
     if (!content) return <p className="text-gray-500 italic">No content available</p>;
-    
+
     console.log('Rendering content with format:', format, 'content length:', content?.length || 0);
-    
+
     if (format === 'html') {
       return <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: content }} />;
     } else if (format === 'plaintext' || format === 'txt') {
       // For plain text, we offer two display options:
       // 1. Convert to HTML using marked library (for better display)
       // 2. Preserve original formatting (for viewing raw content)
-      
+
       console.log('Converting plaintext to HTML using marked');
-      
+
       try {
         // Convert plaintext to HTML using marked
         const htmlContent = marked.parse(content || '');
-        console.log('HTML conversion successful, length:', htmlContent.length);
-        
+        console.log('HTML conversion successful');
+
         return (
           <>
             <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: htmlContent }} />
-            
+
             <details className="mt-4 border rounded-md">
               <summary className="text-sm p-2 bg-gray-50 cursor-pointer">
                 View original plain text
@@ -129,21 +129,21 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
                 <span>{article.author}</span>
               </div>
             )}
-            
+
             {article.publishedAt && (
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
                 <span>{formatDate(article.publishedAt)}</span>
               </div>
             )}
-            
+
             {!article.publishedAt && article.createdAt && (
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
                 <span>Created: {formatDate(article.createdAt)}</span>
               </div>
             )}
-            
+
             {article.featured === 'yes' && (
               <Badge variant="default" className="bg-amber-500">Featured</Badge>
             )}
@@ -152,9 +152,9 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
           {/* Main Image */}
           {article.imageUrl && (
             <div className="my-4 rounded-lg overflow-hidden shadow-sm">
-              <img 
-                src={article.imageUrl} 
-                alt={article.title || "Article preview"} 
+              <img
+                src={article.imageUrl}
+                alt={article.title || "Article preview"}
                 className="w-full h-auto object-cover"
               />
               {article.photo && (
@@ -164,7 +164,7 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
               )}
             </div>
           )}
-          
+
           {/* Tags */}
           {article.hashtags && (
             <div className="flex flex-wrap gap-2 my-2">
@@ -178,15 +178,15 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
           )}
 
           <Separator />
-          
+
           {/* Content */}
           <div className="prose prose-sm max-w-none">
             {renderContent(article.content, article.contentFormat)}
           </div>
-          
+
           {/* Source Info */}
           <div className="text-xs text-gray-500 mt-4 pt-4 border-t">
-            Source: {article.source || "Local"} 
+            Source: {article.source || "Local"}
             {article.externalId && (
               <span className="ml-2">• ID: {article.externalId}</span>
             )}

@@ -1,0 +1,148 @@
+name: Setup Environment Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test-setup:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20.x, 21.x]
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Create test directories
+      run: |
+        mkdir -p uploads uploads/instagram temp certs
+      shell: bash
+
+    - name: Create .env file for testing
+      run: |
+        cat > .env << EOF
+        DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db
+        SESSION_SECRET=test_session_secret_for_ci
+        DISCORD_BOT_TOKEN=test_discord_token
+        DISCORD_CLIENT_ID=test_discord_client
+        AIRTABLE_API_KEY=test_airtable_key
+        AIRTABLE_BASE_ID=test_airtable_base
+        FACEBOOK_APP_ID=test_facebook_id
+        FACEBOOK_APP_SECRET=test_facebook_secret
+        INSTAGRAM_APP_ID=test_instagram_id
+        INSTAGRAM_APP_SECRET=test_instagram_secret
+        IMGUR_CLIENT_ID=test_imgur_id
+        IMGUR_CLIENT_SECRET=test_imgur_secret
+        BASE_URL=http://localhost:3000
+        EOF
+      shell: bash
+
+    - name: Run setup test
+      run: npm run test:setup
+      env:
+        NODE_ENV: test
+
+    - name: Run TypeScript check
+      run: npm run check
+
+    - name: Test database migration
+      run: npm run db:push
+      if: matrix.os == 'ubuntu-latest'
+
+    - name: Test build process
+      run: npm run build
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: test-results-${{ matrix.os }}-node${{ matrix.node-version }}
+        path: |
+          npm-debug.log
+          .env
+
+  docker-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Create .env file
+      run: |
+        cp .env.example .env || echo "No .env.example found"
+        # Add test values if .env doesn't exist
+        if [ ! -f .env ]; then
+          cat > .env << EOF
+          DATABASE_URL=postgresql://postgres:password@postgres:5432/multi_platform_integration
+          SESSION_SECRET=test_session_secret
+          DISCORD_BOT_TOKEN=test_token
+          DISCORD_CLIENT_ID=test_client
+          AIRTABLE_API_KEY=test_key
+          AIRTABLE_BASE_ID=test_base
+          FACEBOOK_APP_ID=test_app
+          FACEBOOK_APP_SECRET=test_secret
+          EOF
+        fi
+
+    - name: Test Docker Compose setup
+      run: |
+        docker-compose build
+        docker-compose up -d
+        sleep 10
+        docker-compose ps
+        docker-compose logs
+        docker-compose down
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+
+    - name: Check for vulnerabilities
+      run: npm audit --audit-level=high
+
+    - name: Check for outdated packages
+      run: npm outdated || true
+
+    - name: License check
+      run: |
+        npx license-checker --production --summary

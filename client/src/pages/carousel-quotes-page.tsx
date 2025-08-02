@@ -18,22 +18,22 @@ export default function CarouselQuotesPage() {
   const { toast } = useToast();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editQuote, setEditQuote] = useState<CarouselQuote | null>(null);
-  const [formData, setFormData] = useState<InsertCarouselQuote & {externalId?: string}>({
+  const [formData, setFormData] = useState<InsertCarouselQuote & { externalId?: string }>({
     carousel: "",
     quote: "",
     main: "",
     philo: "",
   });
-  
+
   const { data: quotes, isLoading } = useQuery<CarouselQuote[]>({
     queryKey: ['/api/carousel-quotes'],
   });
-  
+
   const createQuoteMutation = useMutation({
     mutationFn: async (quote: InsertCarouselQuote) => {
       const res = await apiRequest(
-        editQuote ? "PUT" : "POST", 
-        editQuote ? `/api/carousel-quotes/${editQuote.id}` : "/api/carousel-quotes", 
+        editQuote ? "PUT" : "POST",
+        editQuote ? `/api/carousel-quotes/${editQuote.id}` : "/api/carousel-quotes",
         quote
       );
       return await res.json();
@@ -42,8 +42,8 @@ export default function CarouselQuotesPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
       toast({
         title: editQuote ? "Quote updated" : "Quote created",
-        description: editQuote 
-          ? "The quote has been updated successfully." 
+        description: editQuote
+          ? "The quote has been updated successfully."
           : "The quote has been created successfully.",
       });
       handleCloseModal();
@@ -56,7 +56,7 @@ export default function CarouselQuotesPage() {
       });
     },
   });
-  
+
   const deleteQuoteMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/carousel-quotes/${id}`);
@@ -76,7 +76,7 @@ export default function CarouselQuotesPage() {
       });
     },
   });
-  
+
   // New mutation to update quotes directly in Airtable
   // Pull from Airtable (sync quotes from Airtable to our application)
   const syncMutation = useMutation({
@@ -137,8 +137,8 @@ export default function CarouselQuotesPage() {
         philo: quote.philo || quote.quote
       };
       const res = await apiRequest(
-        "POST", 
-        `/api/airtable/update-quote/${quote.id}`, 
+        "POST",
+        `/api/airtable/update-quote/${quote.id}`,
         airtablePayload
       );
       return await res.json();
@@ -158,7 +158,7 @@ export default function CarouselQuotesPage() {
       });
     },
   });
-  
+
   // Group quotes by carousel
   const groupedQuotes = quotes?.reduce((acc, quote) => {
     if (!acc[quote.carousel]) {
@@ -167,7 +167,7 @@ export default function CarouselQuotesPage() {
     acc[quote.carousel].push(quote);
     return acc;
   }, {} as Record<string, CarouselQuote[]>);
-  
+
   const handleCreateClick = () => {
     setEditQuote(null);
     setFormData({
@@ -178,7 +178,7 @@ export default function CarouselQuotesPage() {
     });
     setIsModalOpen(true);
   };
-  
+
   const handleEditClick = (quote: CarouselQuote) => {
     setEditQuote(quote);
     setFormData({
@@ -192,13 +192,13 @@ export default function CarouselQuotesPage() {
     });
     setIsModalOpen(true);
   };
-  
+
   const handleDeleteClick = (quote: CarouselQuote) => {
     if (confirm("Are you sure you want to delete this quote?")) {
       deleteQuoteMutation.mutate(quote.id);
     }
   };
-  
+
   // Function to handle updating a quote directly in Airtable
   const handleUpdateAirtable = (quote: CarouselQuote) => {
     if (!quote.externalId) {
@@ -209,7 +209,7 @@ export default function CarouselQuotesPage() {
       });
       return;
     }
-    
+
     updateAirtableMutation.mutate({
       id: quote.id,
       externalId: quote.externalId,
@@ -217,26 +217,26 @@ export default function CarouselQuotesPage() {
       philo: quote.philo || quote.quote || null
     });
   };
-  
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-  
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Make sure to copy main to carousel and philo to quote for API compatibility
     const quoteData = {
       ...formData,
       // Ensure both carousel and quote fields have values for the API
-      carousel: formData.main,
-      quote: formData.philo
+      carousel: formData.main || formData.carousel || "",
+      quote: formData.philo || formData.quote || ""
     };
-    
+
     createQuoteMutation.mutate(quoteData);
   };
-  
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditQuote(null);
@@ -247,21 +247,21 @@ export default function CarouselQuotesPage() {
       philo: "",
     });
   };
-  
+
   // Function to pull quotes from Airtable
   const handlePullFromAirtable = () => {
     if (confirm("This will pull all quotes from Airtable. Existing quotes with matching IDs will be updated. Continue?")) {
       syncMutation.mutate();
     }
   };
-  
+
   // Function to push all quotes to Airtable
   const handlePushToAirtable = () => {
     if (confirm("This will push all quotes to Airtable. Continue?")) {
       pushMutation.mutate();
     }
   };
-  
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="Carousel Quotes" />
@@ -391,19 +391,19 @@ export default function CarouselQuotesPage() {
                 )}
               </>
             )}
-            
+
             {/* Create/Edit Quote Modal */}
             <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{editQuote ? "Edit Quote" : "Add Quote"}</DialogTitle>
                   <DialogDescription>
-                    {editQuote 
-                      ? "Update the quote for this carousel." 
+                    {editQuote
+                      ? "Update the quote for this carousel."
                       : "Add a new quote to display in a carousel."}
                   </DialogDescription>
                 </DialogHeader>
-                
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <Label htmlFor="main">Main Field</Label>
@@ -419,7 +419,7 @@ export default function CarouselQuotesPage() {
                       This identifies which carousel the quote belongs to. Quotes with the same identifier will be grouped together.
                     </p>
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="philo">Quote Content</Label>
                     <Textarea
@@ -432,7 +432,7 @@ export default function CarouselQuotesPage() {
                       required
                     />
                   </div>
-                  
+
                   <DialogFooter className="flex gap-2 justify-end">
                     <Button variant="outline" type="button" onClick={handleCloseModal}>
                       Cancel

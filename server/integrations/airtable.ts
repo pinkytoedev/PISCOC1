@@ -2,11 +2,11 @@ import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
 import { upload } from "../utils/fileUpload";
-import { 
-  uploadImageToAirtable, 
-  uploadImageUrlToAirtable, 
+import {
+  uploadImageToAirtable,
+  uploadImageUrlToAirtable,
   uploadImageUrlAsLinkField,
-  cleanupUploadedFile 
+  cleanupUploadedFile
 } from "../utils/imageUploader";
 import { uploadImageToImgBB, uploadImageUrlToImgBB } from "../utils/imgbbUploader";
 
@@ -141,11 +141,11 @@ async function airtableRequest(
   if (method === "GET") {
     return await airtableRequestWithPagination(apiKey, baseId, tableName, queryParams);
   }
-  
+
   // For non-GET requests, use the regular implementation
   // Build the URL with query parameters if provided
   let url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
-  
+
   if (queryParams && Object.keys(queryParams).length > 0) {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(queryParams)) {
@@ -153,9 +153,9 @@ async function airtableRequest(
     }
     url += `?${params.toString()}`;
   }
-  
+
   console.log(`Airtable API request: ${method} ${url.split('?')[0]} ${queryParams ? JSON.stringify(queryParams) : ''}`);
-  
+
   const options: RequestInit = {
     method,
     headers: {
@@ -163,18 +163,18 @@ async function airtableRequest(
       "Content-Type": "application/json"
     }
   };
-  
+
   if (data && (method === "POST" || method === "PATCH" || method === "DELETE")) {
     options.body = JSON.stringify(data);
   }
-  
+
   const response = await fetch(url, options);
-  
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
   }
-  
+
   return response.json();
 }
 
@@ -187,49 +187,49 @@ async function airtableRequestWithPagination(
 ) {
   // Initialize the result object with empty records array
   const result: any = { records: [] };
-  
+
   // Initialize pagination parameters
   let offset: string | undefined = undefined;
   let hasMorePages = true;
   let pageCount = 0;
-  
+
   // Clone the query parameters to avoid modifying the original
   const params = queryParams ? { ...queryParams } : {};
-  
+
   // Airtable has a maximum limit of 100 records per request
   // If no limit is specified, we use the maximum
   if (!params.maxRecords) {
     // A very high number to effectively get all records
     params.maxRecords = 10000;
   }
-  
+
   // Default page size if not specified is 100 (Airtable's maximum)
   if (!params.pageSize) {
     params.pageSize = 100;
   }
-  
+
   console.log(`Starting paginated Airtable request for table: ${tableName}`);
-  
+
   // Fetch all pages
   while (hasMorePages) {
     // Build the URL with pagination parameters
     let url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
     const urlParams = new URLSearchParams();
-    
+
     // Add all query parameters
     for (const [key, value] of Object.entries(params)) {
       urlParams.append(key, String(value));
     }
-    
+
     // Add the offset parameter if we have one
     if (offset) {
       urlParams.append('offset', offset);
     }
-    
+
     url += `?${urlParams.toString()}`;
-    
+
     console.log(`Airtable API request (page ${pageCount + 1}): GET ${url.split('?')[0]}`);
-    
+
     const options: RequestInit = {
       method: 'GET',
       headers: {
@@ -237,21 +237,21 @@ async function airtableRequestWithPagination(
         "Content-Type": "application/json"
       }
     };
-    
+
     const response = await fetch(url, options);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
     }
-    
+
     const pageData = await response.json();
-    
+
     // Add records from this page to our result
     if (pageData.records && Array.isArray(pageData.records)) {
       result.records = [...result.records, ...pageData.records];
     }
-    
+
     // Check if there are more pages
     if (pageData.offset) {
       offset = pageData.offset;
@@ -260,9 +260,9 @@ async function airtableRequestWithPagination(
       hasMorePages = false;
     }
   }
-  
+
   console.log(`Completed paginated Airtable request. Retrieved ${result.records.length} records from ${pageCount + 1} pages.`);
-  
+
   return result;
 }
 
@@ -276,9 +276,9 @@ export async function deleteAirtableRecord(
   try {
     // Airtable allows deleting records using the DELETE HTTP method with recordIds
     const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}/${recordId}`;
-    
+
     console.log(`Deleting Airtable record: ${recordId} from table ${tableName}`);
-    
+
     const options: RequestInit = {
       method: 'DELETE',
       headers: {
@@ -286,14 +286,14 @@ export async function deleteAirtableRecord(
         "Content-Type": "application/json"
       }
     };
-    
+
     const response = await fetch(url, options);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(`Airtable API delete error: ${response.status} - ${errorText}`);
     }
-    
+
     return response.json();
   } catch (error) {
     console.error("Error deleting Airtable record:", error);
@@ -312,11 +312,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       authorRecord = [authorMember.externalId];
     }
   }
-  
+
   // Convert to Airtable format
   const airtableData: Partial<AirtableArticleRequest> = {
     Name: article.title,
-    Body: article.content,
+    Body: article.content || "",
     Description: article.description || "",
     Featured: article.featured === "yes",
     // Always set Finished to true if status is "published" regardless of the finished field value
@@ -324,17 +324,17 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     Hashtags: article.hashtags || "",
     message_sent: article.status === "published" // If the article is published, assume it was sent
   };
-  
+
   // Log for debugging
   console.log("Finished status:", airtableData.Finished, "Article status:", article.status);
-  
+
   // Add _updatedTime to track when this article was last updated
   airtableData._updatedTime = new Date().toISOString();
-  
+
   // Set the creation timestamp in the "Date" field (always update this on push)
   // If we don't have a creation date recorded, use current time
   airtableData.Date = article.date || new Date().toISOString();
-  
+
   // Handle publication schedule in the "Scheduled" field if available
   if (article.Scheduled) {
     // For scheduled publication time, use the Scheduled field
@@ -345,12 +345,12 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     const date = new Date(article.publishedAt);
     airtableData.Scheduled = date.toISOString();
   }
-  
+
   // Add author reference if we found one
   if (authorRecord) {
     airtableData.Author = authorRecord;
   }
-  
+
   // Handle Photo field - if we have a photo reference
   if (article.photo && article.photo !== "none") {
     // Try to find the photo reference in the team members
@@ -363,7 +363,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     // Explicitly set to empty array when "none" or no photo is selected
     airtableData.Photo = [];
   }
-  
+
   // Handle MainImage field if article has an imageUrl
   if (article.imageUrl && article.imageUrl !== "") {
     // Only add MainImage if it's a URL - for other image types we'd need a different approach
@@ -373,7 +373,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         const urlLower = article.imageUrl.toLowerCase();
         let mimeType = "image/jpeg"; // Default
         let fileExt = "jpg";
-        
+
         // Determine MIME type based on URL extension
         if (urlLower.endsWith('.png')) {
           mimeType = "image/png";
@@ -388,22 +388,22 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
           mimeType = "image/svg+xml";
           fileExt = "svg";
         }
-        
+
         // Extract filename or create a default one with proper extension
         const filename = article.imageUrl.split('/').pop() || `main_image.${fileExt}`;
-        
+
         // Using Link field for MainImage instead of attachment field
         // Use the MainImageLink field which accepts a URL string
         // Use the MainImageLink field which accepts a URL string
         airtableData.MainImageLink = article.imageUrl;
-        
+
         console.log("Setting MainImageLink:", article.imageUrl);
       } catch (error) {
         console.error("Error creating MainImage attachment:", error);
       }
     }
   }
-  
+
   // Handle instaPhoto field separately if we have an Instagram image URL
   if (article.instagramImageUrl && article.instagramImageUrl !== "") {
     try {
@@ -411,7 +411,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       const urlLower = article.instagramImageUrl.toLowerCase();
       let mimeType = "image/jpeg"; // Default for Instagram
       let fileExt = "jpg";
-      
+
       // Determine MIME type based on URL extension
       if (urlLower.endsWith('.png')) {
         mimeType = "image/png";
@@ -423,14 +423,14 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         mimeType = "image/webp";
         fileExt = "webp";
       }
-      
+
       // Extract filename or create a default one with proper extension
       const filename = article.instagramImageUrl.split('/').pop() || `instagram_image.${fileExt}`;
-      
+
       // Using Link field for instaPhoto instead of attachment field
       // Use the InstaPhotoLink field which accepts a URL string
       airtableData.InstaPhotoLink = article.instagramImageUrl;
-      
+
       console.log("Setting InstaPhotoLink:", article.instagramImageUrl);
     } catch (error) {
       console.error("Error creating instaPhoto attachment:", error);
@@ -444,7 +444,7 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       const urlLower = article.imageUrl.toLowerCase();
       let mimeType = "image/jpeg"; // Default
       let fileExt = "jpg";
-      
+
       // Determine MIME type based on URL extension
       if (urlLower.endsWith('.png')) {
         mimeType = "image/png";
@@ -456,20 +456,20 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
         mimeType = "image/webp";
         fileExt = "webp";
       }
-      
+
       // Extract filename or create a default one with proper extension
       const filename = article.imageUrl.split('/').pop() || `instagram_fallback.${fileExt}`;
-      
+
       // Using Link field for instaPhoto fallback instead of attachment field
       // Use the InstaPhotoLink field which accepts a URL string
       airtableData.InstaPhotoLink = article.imageUrl;
-      
+
       console.log("Using main image for InstaPhotoLink:", article.imageUrl);
     } catch (error) {
       console.error("Error creating fallback instaPhoto attachment:", error);
     }
   }
-  
+
   return airtableData;
 }
 
@@ -488,15 +488,15 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       // Get Airtable settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: "Airtable settings are not fully configured",
           missing: [
             !apiKeySetting?.value ? "API Key" : null,
@@ -505,7 +505,7 @@ export function setupAirtableRoutes(app: Express) {
           ].filter(Boolean)
         });
       }
-      
+
       // Test the connection by fetching a single record
       // Instead of using /meta/bases which requires special permissions,
       // we'll test by attempting to access the table directly with maxRecords=1
@@ -513,7 +513,7 @@ export function setupAirtableRoutes(app: Express) {
         const apiKey = apiKeySetting.value;
         const baseId = baseIdSetting.value;
         const tableName = tableNameSetting.value;
-        
+
         // Make a simple request to get one record from the table
         // This requires less permissions than accessing base metadata
         const response = await airtableRequest(
@@ -524,7 +524,7 @@ export function setupAirtableRoutes(app: Express) {
           null,
           { maxRecords: 1 }
         );
-        
+
         // If we get here, the connection was successful
         return res.json({
           success: true,
@@ -545,20 +545,20 @@ export function setupAirtableRoutes(app: Express) {
       }
     } catch (error) {
       console.error("Airtable connection test error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        message: "Failed to test Airtable connection" 
+        message: "Failed to test Airtable connection"
       });
     }
   });
-  
+
   // Get Airtable integration settings
   app.get("/api/airtable/settings", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const settings = await storage.getIntegrationSettings("airtable");
       res.json(settings);
     } catch (error) {
@@ -572,23 +572,23 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const { key, value, enabled } = req.body;
-      
+
       if (!key || !value) {
         return res.status(400).json({ message: "Key and value are required" });
       }
-      
+
       // Check if setting already exists
       const existingSetting = await storage.getIntegrationSettingByKey("airtable", key);
-      
+
       if (existingSetting) {
         // Update existing setting
         const updatedSetting = await storage.updateIntegrationSetting(existingSetting.id, {
           value,
           enabled: enabled !== undefined ? enabled : existingSetting.enabled
         });
-        
+
         return res.json(updatedSetting);
       } else {
         // Create new setting
@@ -598,7 +598,7 @@ export function setupAirtableRoutes(app: Express) {
           value,
           enabled: enabled !== undefined ? enabled : true
         });
-        
+
         return res.status(201).json(newSetting);
       }
     } catch (error) {
@@ -612,24 +612,24 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       // Check for API key in environment
       const apiKey = process.env.AIRTABLE_API_KEY;
-      
+
       if (!apiKey) {
         return res.status(400).json({ message: "AIRTABLE_API_KEY environment variable not set" });
       }
-      
+
       // Get the current API key setting
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-      
+
       if (apiKeySetting) {
         // Update existing setting
         await storage.updateIntegrationSetting(apiKeySetting.id, {
           value: apiKey,
           enabled: true
         });
-        
+
         console.log("Updated Airtable API key from environment variable");
       } else {
         // Create new setting if it doesn't exist
@@ -639,10 +639,10 @@ export function setupAirtableRoutes(app: Express) {
           value: apiKey,
           enabled: true
         });
-        
+
         console.log("Created Airtable API key from environment variable");
       }
-      
+
       return res.json({ message: "Airtable API key updated successfully", success: true });
     } catch (error) {
       console.error("Error updating Airtable API key:", error);
@@ -656,69 +656,69 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-      
+
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Fetch articles from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
-      
+
       const syncResults = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-      
+
       // Process each article
       for (const record of response.records) {
         try {
           const fields = record.fields;
-          
+
           // Debug log to see what fields we're actually receiving from Airtable
           console.log(`Processing Airtable record ${record.id}, fields:`, JSON.stringify(fields));
-          
+
           // Create default values for all required fields
           const defaultTitle = `Untitled Article (ID: ${record.id})`;
           const defaultContent = "This article content is not available.";
           const defaultDescription = "No description provided.";
-          const defaultImageUrl = "https://placehold.co/600x400?text=No+Image"; 
+          const defaultImageUrl = "https://placehold.co/600x400?text=No+Image";
           const defaultAuthor = "Unknown Author";
-          
+
           // Apply defaults for missing fields and log what we're doing
           if (!fields.Name) {
             fields.Name = defaultTitle;
             syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
           }
-          
+
           if (!fields.Body) {
             fields.Body = defaultContent;
             syncResults.details.push(`Record ${record.id}: Missing Body, using default`);
           }
-          
+
           if (!fields.Description) {
             fields.Description = defaultDescription;
             syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
           }
-          
+
           // Use helper function that correctly prioritizes the link fields over attachment fields
           // Default image URL to use if no images are found
           let imageUrl = defaultImageUrl;
           let instagramImageUrl = "";
-          
+
           try {
             // Check for MainImageLink first (preferred) then fallback to MainImage attachment
             if (fields.MainImageLink && typeof fields.MainImageLink === 'string') {
@@ -728,7 +728,7 @@ export function setupAirtableRoutes(app: Express) {
             // If no MainImageLink, try MainImage attachment
             else if (fields.MainImage && fields.MainImage.length > 0) {
               console.log(`Record ${record.id}: MainImage attachment structure:`, JSON.stringify(fields.MainImage[0], null, 2));
-              
+
               // Extract the URL from the attachment object
               if (fields.MainImage[0].url) {
                 imageUrl = fields.MainImage[0].url;
@@ -737,10 +737,10 @@ export function setupAirtableRoutes(app: Express) {
               } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.large) {
                 imageUrl = fields.MainImage[0].thumbnails.large.url;
               }
-              
+
               syncResults.details.push(`Record ${record.id}: Found MainImage attachment: ${imageUrl.substring(0, 50)}...`);
             }
-            
+
             // Check for InstaPhotoLink first (preferred) then fallback to instaPhoto attachment
             if (fields.InstaPhotoLink && typeof fields.InstaPhotoLink === 'string') {
               instagramImageUrl = fields.InstaPhotoLink;
@@ -749,7 +749,7 @@ export function setupAirtableRoutes(app: Express) {
             // If no InstaPhotoLink, try instaPhoto attachment
             else if (fields.instaPhoto && fields.instaPhoto.length > 0) {
               console.log(`Record ${record.id}: instaPhoto attachment structure:`, JSON.stringify(fields.instaPhoto[0], null, 2));
-              
+
               // Extract the URL from the attachment object
               if (fields.instaPhoto[0].url) {
                 instagramImageUrl = fields.instaPhoto[0].url;
@@ -758,10 +758,10 @@ export function setupAirtableRoutes(app: Express) {
               } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.large) {
                 instagramImageUrl = fields.instaPhoto[0].thumbnails.large.url;
               }
-              
+
               syncResults.details.push(`Record ${record.id}: Found instaPhoto attachment: ${instagramImageUrl.substring(0, 50)}...`);
             }
-            
+
             // Use instaPhoto/InstaPhotoLink as fallback if no main image
             if (imageUrl === defaultImageUrl && instagramImageUrl !== "") {
               imageUrl = instagramImageUrl;
@@ -771,23 +771,23 @@ export function setupAirtableRoutes(app: Express) {
             console.error(`Error processing images for record ${record.id}:`, error);
             syncResults.details.push(`Record ${record.id}: Error processing images, using defaults`);
           }
-          
+
           // Get the author name as a string (first one if it's an array)
           let authorName = defaultAuthor;
           if (fields["Name (from Author)"] && fields["Name (from Author)"].length > 0) {
             authorName = fields["Name (from Author)"][0];
           }
-          
+
           // Get the photo name as a string (first one if it's an array)
           // Default to "none" for empty values to work with the Select component
           let photoName = "none";
           if (fields["Name (from Photo)"] && fields["Name (from Photo)"].length > 0) {
             photoName = fields["Name (from Photo)"][0];
           }
-          
+
           // Check if article already exists
           const existingArticle = await storage.getArticleByExternalId(record.id);
-          
+
           const articleData: InsertArticle = {
             title: fields.Name,
             description: fields.Description || "",
@@ -811,7 +811,7 @@ export function setupAirtableRoutes(app: Express) {
             externalId: record.id,
             source: "airtable"
           };
-          
+
           if (existingArticle) {
             // Update existing article
             await storage.updateArticle(existingArticle.id, articleData);
@@ -829,18 +829,18 @@ export function setupAirtableRoutes(app: Express) {
           syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
         }
       }
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
         action: "sync",
         resourceType: "articles",
-        details: { 
+        details: {
           source: "airtable",
           results: syncResults
         }
       });
-      
+
       res.json({
         message: "Articles synced from Airtable",
         results: syncResults
@@ -857,76 +857,76 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "team_members_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-      
+
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Fetch team members from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableTeamMember>;
-      
+
       const syncResults = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-      
+
       // Process each team member
       for (const record of response.records) {
         try {
           const fields = record.fields;
-          
+
           // Debug log to see what fields we're actually receiving from Airtable
           console.log(`Processing Airtable team member record ${record.id}, fields:`, JSON.stringify(fields));
-          
+
           // Check for missing required fields, but provide defaults
           let missingFields = [];
-          
+
           // Default values
           const defaultName = `Team Member (ID: ${record.id})`;
           const defaultRole = "Team Member";
           const defaultBio = "Bio information not available.";
           const defaultImageUrl = "https://placehold.co/600x400?text=No+Image";
-          
+
           if (!fields.Name) {
             fields.Name = defaultName;
             missingFields.push("Name");
           }
-          
+
           if (!fields.Role) {
             fields.Role = defaultRole;
             missingFields.push("Role");
           }
-          
+
           if (!fields.Bio) {
             fields.Bio = defaultBio;
             missingFields.push("Bio");
           }
-          
+
           if (missingFields.length > 0) {
             syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
-          
+
           // Get the image URL from image_url attachment if it exists
           let imageUrl = defaultImageUrl;
           if (fields.image_url && fields.image_url.length > 0) {
             try {
               // Log the full structure to better understand the Airtable format
               console.log(`Team Member Record ${record.id}: image_url attachment structure:`, JSON.stringify(fields.image_url[0], null, 2));
-              
+
               // Extract the URL from the attachment object
               // First try the url property, then check for thumbnails
               if (fields.image_url[0].url) {
@@ -936,7 +936,7 @@ export function setupAirtableRoutes(app: Express) {
               } else if (fields.image_url[0].thumbnails && fields.image_url[0].thumbnails.large) {
                 imageUrl = fields.image_url[0].thumbnails.large.url;
               }
-              
+
               syncResults.details.push(`Record ${record.id}: Found team member image: ${imageUrl.substring(0, 50)}...`);
             } catch (error) {
               console.error(`Error parsing image_url for team member record ${record.id}:`, error);
@@ -944,10 +944,10 @@ export function setupAirtableRoutes(app: Express) {
               imageUrl = defaultImageUrl;
             }
           }
-          
+
           // Check if team member already exists
           const existingMember = await storage.getTeamMemberByExternalId(record.id);
-          
+
           const memberData: InsertTeamMember = {
             name: fields.Name,
             role: fields.Role || defaultRole,
@@ -957,7 +957,7 @@ export function setupAirtableRoutes(app: Express) {
             imagePath: null,
             externalId: record.id
           };
-          
+
           if (existingMember) {
             // Update existing team member
             await storage.updateTeamMember(existingMember.id, memberData);
@@ -975,18 +975,18 @@ export function setupAirtableRoutes(app: Express) {
           syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
         }
       }
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
         action: "sync",
         resourceType: "team_members",
-        details: { 
+        details: {
           source: "airtable",
           results: syncResults
         }
       });
-      
+
       res.json({
         message: "Team members synced from Airtable",
         results: syncResults
@@ -1002,54 +1002,54 @@ export function setupAirtableRoutes(app: Express) {
     // Store article info for error logging
     let articleId: number | undefined;
     let articleDetails: { externalId?: string, title?: string } = {};
-    
+
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       articleId = parseInt(req.params.id);
       if (isNaN(articleId)) {
         return res.status(400).json({ message: "Invalid article ID" });
       }
-      
+
       // Get the article from the database
       const article = await storage.getArticle(articleId);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       // Save article details for error handling
       articleDetails = {
         externalId: article.externalId || undefined,
         title: article.title
       };
-      
+
       // Check if this is an Airtable article
       if (article.source !== "airtable" || !article.externalId) {
         return res.status(400).json({ message: "This article is not from Airtable" });
       }
-      
+
       // Get Airtable settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-      
+
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Convert article data to Airtable format
       const airtableData = await convertToAirtableFormat(article);
-      
+
       // Update the record in Airtable using the records array format
       // which is what the Airtable API expects for table-level operations
       const response = await airtableRequest(
@@ -1066,34 +1066,34 @@ export function setupAirtableRoutes(app: Express) {
           ]
         }
       );
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
         action: "update",
         resourceType: "article",
         resourceId: articleId.toString(),
-        details: { 
+        details: {
           source: "airtable",
           externalId: article.externalId || undefined
         }
       });
-      
+
       res.json({
         message: "Article updated in Airtable",
         article: response
       });
     } catch (error) {
       console.error("Airtable update error:", error);
-      
+
       let errorMessage = "Failed to update article in Airtable";
       let statusCode = 500;
-      
+
       // Check for specific error types to provide better error messages
       if (error instanceof Error) {
         const errorText = error.message;
         console.log("Detailed Airtable error:", errorText);
-        
+
         if (errorText.includes("403")) {
           errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
           statusCode = 403;
@@ -1107,14 +1107,14 @@ export function setupAirtableRoutes(app: Express) {
           errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
           statusCode = 403;
         }
-        
+
         // Log article details that were captured earlier
         if (articleId && articleDetails) {
           console.log(`Article update failed for ID ${articleId}, externalId: ${articleDetails.externalId}, title: "${articleDetails.title}"`);
         }
       }
-      
-      res.status(statusCode).json({ 
+
+      res.status(statusCode).json({
         message: errorMessage,
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1128,36 +1128,36 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const { id } = req.params;
       const quoteData = req.body;
-      
+
       if (!quoteData.externalId) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
           message: "External ID (Airtable record ID) is required"
         });
       }
-      
+
       // Get API key and base ID from settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Airtable settings are not fully configured" 
+          message: "Airtable settings are not fully configured"
         });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Convert to Airtable format
       const airtableFields = await convertCarouselQuoteToAirtableFormat(quoteData);
-      
+
       // Log the fields being sent to Airtable for debugging
       console.log("Sending to Airtable for quote update:", {
         quoteId: id,
@@ -1168,7 +1168,7 @@ export function setupAirtableRoutes(app: Express) {
           philo: quoteData.philo
         }
       });
-      
+
       // Create the Airtable update payload
       const airtableData = {
         records: [
@@ -1178,7 +1178,7 @@ export function setupAirtableRoutes(app: Express) {
           }
         ]
       };
-      
+
       // Update the record in Airtable
       try {
         const response = await airtableRequest(
@@ -1188,7 +1188,7 @@ export function setupAirtableRoutes(app: Express) {
           "PATCH",
           airtableData
         );
-        
+
         // Update the local database record with the new Airtable fields
         const quote = await storage.getCarouselQuote(parseInt(id));
         if (quote) {
@@ -1197,19 +1197,19 @@ export function setupAirtableRoutes(app: Express) {
             philo: quoteData.philo || null
           });
         }
-        
+
         // Log the activity
         await storage.createActivityLog({
           userId: req.user?.id,
           action: "update",
           resourceType: "carousel_quote",
-          details: { 
+          details: {
             id: parseInt(id),
             airtableId: quoteData.externalId,
             source: "direct"
           }
         });
-        
+
         return res.json({
           success: true,
           message: "Quote updated in Airtable",
@@ -1225,9 +1225,9 @@ export function setupAirtableRoutes(app: Express) {
       }
     } catch (error) {
       console.error("Error in update quote endpoint:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "Internal server error" 
+        message: "Internal server error"
       });
     }
   });
@@ -1237,65 +1237,65 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-      
+
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Fetch carousel quotes from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableCarouselQuote>;
-      
+
       const syncResults = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-      
+
       // Process each carousel quote
       for (const record of response.records) {
         try {
           const fields = record.fields;
-          
+
           // Check for missing required fields, but provide defaults
           let missingFields = [];
-          
+
           if (!fields.main) {
             fields.main = "default";
             missingFields.push("main");
           }
-          
+
           if (!fields.philo) {
             fields.philo = "Quote information not available.";
             missingFields.push("philo");
           }
-          
+
           if (missingFields.length > 0) {
             syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
-          
+
           // Get all quotes to check if this one exists
           const allQuotes = await storage.getCarouselQuotes();
           const existingQuote = allQuotes.find(q => q.externalId === record.id);
-          
+
           const quoteData: InsertCarouselQuote = {
             carousel: fields.main,
             quote: fields.philo,
             externalId: record.id
           };
-          
+
           if (existingQuote) {
             // Update existing quote
             await storage.updateCarouselQuote(existingQuote.id, quoteData);
@@ -1313,18 +1313,18 @@ export function setupAirtableRoutes(app: Express) {
           syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
         }
       }
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
         action: "sync",
         resourceType: "carousel_quotes",
-        details: { 
+        details: {
           source: "airtable",
           results: syncResults
         }
       });
-      
+
       res.json({
         message: "Carousel quotes synced from Airtable",
         results: syncResults
@@ -1334,44 +1334,44 @@ export function setupAirtableRoutes(app: Express) {
       res.status(500).json({ message: "Failed to sync carousel quotes from Airtable" });
     }
   });
-  
+
   // Push all carousel quotes to Airtable (batch)
   app.post("/api/airtable/push/carousel-quotes", async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       // Get Airtable settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "quotes_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          message: "Airtable settings are not fully configured" 
+          message: "Airtable settings are not fully configured"
         });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Get all quotes from the database
       const quotes = await storage.getCarouselQuotes();
-      
+
       // Split into create (no externalId) and update (with externalId) operations
       const quotesToCreate = quotes.filter(q => !q.externalId);
       const quotesToUpdate = quotes.filter(q => q.externalId);
-      
+
       const results = {
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as string[]
       };
-      
+
       // Process updates first (Airtable has a limit on batch operations, so we need to be careful)
       if (quotesToUpdate.length > 0) {
         // Convert quotes to Airtable format
@@ -1384,7 +1384,7 @@ export function setupAirtableRoutes(app: Express) {
             };
           })
         );
-        
+
         // Batch update records in Airtable (max 10 at a time)
         for (let i = 0; i < updateRecords.length; i += 10) {
           const batch = updateRecords.slice(i, i + 10);
@@ -1397,15 +1397,15 @@ export function setupAirtableRoutes(app: Express) {
               { records: batch }
             );
             results.updated += batch.length;
-            results.details.push(`Updated ${batch.length} quotes in batch ${Math.floor(i/10) + 1}`);
+            results.details.push(`Updated ${batch.length} quotes in batch ${Math.floor(i / 10) + 1}`);
           } catch (error) {
-            console.error(`Error updating batch ${Math.floor(i/10) + 1}:`, error);
+            console.error(`Error updating batch ${Math.floor(i / 10) + 1}:`, error);
             results.errors += batch.length;
-            results.details.push(`Error updating batch ${Math.floor(i/10) + 1}: ${String(error)}`);
+            results.details.push(`Error updating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
           }
         }
       }
-      
+
       // Process creates next (for quotes without externalId)
       if (quotesToCreate.length > 0) {
         // Convert quotes to Airtable format
@@ -1415,7 +1415,7 @@ export function setupAirtableRoutes(app: Express) {
             return { fields };
           })
         );
-        
+
         // Batch create records in Airtable (max 10 at a time)
         for (let i = 0; i < createRecords.length; i += 10) {
           const batch = createRecords.slice(i, i + 10);
@@ -1427,7 +1427,7 @@ export function setupAirtableRoutes(app: Express) {
               "POST",
               { records: batch }
             ) as AirtableResponse<AirtableCarouselQuote>;
-            
+
             // Update local records with the new external IDs
             for (let j = 0; j < response.records.length; j++) {
               const record = response.records[j];
@@ -1440,28 +1440,28 @@ export function setupAirtableRoutes(app: Express) {
                 });
               }
             }
-            
+
             results.created += batch.length;
-            results.details.push(`Created ${batch.length} quotes in batch ${Math.floor(i/10) + 1}`);
+            results.details.push(`Created ${batch.length} quotes in batch ${Math.floor(i / 10) + 1}`);
           } catch (error) {
-            console.error(`Error creating batch ${Math.floor(i/10) + 1}:`, error);
+            console.error(`Error creating batch ${Math.floor(i / 10) + 1}:`, error);
             results.errors += batch.length;
-            results.details.push(`Error creating batch ${Math.floor(i/10) + 1}: ${String(error)}`);
+            results.details.push(`Error creating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
           }
         }
       }
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
         action: "push",
         resourceType: "carousel_quotes",
-        details: { 
+        details: {
           source: "airtable",
           results
         }
       });
-      
+
       res.json({
         message: "Carousel quotes pushed to Airtable",
         updated: results.updated,
@@ -1471,7 +1471,7 @@ export function setupAirtableRoutes(app: Express) {
       });
     } catch (error) {
       console.error("Error pushing carousel quotes to Airtable:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
         message: "Failed to push carousel quotes to Airtable",
         error: error instanceof Error ? error.message : String(error)
@@ -1484,41 +1484,41 @@ export function setupAirtableRoutes(app: Express) {
     // Store article info for error logging
     let articleId: number | undefined;
     let articleDetails: { externalId?: string, title?: string } = {};
-    
+
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       articleId = parseInt(req.params.id);
       const article = await storage.getArticle(articleId);
-      
+
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       // Save article details for error handling
       articleDetails = {
         externalId: article.externalId || undefined,
         title: article.title
       };
-      
+
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-      
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({ message: "Airtable settings are not fully configured" });
       }
-      
+
       if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
-      
+
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       // Prepare the data for Airtable
       const fields: any = {
         Name: article.title,
@@ -1529,7 +1529,7 @@ export function setupAirtableRoutes(app: Express) {
         // Use the dedicated finished field or fall back to status
         Finished: article.finished !== undefined ? article.finished : (article.status === "published")
       };
-      
+
       // Date handling: prioritize the date field from Airtable
       if (article.date) {
         // Use the direct date field if available (preferred)
@@ -1540,10 +1540,10 @@ export function setupAirtableRoutes(app: Express) {
         // Use the full ISO string with time for Airtable (not just YYYY-MM-DD)
         fields.Date = new Date(article.publishedAt).toISOString();
       }
-      
+
       // Add hashtags if they exist
       if (article.hashtags) fields.Hashtags = article.hashtags;
-      
+
       // Handle author relationship
       // Note: this doesn't actually create the relationship in Airtable
       // but we store the author name for reference
@@ -1553,13 +1553,13 @@ export function setupAirtableRoutes(app: Express) {
         // Just log that this would need proper linking
         console.log(`Author ${article.author} would need to be linked in Airtable`);
       }
-      
+
       let response;
-      
+
       // Always create a new record - don't check for existing record
       console.log("Creating new record in Airtable");
       console.log("Pushing article to Airtable:", JSON.stringify(fields, null, 2));
-      
+
       response = await airtableRequest(
         apiKey,
         baseId,
@@ -1573,43 +1573,43 @@ export function setupAirtableRoutes(app: Express) {
           ]
         }
       );
-      
+
       // Get the Airtable ID
       const airtableId = response.records[0].id;
-      
+
       // Update the article with the Airtable ID and change its source
       await storage.updateArticle(articleId, {
         externalId: airtableId,
         source: 'airtable'  // Change the source to 'airtable'
       });
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
         action: "create",
         resourceType: "article",
         resourceId: article.id.toString(),
-        details: { 
+        details: {
           service: "airtable",
           article: article.title,
           airtableId
         }
       });
-      
+
       res.json({
         message: "Article pushed to Airtable successfully",
         response
       });
     } catch (error) {
       console.error("Airtable push error:", error);
-      
+
       let errorMessage = "Failed to push article to Airtable";
       let statusCode = 500;
-      
+
       if (error instanceof Error) {
         const errorText = error.message;
         console.log("Detailed Airtable push error:", errorText);
-        
+
         if (errorText.includes("403")) {
           errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
           statusCode = 403;
@@ -1623,14 +1623,14 @@ export function setupAirtableRoutes(app: Express) {
           errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
           statusCode = 403;
         }
-        
+
         // Log article details that were captured earlier
         if (articleId !== undefined && articleDetails) {
           console.log(`Article push failed for ID ${articleId}, title: "${articleDetails.title}", externalId: ${articleDetails.externalId || 'none'}`);
         }
       }
-      
-      res.status(statusCode).json({ 
+
+      res.status(statusCode).json({
         message: errorMessage,
         error: error instanceof Error ? error.message : String(error)
       });
@@ -1643,41 +1643,41 @@ export function setupAirtableRoutes(app: Express) {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const articleId = parseInt(req.params.articleId);
       if (isNaN(articleId)) {
         return res.status(400).json({ message: "Invalid article ID" });
       }
-      
+
       const fieldName = req.params.fieldName;
       if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto' && fieldName !== 'MainImageLink' && fieldName !== 'InstaPhotoLink')) {
         return res.status(400).json({ message: "Invalid field name. Must be 'MainImage', 'MainImageLink', 'instaPhoto', or 'InstaPhotoLink'" });
       }
-      
+
       // Get the article from the database
       const article = await storage.getArticle(articleId);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       // Check if this is an Airtable article
       if (article.source !== "airtable" || !article.externalId) {
         return res.status(400).json({ message: "This article is not from Airtable" });
       }
-      
+
       // Check if file was uploaded
       if (!req.file) {
         return res.status(400).json({ message: "No image file uploaded" });
       }
-      
+
       // Check if ImgBB integration is enabled
       const imgbbApiKeySetting = await storage.getIntegrationSettingByKey('imgbb', 'api_key');
       const isImgBBEnabled = imgbbApiKeySetting?.enabled && !!imgbbApiKeySetting?.value;
-      
+
       if (isImgBBEnabled) {
         // ImgBB integration is enabled, using ImgBB as intermediary
         console.log("ImgBB integration is enabled, using ImgBB as intermediary for upload");
-        
+
         // We can't use redirect here because we need to forward the file
         // So we'll call the ImgBB upload function directly
         const file = {
@@ -1686,17 +1686,17 @@ export function setupAirtableRoutes(app: Express) {
           mimetype: req.file.mimetype,
           size: req.file.size
         };
-        
+
         // Step 1: Upload to ImgBB
         const imgbbResult = await uploadImageToImgBB(file);
-        
+
         // Always cleanup the uploaded file after processing
         cleanupUploadedFile(file.path);
-        
+
         if (!imgbbResult) {
           return res.status(500).json({ message: 'Failed to upload image to ImgBB' });
         }
-        
+
         // Step 2: Upload ImgBB URL to Airtable
         const airtableResult = await uploadImageUrlToAirtable(
           imgbbResult.url,
@@ -1704,26 +1704,26 @@ export function setupAirtableRoutes(app: Express) {
           fieldName,
           file.filename
         );
-        
+
         if (!airtableResult) {
-          return res.status(500).json({ 
+          return res.status(500).json({
             message: 'Image uploaded to ImgBB but failed to update Airtable',
-            imgbbUrl: imgbbResult.url 
+            imgbbUrl: imgbbResult.url
           });
         }
-        
+
         // Step 3: Update the article in the database with the new image URL
         const updateData: Partial<InsertArticle> = {};
-        
+
         if (fieldName === 'MainImage') {
           updateData.imageUrl = imgbbResult.url;
           updateData.imageType = 'url';
         } else if (fieldName === 'instaPhoto') {
           updateData.instagramImageUrl = imgbbResult.url;
         }
-        
+
         await storage.updateArticle(articleId, updateData);
-        
+
         // Log the activity
         await storage.createActivityLog({
           userId: req.user?.id,
@@ -1737,7 +1737,7 @@ export function setupAirtableRoutes(app: Express) {
             filename: file.filename
           }
         });
-        
+
         return res.json({
           message: `Image uploaded successfully to ImgBB and then to ${fieldName}`,
           imgbb: {
@@ -1748,7 +1748,7 @@ export function setupAirtableRoutes(app: Express) {
           airtable: airtableResult
         });
       }
-      
+
       // Log debug information before uploading
       console.log("Airtable Image Upload Debug:", {
         articleId,
@@ -1759,7 +1759,7 @@ export function setupAirtableRoutes(app: Express) {
         fileSize: req.file.size,
         fileMimetype: req.file.mimetype
       });
-      
+
       // Upload the image to Airtable
       const result = await uploadImageToAirtable(
         {
@@ -1771,7 +1771,7 @@ export function setupAirtableRoutes(app: Express) {
         article.externalId,
         fieldName
       );
-      
+
       // Log result or error
       if (result) {
         console.log("Airtable Image Upload Success:", {
@@ -1785,26 +1785,26 @@ export function setupAirtableRoutes(app: Express) {
           externalId: article.externalId
         });
       }
-      
+
       // Clean up the uploaded file
       cleanupUploadedFile(req.file.path);
-      
+
       if (!result) {
         return res.status(500).json({ message: "Failed to upload image to Airtable" });
       }
-      
+
       // Update the article in the database with the new image URL
       const updateData: Partial<InsertArticle> = {};
-      
+
       if (fieldName === 'MainImage') {
         updateData.imageUrl = result.url;
         updateData.imageType = 'url';
       } else if (fieldName === 'instaPhoto') {
         updateData.instagramImageUrl = result.url;
       }
-      
+
       await storage.updateArticle(articleId, updateData);
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -1816,74 +1816,74 @@ export function setupAirtableRoutes(app: Express) {
           filename: req.file.originalname
         }
       });
-      
+
       res.json({
         message: `Image uploaded successfully to ${fieldName}`,
         attachment: result
       });
     } catch (error) {
       console.error("Error uploading image to Airtable:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to upload image to Airtable",
         error: error instanceof Error ? error.message : String(error)
       });
     }
   });
-  
+
   // Upload an image URL to Airtable for a specific article and field
   app.post("/api/airtable/upload-image-url/:articleId/:fieldName", async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
-      
+
       const articleId = parseInt(req.params.articleId);
       if (isNaN(articleId)) {
         return res.status(400).json({ message: "Invalid article ID" });
       }
-      
+
       const fieldName = req.params.fieldName;
       if (!fieldName || (fieldName !== 'MainImage' && fieldName !== 'instaPhoto' && fieldName !== 'MainImageLink' && fieldName !== 'InstaPhotoLink')) {
         return res.status(400).json({ message: "Invalid field name. Must be 'MainImage', 'MainImageLink', 'instaPhoto', or 'InstaPhotoLink'" });
       }
-      
+
       const { imageUrl, filename } = req.body;
-      
+
       if (!imageUrl) {
         return res.status(400).json({ message: "Image URL is required" });
       }
-      
+
       if (!filename) {
         return res.status(400).json({ message: "Filename is required" });
       }
-      
+
       // Get the article from the database
       const article = await storage.getArticle(articleId);
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       // Check if this is an Airtable article
       if (article.source !== "airtable" || !article.externalId) {
         return res.status(400).json({ message: "This article is not from Airtable" });
       }
-      
+
       // Check if ImgBB integration is enabled
       const imgbbApiKeySetting = await storage.getIntegrationSettingByKey('imgbb', 'api_key');
       const isImgBBEnabled = imgbbApiKeySetting?.enabled && !!imgbbApiKeySetting?.value;
-      
+
       if (isImgBBEnabled) {
         // ImgBB integration is enabled, using ImgBB as intermediary
         console.log("ImgBB integration is enabled, using ImgBB as intermediary for URL upload");
-        
+
         // We'll call the ImgBB upload function directly rather than redirecting
         // Step 1: Upload URL to ImgBB
         const imgbbResult = await uploadImageUrlToImgBB(imageUrl, filename);
-        
+
         if (!imgbbResult) {
           return res.status(500).json({ message: 'Failed to upload image URL to ImgBB' });
         }
-        
+
         // Step 2: Upload ImgBB URL to Airtable using the new link field approach
         // Map the field names to their link field equivalents
         const fieldMappings: Record<string, string> = {
@@ -1892,36 +1892,36 @@ export function setupAirtableRoutes(app: Express) {
           'MainImageLink': 'MainImageLink',
           'InstaPhotoLink': 'InstaPhotoLink'
         };
-        
+
         // Use the mapped field name or fallback to original
         const targetFieldName = fieldMappings[fieldName] || fieldName;
-        
+
         // Upload using the new link field function
         const airtableResult = await uploadImageUrlAsLinkField(
           imgbbResult.url,
           article.externalId,
           targetFieldName
         );
-        
+
         if (!airtableResult) {
-          return res.status(500).json({ 
+          return res.status(500).json({
             message: 'Image uploaded to ImgBB but failed to update Airtable',
-            imgbbUrl: imgbbResult.url 
+            imgbbUrl: imgbbResult.url
           });
         }
-        
+
         // Step 3: Update the article in the database with the new image URL
         const updateData: Partial<InsertArticle> = {};
-        
+
         if (fieldName === 'MainImage') {
           updateData.imageUrl = imgbbResult.url;
           updateData.imageType = 'url';
         } else if (fieldName === 'instaPhoto') {
           updateData.instagramImageUrl = imgbbResult.url;
         }
-        
+
         await storage.updateArticle(articleId, updateData);
-        
+
         // Log the activity
         await storage.createActivityLog({
           userId: req.user?.id,
@@ -1936,7 +1936,7 @@ export function setupAirtableRoutes(app: Express) {
             filename
           }
         });
-        
+
         return res.json({
           message: `Image URL uploaded successfully to ImgBB and then to ${fieldName}`,
           imgbb: {
@@ -1947,7 +1947,7 @@ export function setupAirtableRoutes(app: Express) {
           airtable: airtableResult
         });
       }
-      
+
       // Log debug information before uploading
       console.log("Airtable Image URL Upload Debug:", {
         articleId,
@@ -1957,7 +1957,7 @@ export function setupAirtableRoutes(app: Express) {
         imageUrl,
         filename
       });
-      
+
       // Map the field names to their link field equivalents
       const fieldMappings: Record<string, string> = {
         'MainImage': 'MainImageLink',
@@ -1965,19 +1965,19 @@ export function setupAirtableRoutes(app: Express) {
         'InstaPhotoLink': 'InstaPhotoLink',
         'MainImageLink': 'MainImageLink'
       };
-      
+
       // Use the mapped field name or fallback to original
       const targetFieldName = fieldMappings[fieldName] || fieldName;
-      
+
       console.log(`Using link field approach: ${fieldName} → ${targetFieldName}`);
-      
+
       // Upload the image URL to Airtable using the new link field approach
       const result = await uploadImageUrlAsLinkField(
         imageUrl,
         article.externalId,
         targetFieldName
       );
-      
+
       // Log result or error (note: using link fields returns boolean, not attachment object)
       if (result) {
         console.log("Airtable Image URL Upload Success (link field):", {
@@ -1992,24 +1992,24 @@ export function setupAirtableRoutes(app: Express) {
           fieldName: targetFieldName
         });
       }
-      
+
       if (!result) {
         return res.status(500).json({ message: "Failed to upload image URL to Airtable" });
       }
-      
+
       // Update the article in the database with the image URL
       // For link fields, result is a boolean, so we use the original imageUrl
       const updateData: Partial<InsertArticle> = {};
-      
+
       if (fieldName === 'MainImage' || fieldName === 'MainImageLink') {
         updateData.imageUrl = imageUrl;
         updateData.imageType = 'url';
       } else if (fieldName === 'instaPhoto' || fieldName === 'InstaPhotoLink') {
         updateData.instagramImageUrl = imageUrl;
       }
-      
+
       await storage.updateArticle(articleId, updateData);
-      
+
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -2022,7 +2022,7 @@ export function setupAirtableRoutes(app: Express) {
           filename
         }
       });
-      
+
       res.json({
         message: `Image URL uploaded successfully to ${targetFieldName}`,
         success: true,
@@ -2032,7 +2032,7 @@ export function setupAirtableRoutes(app: Express) {
       });
     } catch (error) {
       console.error("Error uploading image URL to Airtable:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: "Failed to upload image URL to Airtable",
         error: error instanceof Error ? error.message : String(error)
       });

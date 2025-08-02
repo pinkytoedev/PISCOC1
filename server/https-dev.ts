@@ -37,7 +37,7 @@ export function setupHTTPS(app: Express, port: number = 3001) {
 
         return httpsServer;
     } catch (error) {
-        log('❌ Failed to setup HTTPS server:', error);
+        log('❌ Failed to setup HTTPS server:', String(error));
         return null;
     }
 }

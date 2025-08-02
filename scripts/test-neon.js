@@ -23,7 +23,14 @@ if (!dbUrlMatch) {
     process.exit(1);
 }
 
-const databaseUrl = dbUrlMatch[1].trim();
+let databaseUrl = dbUrlMatch[1].trim();
+
+// Remove search_path parameter if present (not supported by psql CLI)
+if (databaseUrl.includes('search_path=')) {
+    databaseUrl = databaseUrl.replace(/&?search_path=[^&]*/g, '');
+    // Clean up any double & or trailing &
+    databaseUrl = databaseUrl.replace(/&&/g, '&').replace(/&$/, '');
+}
 
 if (!databaseUrl.includes('neon.tech')) {
     console.log('⚠️  Current DATABASE_URL does not appear to be a Neon database');
