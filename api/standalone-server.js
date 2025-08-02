@@ -317,7 +317,7 @@ app.get('/api/test-integrations', async (req, res) => {
 app.get('/api/discord/settings', async (req, res) => {
     try {
         const result = await pgPool.query(
-            "SELECT * FROM integration_settings WHERE integration = 'discord'"
+            "SELECT * FROM integration_settings WHERE service = 'discord'"
         );
         res.json(result.rows);
     } catch (error) {
@@ -346,7 +346,7 @@ app.get('/api/discord/webhooks', (req, res) => {
 app.get('/api/airtable/settings', async (req, res) => {
     try {
         const result = await pgPool.query(
-            "SELECT * FROM integration_settings WHERE integration = 'airtable'"
+            "SELECT * FROM integration_settings WHERE service = 'airtable'"
         );
         res.json(result.rows);
     } catch (error) {
@@ -367,7 +367,7 @@ app.get('/api/airtable/test-connection', async (req, res) => {
 app.get('/api/imgbb/settings', async (req, res) => {
     try {
         const result = await pgPool.query(
-            "SELECT * FROM integration_settings WHERE integration = 'imgbb'"
+            "SELECT * FROM integration_settings WHERE service = 'imgbb'"
         );
         res.json(result.rows);
     } catch (error) {
@@ -560,6 +560,39 @@ app.get('/api/instagram/webhooks/field-groups', (req, res) => {
 // Serve static files
 const publicPath = path.resolve(__dirname, '../dist/public');
 app.use(express.static(publicPath));
+
+// Metrics endpoint (minimal)
+app.get('/api/metrics', async (req, res) => {
+    try {
+        const metrics = {
+            users: 0,
+            articles: 0,
+            teamMembers: 0,
+            activities: []
+        };
+        
+        // Try to get counts from database
+        try {
+            const usersResult = await pgPool.query('SELECT COUNT(*) FROM users');
+            metrics.users = parseInt(usersResult.rows[0].count);
+        } catch (e) {}
+        
+        try {
+            const articlesResult = await pgPool.query('SELECT COUNT(*) FROM articles');
+            metrics.articles = parseInt(articlesResult.rows[0].count);
+        } catch (e) {}
+        
+        try {
+            const teamResult = await pgPool.query('SELECT COUNT(*) FROM team_members');
+            metrics.teamMembers = parseInt(teamResult.rows[0].count);
+        } catch (e) {}
+        
+        res.json(metrics);
+    } catch (error) {
+        console.error('Metrics error:', error);
+        res.json({ users: 0, articles: 0, teamMembers: 0, activities: [] });
+    }
+});
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
