@@ -406,12 +406,33 @@ app.get('/api/health', async (req, res) => {
 const publicPath = path.resolve(__dirname, '../dist/public');
 app.use(express.static(publicPath));
 
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    next();
+});
+
+// List all registered routes (for debugging)
+app.get('/api/routes', (req, res) => {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+        if (middleware.route) {
+            routes.push({
+                path: middleware.route.path,
+                methods: Object.keys(middleware.route.methods)
+            });
+        }
+    });
+    res.json(routes);
+});
+
 // Catch-all route for SPA
 app.use('*', (req, res) => {
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(publicPath, 'index.html'));
     } else {
-        res.status(404).json({ error: 'Not found' });
+        console.log(`API route not found: ${req.path}`);
+        res.status(404).json({ error: 'Not found', path: req.path });
     }
 });
 
