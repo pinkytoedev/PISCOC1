@@ -12,7 +12,12 @@
     "db:push": "drizzle-kit push",
     "setup:https": "node scripts/setup-https.js",
     "test:setup": "node scripts/test-setup.js",
-    "test:neon": "node scripts/test-neon.js"
+    "test:neon": "node scripts/test-neon.js",
+    "vercel:check": "node scripts/check-vercel-env.js",
+    "vercel:build": "npm run build",
+    "vercel:dev": "vercel dev",
+    "vercel:export": "node scripts/export-env-for-vercel.js",
+    "vercel:push": "./scripts/push-env-to-vercel.sh"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.17",
@@ -125,6 +130,7 @@
     "tailwindcss": "^3.4.14",
     "tsx": "^4.19.1",
     "typescript": "5.6.3",
+    "vercel": "^44.6.6",
     "vite": "^5.4.14"
   },
   "engines": {

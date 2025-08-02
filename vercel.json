@@ -4,13 +4,21 @@
   "outputDirectory": "dist/public",
   "functions": {
     "api/*.js": {
-      "includeFiles": "api/**"
+      "maxDuration": 30,
+      "memory": 1024
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "/api/index.js"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/$1"
     }
-  ]
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  }
 }
