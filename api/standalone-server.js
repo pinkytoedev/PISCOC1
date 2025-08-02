@@ -111,21 +111,30 @@ passport.use(
         try {
             // Query the database for the user using pg client directly
             const result = await pgPool.query(
-                'SELECT * FROM users WHERE username = $1',
+                'SELECT id, username, password, is_admin, last_login FROM users WHERE username = $1',
                 [username]
             );
-            const user = result.rows[0];
-
-            if (!user || !(await comparePasswords(password, user.password))) {
+            const dbUser = result.rows[0];
+            
+            if (!dbUser || !(await comparePasswords(password, dbUser.password))) {
                 return done(null, false);
             }
-
+            
             // Update last login
             await pgPool.query(
                 'UPDATE users SET last_login = NOW() WHERE id = $1',
-                [user.id]
+                [dbUser.id]
             );
-
+            
+            // Map database columns to expected JavaScript properties
+            const user = {
+                id: dbUser.id,
+                username: dbUser.username,
+                password: dbUser.password,
+                isAdmin: dbUser.is_admin,
+                lastLogin: dbUser.last_login
+            };
+            
             return done(null, user);
         } catch (error) {
             console.error('Login error:', error);
@@ -139,10 +148,24 @@ passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
     try {
         const result = await pgPool.query(
-            'SELECT * FROM users WHERE id = $1',
+            'SELECT id, username, is_admin, last_login FROM users WHERE id = $1',
             [id]
         );
-        done(null, result.rows[0]);
+        const dbUser = result.rows[0];
+        
+        if (!dbUser) {
+            return done(null, false);
+        }
+        
+        // Map database columns to expected JavaScript properties
+        const user = {
+            id: dbUser.id,
+            username: dbUser.username,
+            isAdmin: dbUser.is_admin,
+            lastLogin: dbUser.last_login
+        };
+        
+        done(null, user);
     } catch (error) {
         done(error);
     }
@@ -166,7 +189,14 @@ app.post('/api/login', (req, res, next) => {
                 return res.status(500).json({ message: 'Failed to establish session' });
             }
 
-            res.status(200).json(user);
+            // Ensure we're sending the properly mapped user object
+            const responseUser = {
+                id: user.id,
+                username: user.username,
+                isAdmin: user.isAdmin,
+                lastLogin: user.lastLogin
+            };
+            res.status(200).json(responseUser);
         });
     })(req, res, next);
 });
