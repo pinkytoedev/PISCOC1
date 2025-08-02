@@ -4,7 +4,6 @@
   "outputDirectory": "dist/public",
   "functions": {
     "api/index.js": {
-      "runtime": "nodejs20.x",
       "includeFiles": "dist/**",
       "excludeFiles": "node_modules/{vite,rollup,@rollup,esbuild,@vitejs,typescript,tsx,drizzle-kit}/**"
     }
