@@ -40,13 +40,13 @@ const handleZodError = (error: ZodError) => {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes
   setupAuth(app);
-  
+
   // Set up direct upload routes
   setupDirectUploadRoutes(app);
-  
+
   // Set up public upload routes
   setupPublicUploadRoutes(app);
-  
+
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {
     res.sendFile(path.join(process.cwd(), "client/public/privacy.html"));
@@ -56,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/config/facebook", (req, res) => {
     // Only confirm if Facebook is configured without exposing the actual App ID
     const isFacebookConfigured = !!process.env.FACEBOOK_APP_ID;
-    res.json({ 
+    res.json({
       status: 'success',
       configured: isFacebookConfigured,
       // For backward compatibility, providing a placeholder value
@@ -79,11 +79,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const teamMember = await storage.getTeamMember(id);
-      
+
       if (!teamMember) {
         return res.status(404).json({ message: "Team member not found" });
       }
-      
+
       res.json(teamMember);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch team member" });
@@ -94,7 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertTeamMemberSchema.parse(req.body);
       const newTeamMember = await storage.createTeamMember(validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -103,7 +103,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: newTeamMember.id.toString(),
         details: { teamMember: newTeamMember }
       });
-      
+
       res.status(201).json(newTeamMember);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -117,13 +117,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertTeamMemberSchema.partial().parse(req.body);
-      
+
       const updatedTeamMember = await storage.updateTeamMember(id, validatedData);
-      
+
       if (!updatedTeamMember) {
         return res.status(404).json({ message: "Team member not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -132,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { teamMember: updatedTeamMember }
       });
-      
+
       res.json(updatedTeamMember);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -146,11 +146,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteTeamMember(id);
-      
+
       if (!success) {
         return res.status(404).json({ message: "Team member not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -159,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
-      
+
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete team member" });
@@ -180,11 +180,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const article = await storage.getArticle(id);
-      
+
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       res.json(article);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch article" });
@@ -195,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertArticleSchema.parse(req.body);
       const newArticle = await storage.createArticle(validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -204,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: newArticle.id.toString(),
         details: { article: newArticle }
       });
-      
+
       res.status(201).json(newArticle);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -218,27 +218,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertArticleSchema.partial().parse(req.body);
-      
+
       // Check if this is a status change to "published"
       const statusChangedToPublished = validatedData.status === 'published';
-      
+
       // Get the existing article before updating it, if we need to check status
       let previousArticle = null;
       if (statusChangedToPublished) {
         previousArticle = await storage.getArticle(id);
-        
+
         if (!previousArticle) {
           return res.status(404).json({ message: "Article not found" });
         }
       }
-      
+
       // Update the article
       const updatedArticle = await storage.updateArticle(id, validatedData);
-      
+
       if (!updatedArticle) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -247,21 +247,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { article: updatedArticle }
       });
-      
+
       // If status was changed to "published" from a different status, trigger Instagram post
-      if (statusChangedToPublished && 
-          previousArticle && 
-          previousArticle.status !== 'published') {
-        
+      if (statusChangedToPublished &&
+        previousArticle &&
+        previousArticle.status !== 'published') {
+
         log(`Article status changed to published, triggering Instagram post for article ID ${id}`, 'instagram');
-        
+
         // Post to Instagram
         const instagramResult = await postArticleToInstagram(updatedArticle);
-        
+
         // Log the result of the Instagram post attempt 
         if (instagramResult.success) {
           log(`Successfully posted article to Instagram: ${updatedArticle.title}`, 'instagram');
-          
+
           // Add Instagram posting result to the response
           const responseWithInstagram = {
             ...updatedArticle,
@@ -270,11 +270,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               mediaId: instagramResult.mediaId
             }
           };
-          
+
           return res.json(responseWithInstagram);
         } else {
           log(`Failed to post article to Instagram: ${instagramResult.error}`, 'instagram');
-          
+
           // Still return the updated article but include the error information
           const responseWithInstagramError = {
             ...updatedArticle,
@@ -283,11 +283,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               error: instagramResult.error
             }
           };
-          
+
           return res.json(responseWithInstagramError);
         }
       }
-      
+
       // Return the updated article (if we didn't already return with Instagram info)
       res.json(updatedArticle);
     } catch (error) {
@@ -301,14 +301,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/articles/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       // Fetch article to check if it has an externalId to remove from Airtable
       const article = await storage.getArticle(id);
-      
+
       if (!article) {
         return res.status(404).json({ message: "Article not found" });
       }
-      
+
       // If the article has an externalId and is from Airtable, delete it from Airtable first
       if (article.externalId && article.source === 'airtable') {
         try {
@@ -316,7 +316,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
           const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
           const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-          
+
           if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value) {
             // Delete the record from Airtable using the imported function
             await deleteAirtableRecord(
@@ -325,17 +325,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               tableNameSetting.value,
               article.externalId
             );
-            
+
             console.log(`Successfully deleted article "${article.title}" (ID: ${article.externalId}) from Airtable`);
-            
+
             // Log the Airtable deletion activity
             await storage.createActivityLog({
               userId: req.user?.id,
               action: "delete",
               resourceType: "airtable_article",
               resourceId: article.externalId,
-              details: { 
-                id: article.id, 
+              details: {
+                id: article.id,
                 title: article.title,
                 externalId: article.externalId
               }
@@ -346,14 +346,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // We'll still proceed with the local deletion even if Airtable deletion fails
         }
       }
-      
+
       // Now delete from local database
       const success = await storage.deleteArticle(id);
-      
+
       if (!success) {
         return res.status(404).json({ message: "Failed to delete article from local database" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -362,7 +362,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
-      
+
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting article:", error);
@@ -403,11 +403,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const quote = await storage.getCarouselQuote(id);
-      
+
       if (!quote) {
         return res.status(404).json({ message: "Carousel quote not found" });
       }
-      
+
       res.json(quote);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch carousel quote" });
@@ -418,7 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertCarouselQuoteSchema.parse(req.body);
       const newQuote = await storage.createCarouselQuote(validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -427,7 +427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: newQuote.id.toString(),
         details: { quote: newQuote }
       });
-      
+
       res.status(201).json(newQuote);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -441,13 +441,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertCarouselQuoteSchema.partial().parse(req.body);
-      
+
       const updatedQuote = await storage.updateCarouselQuote(id, validatedData);
-      
+
       if (!updatedQuote) {
         return res.status(404).json({ message: "Carousel quote not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -456,7 +456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { quote: updatedQuote }
       });
-      
+
       res.json(updatedQuote);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -470,11 +470,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteCarouselQuote(id);
-      
+
       if (!success) {
         return res.status(404).json({ message: "Carousel quote not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -483,7 +483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
-      
+
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete carousel quote" });
@@ -505,9 +505,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Check if we need to filter by status, category or urgency
       const { status, category, urgency } = req.query;
-      
+
       let requests;
-      
+
       if (status) {
         requests = await storage.getAdminRequestsByStatus(status as string);
       } else if (category) {
@@ -517,7 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         requests = await storage.getAdminRequests();
       }
-      
+
       res.json(requests);
     } catch (error) {
       console.error("Error fetching admin requests", error);
@@ -528,17 +528,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin-requests/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
       }
-      
+
       const request = await storage.getAdminRequest(id);
-      
+
       if (!request) {
         return res.status(404).json({ message: "Admin request not found" });
       }
-      
+
       res.json(request);
     } catch (error) {
       console.error(`Error fetching admin request with ID ${req.params.id}`, error);
@@ -556,10 +556,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdAt: new Date(),
         ...(req.user ? { userId: req.user.id } : {})
       });
-      
+
       // Create admin request
       const request = await storage.createAdminRequest(validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id || null,
@@ -572,7 +572,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           urgency: request.urgency
         }
       });
-      
+
       res.status(201).json(request);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -584,31 +584,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
-  
+
   app.patch("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
       }
-      
+
       // Get current admin request
       const currentRequest = await storage.getAdminRequest(id);
-      
+
       if (!currentRequest) {
         return res.status(404).json({ message: "Admin request not found" });
       }
-      
+
       // Validate the update data using Zod
       const validatedData = insertAdminRequestSchema.partial().parse({
         ...req.body,
         updatedAt: new Date()
       });
-      
+
       // Update the request
       const updatedRequest = await storage.updateAdminRequest(id, validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id || null,
@@ -620,7 +620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           previousStatus: currentRequest.status
         }
       });
-      
+
       res.json(updatedRequest);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -634,25 +634,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      
+
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
       }
-      
+
       // Get current admin request for logging
       const request = await storage.getAdminRequest(id);
-      
+
       if (!request) {
         return res.status(404).json({ message: "Admin request not found" });
       }
-      
+
       // Delete the request
       const deleted = await storage.deleteAdminRequest(id);
-      
+
       if (!deleted) {
         return res.status(500).json({ message: "Failed to delete admin request" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id || null,
@@ -664,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           category: request.category
         }
       });
-      
+
       res.status(204).send();
     } catch (error) {
       console.error(`Error deleting admin request with ID ${req.params.id}`, error);
@@ -686,11 +686,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const asset = await storage.getImageAsset(id);
-      
+
       if (!asset) {
         return res.status(404).json({ message: "Image asset not found" });
       }
-      
+
       res.json(asset);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch image asset" });
@@ -701,7 +701,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertImageAssetSchema.parse(req.body);
       const newAsset = await storage.createImageAsset(validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -710,7 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: newAsset.id.toString(),
         details: { asset: newAsset }
       });
-      
+
       res.status(201).json(newAsset);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -724,11 +724,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteImageAsset(id);
-      
+
       if (!success) {
         return res.status(404).json({ message: "Image asset not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -737,7 +737,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
-      
+
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete image asset" });
@@ -760,11 +760,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const service = req.params.service;
       const key = req.params.key;
       const setting = await storage.getIntegrationSettingByKey(service, key);
-      
+
       if (!setting) {
         return res.status(404).json({ message: "Integration setting not found" });
       }
-      
+
       res.json(setting);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch integration setting" });
@@ -775,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const validatedData = insertIntegrationSettingSchema.parse(req.body);
       const newSetting = await storage.createIntegrationSetting(validatedData);
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -784,7 +784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: newSetting.id.toString(),
         details: { setting: newSetting }
       });
-      
+
       res.status(201).json(newSetting);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -798,13 +798,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const validatedData = insertIntegrationSettingSchema.partial().parse(req.body);
-      
+
       const updatedSetting = await storage.updateIntegrationSetting(id, validatedData);
-      
+
       if (!updatedSetting) {
         return res.status(404).json({ message: "Integration setting not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -813,7 +813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { setting: updatedSetting }
       });
-      
+
       res.json(updatedSetting);
     } catch (error) {
       if (error instanceof ZodError) {
@@ -827,11 +827,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const success = await storage.deleteIntegrationSetting(id);
-      
+
       if (!success) {
         return res.status(404).json({ message: "Integration setting not found" });
       }
-      
+
       // Log activity
       await storage.createActivityLog({
         userId: req.user?.id,
@@ -840,7 +840,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
-      
+
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete integration setting" });
@@ -859,13 +859,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
 
-// Metrics endpoints for dashboard
+  // Metrics endpoints for dashboard
   app.get("/api/metrics", isAuthenticated, async (req, res) => {
     try {
       const allArticles = await storage.getArticles();
       const pendingArticles = await storage.getArticlesByStatus("pending");
       const draftArticles = await storage.getArticlesByStatus("draft");
-      
+
       // Published today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -874,7 +874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const publishDate = new Date(article.publishedAt);
         return publishDate >= today;
       });
-      
+
       // Calculate growth (simple placeholder)
       const lastMonth = new Date();
       lastMonth.setMonth(lastMonth.getMonth() - 1);
@@ -883,15 +883,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const createDate = new Date(article.createdAt);
         return createDate < today && createDate >= lastMonth;
       });
-      
+
       const totalArticles = allArticles.length;
       const articleGrowth = articlesLastMonth.length > 0
         ? Math.round((publishedToday.length / articlesLastMonth.length) * 100)
         : 0;
-      
+
       // Get migration progress data
       const migrationProgress = getMigrationProgress();
-      
+
       const metrics = {
         totalArticles,
         pendingArticles: pendingArticles.length,
@@ -900,13 +900,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         articleGrowth: `${articleGrowth}%`,
         migration: migrationProgress
       };
-      
+
       res.json(metrics);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch metrics" });
     }
   });
-  
+
   // Endpoint to get just migration progress
   app.get("/api/migration-progress", (req, res) => {
     try {
@@ -914,12 +914,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      
+
       const progress = getMigrationProgress();
       res.json(progress);
     } catch (error) {
       console.error('Error getting migration progress:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Failed to fetch migration progress',
         message: error instanceof Error ? error.message : String(error)
       });
@@ -933,12 +933,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      
+
       const apiStatuses = await getAllApiStatuses();
       res.json(apiStatuses);
     } catch (error) {
       console.error('Error fetching API statuses:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: 'Failed to fetch API statuses',
         error: error instanceof Error ? error.message : String(error)
       });
@@ -949,7 +949,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/integration-status', isAuthenticated, async (req, res) => {
     try {
       const apiStatuses = await getAllApiStatuses();
-      
+
       // Transform the API status data to match what the Keys page expects
       const integrationStatuses = apiStatuses.statuses.map(status => ({
         name: status.name.toLowerCase(),
@@ -957,21 +957,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastChecked: status.lastChecked.toISOString(),
         error: status.message
       }));
-      
+
       res.json(integrationStatuses);
     } catch (error) {
       console.error('Error fetching integration statuses:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         message: 'Failed to fetch integration statuses',
         error: error instanceof Error ? error.message : String(error)
       });
     }
   });
 
+  // Facebook OAuth callback route
+  app.get('/auth/facebook/callback', (req, res) => {
+    // This route handles OAuth redirects from Facebook
+    // The Facebook SDK will handle the token exchange client-side
+    // This route can be used for additional server-side processing if needed
+    res.redirect('/?auth=success');
+  });
+
   // Expose Facebook App ID to frontend
   app.get('/api/config/facebook', (req, res) => {
     const appId = process.env.FACEBOOK_APP_ID;
-    
+
     if (!appId) {
       // Return a structured error response
       return res.status(503).json({
@@ -980,10 +988,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         code: 'FB_APP_ID_MISSING'
       });
     }
-    
-    res.json({ 
+
+    res.json({
       status: 'success',
-      appId 
+      appId
     });
   });
 
@@ -996,7 +1004,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   setupImgBBRoutes(app);
   registerAirtableTestRoutes(app);
-  
+
   // Auto-start Discord bot if settings are available
   autoStartDiscordBot();
 

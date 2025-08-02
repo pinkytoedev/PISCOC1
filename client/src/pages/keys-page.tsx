@@ -8,21 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
-import { 
-  Key, 
-  ExternalLink, 
-  CheckCircle, 
-  AlertCircle, 
-  Copy, 
+import {
+  Key,
+  ExternalLink,
+  CheckCircle,
+  AlertCircle,
+  Copy,
   Settings,
   Database,
   Bot,
@@ -60,12 +60,16 @@ export default function KeysPage() {
   const [copiedKey, setCopiedKey] = useState<string>("");
 
   // Fetch integration statuses
-  const { data: integrations, isLoading } = useQuery({
+  const { data: integrations, isLoading, refetch } = useQuery({
     queryKey: ["integration-status"],
     queryFn: async () => {
-      const response = await apiRequest("/api/integration-status");
-      return response as IntegrationStatus[];
+      const response = await apiRequest("GET", "/api/integration-status");
+      return await response.json() as IntegrationStatus[];
     },
+    staleTime: 0, // Always refetch
+    gcTime: 0, // Don't cache
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   const apiKeys: ApiKeyInfo[] = [
@@ -142,7 +146,7 @@ export default function KeysPage() {
       envVar: "IMGUR_CLIENT_ID",
       description: "Imgur API credentials for image hosting and management",
       required: false,
-      configured: integrations?.find(i => i.name === "imgur")?.configured ?? false,
+      configured: integrations?.find(i => i.name === "imgbb")?.configured ?? false,
       setupUrl: "https://api.imgur.com/oauth2/addclient",
       icon: <Image className="h-5 w-5" />,
       category: "storage",
@@ -225,6 +229,16 @@ export default function KeysPage() {
   const requiredKeysCount = apiKeys.filter(key => key.required).length;
   const configuredKeysCount = apiKeys.filter(key => key.configured).length;
 
+  // Debug logging
+  console.log('Integration API data:', integrations);
+  console.log('API Keys mapping:', apiKeys.map(key => ({
+    name: key.name,
+    configured: key.configured,
+    lookingFor: key.name === "Imgur API" ? "imgbb" : key.name.toLowerCase()
+  })));
+  console.log('Configured count:', configuredKeysCount);
+  console.log('Total count:', apiKeys.length);
+
   return (
     <div className="flex min-h-screen w-full bg-muted/40">
       <Sidebar />
@@ -232,7 +246,7 @@ export default function KeysPage() {
         <Header />
         <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8 lg:grid-cols-3 xl:grid-cols-3">
           <div className="mx-auto grid max-w-[59rem] flex-1 auto-rows-max gap-4 lg:col-span-3">
-            
+
             {/* Header */}
             <div className="flex items-center gap-4">
               <div className="grid gap-1">
@@ -249,13 +263,34 @@ export default function KeysPage() {
             {/* Status Overview */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Configuration Status
-                </CardTitle>
-                <CardDescription>
-                  Overview of your integration configuration
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Settings className="h-5 w-5" />
+                      Configuration Status
+                    </CardTitle>
+                    <CardDescription>
+                      Overview of your integration configuration
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => refetch()}
+                      disabled={isLoading}
+                      className="flex items-center gap-2"
+                    >
+                      <Code2 className="h-4 w-4" />
+                      {isLoading ? "Checking..." : "Refresh"}
+                    </Button>
+                    {/* Debug info */}
+                    <div className="text-xs text-muted-foreground flex flex-col">
+                      <div>API: {integrations?.filter(i => i.configured).length || 0}/{integrations?.length || 0}</div>
+                      <div>UI: {configuredKeysCount}/{apiKeys.length}</div>
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -276,7 +311,7 @@ export default function KeysPage() {
                     <div className="text-sm text-muted-foreground">Optional</div>
                   </div>
                 </div>
-                
+
                 {configuredKeysCount < requiredKeysCount && (
                   <Alert className="mt-4">
                     <AlertCircle className="h-4 w-4" />
@@ -355,7 +390,7 @@ export default function KeysPage() {
                           <div>
                             <strong>Environment Variable:</strong> <code className="bg-muted px-2 py-1 rounded text-sm">{key.envVar}</code>
                           </div>
-                          
+
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button variant="ghost" size="sm" className="flex items-center gap-2">
@@ -416,19 +451,19 @@ export default function KeysPage() {
                     <h4 className="font-semibold mb-2">1. Copy Environment Template</h4>
                     <code className="block bg-muted p-2 rounded text-sm">cp .env.example .env</code>
                   </div>
-                  
+
                   <div>
                     <h4 className="font-semibold mb-2">2. Configure Required Keys</h4>
                     <p className="text-sm text-muted-foreground">
                       At minimum, configure DATABASE_URL, DISCORD_BOT_TOKEN, and SESSION_SECRET to get started.
                     </p>
                   </div>
-                  
+
                   <div>
                     <h4 className="font-semibold mb-2">3. Initialize Database</h4>
                     <code className="block bg-muted p-2 rounded text-sm">npm run db:push</code>
                   </div>
-                  
+
                   <div>
                     <h4 className="font-semibold mb-2">4. Start Development</h4>
                     <code className="block bg-muted p-2 rounded text-sm">npm run dev</code>

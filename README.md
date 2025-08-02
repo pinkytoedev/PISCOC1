@@ -187,11 +187,35 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 
 ## 🔧 Available Scripts
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start development server (HTTP)
+- `npm run dev:https` - Start development server with HTTPS (required for Facebook Login)
+- `npm run setup:https` - Generate HTTPS certificates for local development
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run check` - Run TypeScript type checking
 - `npm run db:push` - Push database schema changes
+
+### 🔒 HTTPS Setup for Facebook Integration
+
+Facebook requires HTTPS for OAuth login. To enable this in development:
+
+1. **Generate HTTPS certificates**:
+   ```bash
+   npm run setup:https
+   ```
+
+2. **Start HTTPS development server**:
+   ```bash
+   npm run dev:https
+   ```
+
+3. **Access your app**:
+   - **For development**: Use `http://localhost:3000` (Facebook SDK now works properly)
+   - **For Facebook testing**: Use `https://localhost:3001` (may show WebSocket warnings - these are safe to ignore)
+
+4. **Accept the security warning** when visiting `https://localhost:3001` (this is safe for localhost development)
+
+> **Note**: The WebSocket warnings in the console when using HTTPS are harmless and don't affect Facebook functionality. For regular development, use HTTP. Use HTTPS only when testing Facebook Login specifically.
 
 ## 🔐 Authentication
 

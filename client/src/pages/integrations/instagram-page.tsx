@@ -9,13 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import DebugEnv from '@/components/DebugEnv';
-import { 
-  CheckCircle2, 
-  XCircle, 
-  LogIn, 
-  LogOut, 
-  RefreshCcw, 
-  Instagram, 
+import {
+  CheckCircle2,
+  XCircle,
+  LogIn,
+  LogOut,
+  RefreshCcw,
+  Instagram,
   Bell,
   MessageCircle,
   Image,
@@ -37,19 +37,19 @@ import { Sidebar } from '@/components/layout/sidebar';
  */
 export default function InstagramPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { 
-    isInitialized, 
-    status, 
-    user, 
-    accessToken, 
+  const {
+    isInitialized,
+    status,
+    user,
+    accessToken,
     initializationError,
-    login, 
-    logout 
+    login,
+    logout
   } = useFacebook();
-  
+
   // States for Instagram data
   const [webhooks, setWebhooks] = useState<any[]>([]);
-  const [webhookFields, setWebhookFields] = useState<{[key: string]: string[]}>({});
+  const [webhookFields, setWebhookFields] = useState<{ [key: string]: string[] }>({});
   const [webhookEvents, setWebhookEvents] = useState<any[]>([]);
   const [webhookTestResult, setWebhookTestResult] = useState<any>(null);
   const [isLoadingWebhooks, setIsLoadingWebhooks] = useState(false);
@@ -69,27 +69,27 @@ export default function InstagramPage() {
     if (isInitialized) {
       fetchWebhookData();
       fetchWebhookEvents();
-      
+
       // Only fetch Instagram account and posts if user is logged in
       if (status === 'connected' && accessToken) {
         // Store the token when the user connects
         storeAccessToken(accessToken);
-        
+
         // Then fetch Instagram data
         fetchInstagramAccount();
         fetchInstagramPosts();
       }
     }
   }, [isInitialized, status, accessToken]);
-  
+
   // Function to fetch webhook events
   const fetchWebhookEvents = async () => {
     setIsLoadingEvents(true);
-    
+
     try {
       const response = await fetch('/api/instagram/webhooks/logs');
       const data = await response.json();
-      
+
       setWebhookEvents(data);
     } catch (err) {
       console.error('Error fetching webhook events:', err);
@@ -103,16 +103,16 @@ export default function InstagramPage() {
   const fetchWebhookData = async () => {
     setIsLoadingWebhooks(true);
     setError(null);
-    
+
     try {
       // Fetch webhook subscriptions
       const subscriptionsRes = await fetch('/api/instagram/webhooks/subscriptions');
       const subscriptions = await subscriptionsRes.json();
-      
+
       // Fetch webhook field groups
       const fieldsRes = await fetch('/api/instagram/webhooks/field-groups');
       const fields = await fieldsRes.json();
-      
+
       setWebhooks(subscriptions);
       setWebhookFields(fields);
     } catch (err) {
@@ -126,10 +126,26 @@ export default function InstagramPage() {
   // Handle Facebook login
   const handleLogin = () => {
     console.log('Login requested, SDK initialized:', isInitialized);
-    
+
     // Clear any previous errors
     setError(null);
-    
+
+    // Additional safety check for SDK initialization
+    if (!isInitialized) {
+      const errorMsg = 'Facebook SDK is still initializing. Please wait a moment and try again.';
+      console.warn(errorMsg);
+      setError(errorMsg);
+      return;
+    }
+
+    // Additional check for window.FB availability
+    if (typeof window !== 'undefined' && (!window.FB || typeof window.FB.login !== 'function')) {
+      const errorMsg = 'Facebook SDK is not properly loaded. Please refresh the page and try again.';
+      console.error(errorMsg);
+      setError(errorMsg);
+      return;
+    }
+
     login(
       () => {
         console.log('Login successful');
@@ -145,10 +161,10 @@ export default function InstagramPage() {
   // Handle Facebook logout
   const handleLogout = () => {
     console.log('Logout requested, SDK initialized:', isInitialized);
-    
+
     // Clear any previous errors
     setError(null);
-    
+
     logout(() => {
       console.log('Logout successful');
       setError(null);
@@ -161,18 +177,18 @@ export default function InstagramPage() {
       setError(`Invalid field group: ${fieldGroup}`);
       return;
     }
-    
+
     try {
       // Log domain information for debugging
       console.log('Current hostname:', window.location.hostname);
       console.log('Current origin:', window.location.origin);
-      
+
       // For testing on Replit, we need a publicly accessible URL
       // This domain needs to be registered in your Facebook App settings
       const baseUrl = window.location.origin;
       console.log('Using base URL for callback:', baseUrl);
       const callbackUrl = `${baseUrl}/api/instagram/webhooks/callback`;
-      
+
       const response = await fetch('/api/instagram/webhooks/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,7 +197,7 @@ export default function InstagramPage() {
           callbackUrl
         })
       });
-      
+
       // Try to get JSON response even for error cases
       let responseData;
       try {
@@ -191,7 +207,7 @@ export default function InstagramPage() {
         const text = await response.text();
         responseData = { message: text || response.statusText };
       }
-      
+
       if (!response.ok) {
         // Format specific error codes from backend
         if (responseData.code === 'NO_ACCESS_TOKEN') {
@@ -202,7 +218,7 @@ export default function InstagramPage() {
           throw new Error(`Failed to subscribe: ${response.statusText}`);
         }
       }
-      
+
       // Success!
       setError(null);
       fetchWebhookData();
@@ -218,7 +234,7 @@ export default function InstagramPage() {
       const response = await fetch(`/api/instagram/webhooks/subscriptions/${subscriptionId}`, {
         method: 'DELETE'
       });
-      
+
       // Try to get JSON response even for error cases
       let responseData;
       try {
@@ -228,7 +244,7 @@ export default function InstagramPage() {
         const text = await response.text();
         responseData = { message: text || response.statusText };
       }
-      
+
       if (!response.ok) {
         if (responseData.message) {
           throw new Error(responseData.message);
@@ -236,7 +252,7 @@ export default function InstagramPage() {
           throw new Error(`Failed to unsubscribe: ${response.statusText}`);
         }
       }
-      
+
       // Success!
       setError(null);
       fetchWebhookData();
@@ -259,7 +275,7 @@ export default function InstagramPage() {
           userId: user?.id,
         }),
       });
-      
+
       if (!response.ok) {
         console.error('Failed to store access token:', await response.text());
       }
@@ -267,15 +283,15 @@ export default function InstagramPage() {
       console.error('Error storing access token:', err);
     }
   };
-  
+
   // Fetch Instagram account information
   const fetchInstagramAccount = async () => {
     setIsLoadingAccount(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/instagram/account');
-      
+
       // Try to get JSON response even for error cases
       let responseData;
       try {
@@ -285,7 +301,7 @@ export default function InstagramPage() {
         const text = await response.text();
         responseData = { message: text || response.statusText };
       }
-      
+
       if (!response.ok) {
         // Do not show error for "NO_ACCESS_TOKEN" since we handle auth separately
         if (responseData.code !== 'NO_ACCESS_TOKEN') {
@@ -299,7 +315,7 @@ export default function InstagramPage() {
         }
         return;
       }
-      
+
       setInstagramAccount(responseData);
     } catch (err) {
       console.error('Error fetching Instagram account:', err);
@@ -308,15 +324,15 @@ export default function InstagramPage() {
       setIsLoadingAccount(false);
     }
   };
-  
+
   // Fetch Instagram media posts
   const fetchInstagramPosts = async () => {
     setIsLoadingPosts(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/instagram/media');
-      
+
       // Try to get JSON response even for error cases
       let responseData;
       try {
@@ -327,7 +343,7 @@ export default function InstagramPage() {
         responseData = { message: text || response.statusText };
         throw new Error(responseData.message);
       }
-      
+
       if (!response.ok) {
         // Do not show error for "NO_ACCESS_TOKEN" since we handle auth separately
         if (responseData.code !== 'NO_ACCESS_TOKEN') {
@@ -339,7 +355,7 @@ export default function InstagramPage() {
         }
         return;
       }
-      
+
       setInstagramPosts(responseData);
     } catch (err) {
       console.error('Error fetching Instagram posts:', err);
@@ -348,17 +364,17 @@ export default function InstagramPage() {
       setIsLoadingPosts(false);
     }
   };
-  
+
   // Create a new Instagram post
   const createInstagramPost = async () => {
     if (!postImageUrl) {
       setError('Image URL is required to create an Instagram post.');
       return;
     }
-    
+
     setIsCreatingPost(true);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/instagram/media', {
         method: 'POST',
@@ -370,7 +386,7 @@ export default function InstagramPage() {
           caption: postCaption,
         }),
       });
-      
+
       // Try to get JSON response even for error cases
       let responseData;
       try {
@@ -380,7 +396,7 @@ export default function InstagramPage() {
         const text = await response.text();
         responseData = { message: text || response.statusText };
       }
-      
+
       if (!response.ok) {
         if (responseData.code === 'NO_ACCESS_TOKEN') {
           throw new Error('Facebook access token is missing. Please connect with Facebook first.');
@@ -392,12 +408,12 @@ export default function InstagramPage() {
           throw new Error(`Failed to create Instagram post: ${response.statusText}`);
         }
       }
-      
+
       // Success!
       setPostImageUrl('');
       setPostCaption('');
       fetchInstagramPosts(); // Refresh the posts list
-      
+
     } catch (err) {
       console.error('Error creating Instagram post:', err);
       setError(err instanceof Error ? err.message : 'Failed to create Instagram post.');
@@ -411,10 +427,10 @@ export default function InstagramPage() {
     setIsTestingWebhook(true);
     setWebhookTestResult(null);
     setError(null);
-    
+
     try {
       const response = await fetch('/api/instagram/webhooks/test');
-      
+
       // Try to get JSON response even for error cases
       let responseData;
       try {
@@ -424,7 +440,7 @@ export default function InstagramPage() {
         const text = await response.text();
         responseData = { message: text || response.statusText, success: false };
       }
-      
+
       if (!response.ok) {
         if (responseData.message) {
           throw new Error(responseData.message);
@@ -432,7 +448,7 @@ export default function InstagramPage() {
           throw new Error(`Failed to test webhook connection: ${response.statusText}`);
         }
       }
-      
+
       // Success!
       setWebhookTestResult(responseData);
     } catch (err) {
@@ -446,14 +462,14 @@ export default function InstagramPage() {
   // Main component render
   return (
     <div className="flex flex-col min-h-screen">
-      <Header 
-        title="Instagram Integration" 
-        onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)} 
+      <Header
+        title="Instagram Integration"
+        onMobileMenuToggle={() => setMobileMenuOpen(!mobileMenuOpen)}
       />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
-          mobileOpen={mobileMenuOpen} 
-          onMobileClose={() => setMobileMenuOpen(false)} 
+        <Sidebar
+          mobileOpen={mobileMenuOpen}
+          onMobileClose={() => setMobileMenuOpen(false)}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50 p-6">
           <div className="container mx-auto">
@@ -471,12 +487,12 @@ export default function InstagramPage() {
                 </li>
               </ol>
             </nav>
-            
+
             <h1 className="text-3xl font-bold mb-6 flex items-center">
               <Instagram className="mr-2" />
               Instagram Integration
             </h1>
-      
+
             {/* Facebook Authentication Card */}
             <Card className="mb-8">
               <CardHeader>
@@ -503,9 +519,9 @@ export default function InstagramPage() {
                   <div className="rounded-lg bg-muted p-4 mb-4">
                     <div className="flex items-center">
                       {user.picture && (
-                        <img 
-                          src={user.picture.data.url} 
-                          alt={user.name || 'User'} 
+                        <img
+                          src={user.picture.data.url}
+                          alt={user.name || 'User'}
                           className="w-12 h-12 rounded-full mr-4"
                         />
                       )}
@@ -516,7 +532,7 @@ export default function InstagramPage() {
                     </div>
                   </div>
                 )}
-                
+
                 {/* Display SDK initialization errors */}
                 {initializationError && (
                   <Alert variant="destructive" className="mb-4">
@@ -525,7 +541,7 @@ export default function InstagramPage() {
                     <AlertDescription>{initializationError}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 {/* Display other errors */}
                 {error && (
                   <Alert variant="destructive" className="mb-4">
@@ -534,7 +550,7 @@ export default function InstagramPage() {
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 {/* Facebook in Replit notice */}
                 <Alert className="mb-4">
                   <Info className="h-4 w-4" />
@@ -557,9 +573,13 @@ export default function InstagramPage() {
                     Disconnect
                   </Button>
                 ) : (
-                  <Button onClick={handleLogin}>
+                  <Button
+                    onClick={handleLogin}
+                    disabled={!isInitialized}
+                    title={!isInitialized ? 'Facebook SDK is initializing...' : ''}
+                  >
                     <LogIn className="mr-2 h-4 w-4" />
-                    Connect with Facebook
+                    {!isInitialized ? 'Initializing...' : 'Connect with Facebook'}
                   </Button>
                 )}
               </CardFooter>
@@ -574,7 +594,7 @@ export default function InstagramPage() {
                 <TabsTrigger value="events">Recent Events</TabsTrigger>
                 <TabsTrigger value="test">Diagnostic Tests</TabsTrigger>
               </TabsList>
-              
+
               {/* Media Tab */}
               <TabsContent value="media">
                 <Card>
@@ -602,17 +622,17 @@ export default function InstagramPage() {
                           <div key={post.id} className="border rounded-md overflow-hidden">
                             {post.media_url && (
                               <div className="aspect-square relative overflow-hidden">
-                                <img 
-                                  src={post.media_url} 
-                                  alt={post.caption || 'Instagram post'} 
+                                <img
+                                  src={post.media_url}
+                                  alt={post.caption || 'Instagram post'}
                                   className="w-full h-full object-cover"
                                 />
                                 <div className="absolute top-2 right-2">
                                   <Badge>
-                                    {post.media_type === 'IMAGE' ? 'Photo' : 
-                                     post.media_type === 'VIDEO' ? 'Video' : 
-                                     post.media_type === 'CAROUSEL_ALBUM' ? 'Album' : 
-                                     post.media_type}
+                                    {post.media_type === 'IMAGE' ? 'Photo' :
+                                      post.media_type === 'VIDEO' ? 'Video' :
+                                        post.media_type === 'CAROUSEL_ALBUM' ? 'Album' :
+                                          post.media_type}
                                   </Badge>
                                 </div>
                               </div>
@@ -627,10 +647,10 @@ export default function InstagramPage() {
                                   {new Date(post.timestamp).toLocaleDateString()}
                                 </span>
                                 {post.permalink && (
-                                  <a 
-                                    href={post.permalink} 
-                                    target="_blank" 
-                                    rel="noreferrer" 
+                                  <a
+                                    href={post.permalink}
+                                    target="_blank"
+                                    rel="noreferrer"
                                     className="text-blue-500 hover:underline"
                                   >
                                     View on Instagram
@@ -651,9 +671,9 @@ export default function InstagramPage() {
                     )}
                   </CardContent>
                   <CardFooter>
-                    <Button 
-                      variant="outline" 
-                      onClick={fetchInstagramPosts} 
+                    <Button
+                      variant="outline"
+                      onClick={fetchInstagramPosts}
                       disabled={isLoadingPosts || !status || status !== 'connected'}
                     >
                       <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingPosts ? 'animate-spin' : ''}`} />
@@ -662,7 +682,7 @@ export default function InstagramPage() {
                   </CardFooter>
                 </Card>
               </TabsContent>
-              
+
               {/* Create Post Tab */}
               <TabsContent value="create">
                 <Card>
@@ -697,7 +717,7 @@ export default function InstagramPage() {
                             Enter the URL of an image to post. The image must be publicly accessible.
                           </p>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <label className="text-sm font-medium">Caption</label>
                           <textarea
@@ -707,7 +727,7 @@ export default function InstagramPage() {
                             className="w-full h-32 p-2 border rounded-md"
                           />
                         </div>
-                        
+
                         <Button
                           onClick={createInstagramPost}
                           disabled={isCreatingPost || !postImageUrl}
@@ -720,7 +740,7 @@ export default function InstagramPage() {
                           )}
                           {isCreatingPost ? 'Creating Post...' : 'Create Post'}
                         </Button>
-                        
+
                         <div className="rounded-lg border p-4">
                           <h3 className="font-medium flex items-center">
                             <Info className="mr-2 h-4 w-4" />
@@ -741,7 +761,7 @@ export default function InstagramPage() {
                   </CardContent>
                 </Card>
               </TabsContent>
-              
+
               {/* Webhooks Tab */}
               <TabsContent value="subscriptions">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -761,8 +781,8 @@ export default function InstagramPage() {
                       ) : webhooks.length > 0 ? (
                         <div className="space-y-4">
                           {webhooks.map((webhook) => (
-                            <div 
-                              key={webhook.subscription_id} 
+                            <div
+                              key={webhook.subscription_id}
                               className="rounded-lg border p-4 relative"
                             >
                               <div className="absolute top-2 right-2">
@@ -780,7 +800,7 @@ export default function InstagramPage() {
                                   const isObjectField = typeof field === 'object' && field !== null;
                                   const fieldName = isObjectField && field.name ? field.name : field;
                                   const fieldVersion = isObjectField && field.version ? field.version : null;
-                                  
+
                                   return (
                                     <Badge key={`field-${index}-${fieldName}`} variant="outline">
                                       {fieldName}
@@ -811,9 +831,9 @@ export default function InstagramPage() {
                       )}
                     </CardContent>
                     <CardFooter>
-                      <Button 
-                        variant="outline" 
-                        onClick={fetchWebhookData} 
+                      <Button
+                        variant="outline"
+                        onClick={fetchWebhookData}
                         disabled={isLoadingWebhooks}
                       >
                         <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingWebhooks ? 'animate-spin' : ''}`} />
@@ -904,7 +924,7 @@ export default function InstagramPage() {
                   </Card>
                 </div>
               </TabsContent>
-              
+
               {/* Events Tab */}
               <TabsContent value="events">
                 <Card>
@@ -934,7 +954,7 @@ export default function InstagramPage() {
                                   {new Date(event.timestamp || Date.now()).toLocaleString()}
                                 </div>
                               </div>
-                              
+
                               <pre className="bg-muted p-3 rounded-md overflow-x-auto text-xs">
                                 {JSON.stringify(event.payload || event, null, 2)}
                               </pre>
@@ -949,9 +969,9 @@ export default function InstagramPage() {
                     )}
                   </CardContent>
                   <CardFooter>
-                    <Button 
-                      variant="outline" 
-                      onClick={fetchWebhookEvents} 
+                    <Button
+                      variant="outline"
+                      onClick={fetchWebhookEvents}
                       disabled={isLoadingEvents}
                     >
                       <RefreshCcw className={`mr-2 h-4 w-4 ${isLoadingEvents ? 'animate-spin' : ''}`} />
@@ -960,7 +980,7 @@ export default function InstagramPage() {
                   </CardFooter>
                 </Card>
               </TabsContent>
-              
+
               {/* Test Tab */}
               <TabsContent value="test">
                 <Card>
@@ -984,7 +1004,7 @@ export default function InstagramPage() {
                             )}
                             {webhookTestResult.message}
                           </h3>
-                          
+
                           <div className="grid grid-cols-2 gap-4 mb-4">
                             <div className="space-y-2">
                               <div className="flex items-center">
@@ -995,7 +1015,7 @@ export default function InstagramPage() {
                                 )}
                                 <span>Facebook App ID</span>
                               </div>
-                              
+
                               <div className="flex items-center">
                                 {webhookTestResult.appSecret ? (
                                   <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
@@ -1005,7 +1025,7 @@ export default function InstagramPage() {
                                 <span>Facebook App Secret</span>
                               </div>
                             </div>
-                            
+
                             <div className="space-y-2">
                               <div className="flex items-center">
                                 {webhookTestResult.accessToken ? (
@@ -1015,7 +1035,7 @@ export default function InstagramPage() {
                                 )}
                                 <span>User Access Token</span>
                               </div>
-                              
+
                               <div className="flex items-center">
                                 {webhookTestResult.appAccessToken ? (
                                   <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
@@ -1026,7 +1046,7 @@ export default function InstagramPage() {
                               </div>
                             </div>
                           </div>
-                          
+
                           {webhookTestResult.details && (
                             <div className="mt-4">
                               <h4 className="text-sm font-medium mb-2">Additional Details</h4>
@@ -1037,7 +1057,7 @@ export default function InstagramPage() {
                           )}
                         </div>
                       )}
-                      
+
                       <div className="rounded-lg border p-4">
                         <h3 className="font-medium flex items-center">
                           <TestTube className="mr-2 h-4 w-4" />
@@ -1058,7 +1078,7 @@ export default function InstagramPage() {
                           Run Test
                         </Button>
                       </div>
-                      
+
                       <div className="rounded-lg border p-4">
                         <h3 className="font-medium flex items-center">
                           <Info className="mr-2 h-4 w-4" />
@@ -1077,8 +1097,8 @@ export default function InstagramPage() {
                     </div>
                   </CardContent>
                   <CardFooter>
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => setWebhookTestResult(null)}
                       disabled={!webhookTestResult || isTestingWebhook}
                     >

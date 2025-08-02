@@ -63,27 +63,56 @@ function Router() {
       </Route>
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
-      
+
       {/* Public upload routes - these don't require auth */}
       <Route path="/public-upload/:uploadType/:token" component={PublicUploadPage} />
-      
+
       <Route component={NotFound} />
     </Switch>
   );
 }
 
 function App() {
-  // Use the hardcoded Facebook App ID directly to fix the initialization issue
-  const [facebookAppId, setFacebookAppId] = useState<string>('1776254399859599');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [facebookAppId, setFacebookAppId] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Add some debugging to help understand environment variables
-    console.log('Facebook App ID set:', facebookAppId);
-    console.log('Environment variables available:', import.meta.env);
-  }, [facebookAppId]);
+    // Fetch Facebook App ID from environment or server
+    const envAppId = import.meta.env.VITE_FACEBOOK_APP_ID;
 
-  // No need for loading state since we hardcode the App ID
+    if (envAppId) {
+      setFacebookAppId(envAppId);
+      setIsLoading(false);
+      console.log('Facebook App ID loaded from environment:', envAppId);
+    } else {
+      // Fallback to server API
+      fetch('/api/config/facebook')
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === 'success' && data.appId) {
+            setFacebookAppId(data.appId);
+          } else {
+            console.warn('Facebook integration not configured');
+            // Use hardcoded fallback for development
+            setFacebookAppId('1776254399859599');
+          }
+        })
+        .catch(error => {
+          console.error('Failed to fetch Facebook config:', error);
+          // Use hardcoded fallback for development
+          setFacebookAppId('1776254399859599');
+        })
+        .finally(() => setIsLoading(false));
+    }
+  }, []);
+
+  if (isLoading) {
+    return <div>Loading Facebook configuration...</div>;
+  }
+
+  if (!facebookAppId) {
+    return <div>Facebook integration not configured. Please set FACEBOOK_APP_ID environment variable.</div>;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -1,8 +1,10 @@
+import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import path from "path";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupStaticServing } from "./middleware/staticMiddleware";
+import { setupHTTPS } from "./https-dev";
 
 const app = express();
 app.use(express.json());
@@ -99,6 +101,11 @@ app.use((req, res, next) => {
 
   try {
     await startServer();
+
+    // Also setup HTTPS for Facebook SDK in development
+    if (app.get("env") === "development") {
+      setupHTTPS(app, 3001);
+    }
   } catch (error) {
     log('❌ Failed to start server on any available port');
     process.exit(1);
