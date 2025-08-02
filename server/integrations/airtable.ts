@@ -677,6 +677,18 @@ export function setupAirtableRoutes(app: Express) {
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
 
       console.log(`Airtable sync: Received ${response.records.length} records from Airtable`);
+      
+      // Log first few records to see the data structure
+      if (response.records.length > 0) {
+        console.log("Sample Airtable record structure (first record):");
+        console.log(JSON.stringify(response.records[0], null, 2));
+        
+        // Log all field names from the first record
+        if (response.records[0].fields) {
+          console.log("Available fields in Airtable records:");
+          console.log(Object.keys(response.records[0].fields));
+        }
+      }
 
       const syncResults = {
         created: 0,
@@ -690,8 +702,10 @@ export function setupAirtableRoutes(app: Express) {
         try {
           const fields = record.fields;
 
-          // Debug log to see what fields we're actually receiving from Airtable
-          console.log(`Processing Airtable record ${record.id}, fields:`, JSON.stringify(fields));
+          // Debug log - only log first 3 records to avoid spam
+          if (syncResults.created + syncResults.updated + syncResults.errors < 3) {
+            console.log(`Processing Airtable record ${record.id}, fields:`, JSON.stringify(fields));
+          }
 
           // Create default values for all required fields
           const defaultTitle = `Untitled Article (ID: ${record.id})`;
@@ -700,20 +714,53 @@ export function setupAirtableRoutes(app: Express) {
           const defaultImageUrl = "https://placehold.co/600x400?text=No+Image";
           const defaultAuthor = "Unknown Author";
 
+          // Check if fields object is empty or has unexpected structure
+          const fieldCount = Object.keys(fields).length;
+          if (fieldCount === 0) {
+            console.warn(`Record ${record.id} has no fields!`);
+            syncResults.errors++;
+            syncResults.details.push(`Record ${record.id}: No fields found in record`);
+            continue;
+          }
+
           // Apply defaults for missing fields and log what we're doing
           if (!fields.Name) {
-            fields.Name = defaultTitle;
-            syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
+            // Check if there might be a lowercase version or different field name
+            const possibleNameFields = ['name', 'title', 'Title', 'NAME'];
+            const foundNameField = possibleNameFields.find(f => fields[f]);
+            if (foundNameField) {
+              fields.Name = fields[foundNameField];
+              console.log(`Record ${record.id}: Using '${foundNameField}' field for Name`);
+            } else {
+              fields.Name = defaultTitle;
+              syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
+            }
           }
 
           if (!fields.Body) {
-            fields.Body = defaultContent;
-            syncResults.details.push(`Record ${record.id}: Missing Body, using default`);
+            // Check for alternative field names
+            const possibleBodyFields = ['body', 'content', 'Content', 'BODY'];
+            const foundBodyField = possibleBodyFields.find(f => fields[f]);
+            if (foundBodyField) {
+              fields.Body = fields[foundBodyField];
+              console.log(`Record ${record.id}: Using '${foundBodyField}' field for Body`);
+            } else {
+              fields.Body = defaultContent;
+              syncResults.details.push(`Record ${record.id}: Missing Body, using default`);
+            }
           }
 
           if (!fields.Description) {
-            fields.Description = defaultDescription;
-            syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
+            // Check for alternative field names
+            const possibleDescFields = ['description', 'desc', 'Desc', 'DESCRIPTION'];
+            const foundDescField = possibleDescFields.find(f => fields[f]);
+            if (foundDescField) {
+              fields.Description = fields[foundDescField];
+              console.log(`Record ${record.id}: Using '${foundDescField}' field for Description`);
+            } else {
+              fields.Description = defaultDescription;
+              syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
+            }
           }
 
           // Use helper function that correctly prioritizes the link fields over attachment fields
@@ -848,6 +895,20 @@ export function setupAirtableRoutes(app: Express) {
           results: syncResults
         }
       });
+
+      // Log summary of what was synced
+      console.log("\n=== Airtable Sync Summary ===");
+      console.log(`Total records from Airtable: ${response.records.length}`);
+      console.log(`Created: ${syncResults.created}`);
+      console.log(`Updated: ${syncResults.updated}`);
+      console.log(`Errors: ${syncResults.errors}`);
+      
+      // Show sample of synced data
+      if (syncResults.details.length > 0) {
+        console.log("\nFirst 5 sync actions:");
+        syncResults.details.slice(0, 5).forEach(detail => console.log(`  - ${detail}`));
+      }
+      console.log("==============================\n");
 
       res.json({
         message: `Articles synced from Airtable (${response.records.length} total records processed)`,
