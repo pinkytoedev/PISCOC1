@@ -221,7 +221,7 @@ app.get('/api/user', (req, res) => {
 app.get('/api/health', async (req, res) => {
     let dbStatus = 'not_configured';
     let dbError = null;
-
+    
     if (connectionString) {
         try {
             await pgPool.query('SELECT 1');
@@ -231,7 +231,20 @@ app.get('/api/health', async (req, res) => {
             dbError = err.message;
         }
     }
-
+    
+    // Debug environment variables (safely)
+    const envDebug = {
+        NODE_ENV: process.env.NODE_ENV || 'not_set',
+        DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'not_set',
+        SESSION_SECRET: process.env.SESSION_SECRET ? 'set' : 'not_set',
+        VERCEL: process.env.VERCEL || 'not_set',
+        VERCEL_ENV: process.env.VERCEL_ENV || 'not_set',
+        // Check for common Vercel env vars
+        VERCEL_URL: process.env.VERCEL_URL || 'not_set',
+        // List all env keys (but not values for security)
+        envKeys: Object.keys(process.env).sort()
+    };
+    
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
@@ -239,9 +252,11 @@ app.get('/api/health', async (req, res) => {
         database: {
             configured: !!connectionString,
             status: dbStatus,
-            error: dbError
+            error: dbError,
+            connectionStringLength: connectionString ? connectionString.length : 0
         },
-        session: !!sessionSecret
+        session: !!sessionSecret,
+        envDebug
     });
 });
 
