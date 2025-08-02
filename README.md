@@ -215,7 +215,7 @@ The application is designed to run on a single port (3000) serving both the API 
 2. Has PostgreSQL database available
 3. Has all required environment variables set
 4. run `npm run test:setup` & `npm run test:neon`
-4. Run `npm start dev` before 
+4. Run `npm run dev` before 
 5. Vist to localhost page
 
 ## 🤝 Contributing
