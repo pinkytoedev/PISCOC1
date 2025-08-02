@@ -185,6 +185,58 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 └── dist/                   # Built application
 ```
 
+## 🧪 Testing
+
+This project includes a comprehensive testing framework to ensure reliability and functionality:
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test categories
+npm run test:unit        # Code quality and unit tests
+npm run test:integration # Integration tests for external APIs
+npm run test:e2e         # End-to-end API tests
+
+# Run tests in watch mode (for development)
+npm run test:watch
+
+# Generate coverage report
+npm run test:coverage
+
+# CI/CD optimized test run
+npm run test:ci
+```
+
+### Health Monitoring
+
+Check the application health and configuration:
+
+```bash
+# Run health check
+npm run health:check
+```
+
+The health check validates:
+- Environment variable configuration
+- Database connectivity setup
+- External API configurations
+- File structure integrity
+- Port availability
+
+### Test Coverage
+
+The testing framework includes:
+
+- **Unit Tests**: Code quality, file structure, and conflict detection
+- **Integration Tests**: External API validation and data flow testing  
+- **End-to-End Tests**: API endpoint structure and response validation
+- **Health Monitoring**: Continuous application status checking
+
+For detailed testing documentation, see [TESTING.md](./TESTING.md).
+
 ## 🔧 Available Scripts
 
 - `npm run dev` - Start development server (HTTP)
@@ -194,6 +246,14 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 - `npm run start` - Start production server
 - `npm run check` - Run TypeScript type checking
 - `npm run db:push` - Push database schema changes
+- `npm run test` - Run all tests
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:coverage` - Run tests with coverage report
+- `npm run test:unit` - Run unit tests only
+- `npm run test:integration` - Run integration tests only
+- `npm run test:e2e` - Run end-to-end tests only
+- `npm run test:ci` - Run tests in CI mode
+- `npm run health:check` - Run application health check
 
 ### 🔒 HTTPS Setup for Facebook Integration
 
