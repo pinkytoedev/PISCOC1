@@ -73,8 +73,8 @@ const users = {
     id: 'id',
     username: 'username',
     password: 'password',
-    isAdmin: 'isAdmin',
-    lastLogin: 'lastLogin'
+    isAdmin: 'is_admin',
+    lastLogin: 'last_login'
 };
 
 // Password helpers
@@ -122,7 +122,7 @@ passport.use(
 
             // Update last login
             await pgPool.query(
-                'UPDATE users SET "lastLogin" = NOW() WHERE id = $1',
+                'UPDATE users SET last_login = NOW() WHERE id = $1',
                 [user.id]
             );
 
@@ -191,7 +191,7 @@ app.get('/api/user', (req, res) => {
 app.get('/api/health', async (req, res) => {
     let dbStatus = 'not_configured';
     let dbError = null;
-    
+
     if (connectionString) {
         try {
             await pgPool.query('SELECT 1');
@@ -201,7 +201,7 @@ app.get('/api/health', async (req, res) => {
             dbError = err.message;
         }
     }
-    
+
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
