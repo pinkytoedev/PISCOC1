@@ -1,0 +1,33 @@
+# Ignore build tools and dev dependencies
+node_modules/vite
+node_modules/rollup
+node_modules/@rollup
+node_modules/esbuild
+node_modules/@vitejs
+node_modules/@esbuild
+node_modules/typescript
+node_modules/tsx
+node_modules/drizzle-kit
+node_modules/@types
+node_modules/tailwindcss
+node_modules/postcss
+node_modules/autoprefixer
+
+# Ignore source files
+server/
+client/src/
+*.ts
+*.tsx
+!dist/**
+
+# Ignore config files not needed at runtime
+vite.config.ts
+tsconfig.json
+tailwind.config.ts
+postcss.config.js
+drizzle.config.ts
+build.config.js
+
+# Ignore dev scripts
+scripts/
+.github/

@@ -1,4 +1,4 @@
-// Simple proxy to the built app without build dependencies
-const app = await import('../dist/app.js').then(m => m.default);
+// Use standalone server for Vercel deployment
+import app from './standalone-server.js';
 
 export default app;
