@@ -8,21 +8,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-setup:
-    runs-on: ${{ matrix.os }}
+  test-setup-linux:
+    runs-on: ubuntu-latest
     
     strategy:
       matrix:
-        os: [ubuntu-latest]
         node-version: [18.x, 20.x, 22.x]
-        include:
-          # Test on other platforms without database requirements
-          - os: macos-latest
-            node-version: 20.x
-            skip-db: true
-          - os: windows-latest  
-            node-version: 20.x
-            skip-db: true
     
     services:
       postgres:
@@ -80,14 +71,71 @@ jobs:
       run: npm run test:setup
       env:
         NODE_ENV: test
-        SKIP_DB_TESTS: ${{ matrix.skip-db && 'true' || 'false' }}
 
     - name: Run TypeScript check
       run: npm run check
 
     - name: Test database migration
       run: npm run db:push
-      if: matrix.skip-db != true
+
+    - name: Test build process
+      run: npm run build
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: test-results-ubuntu-node${{ matrix.node-version }}
+        path: |
+          npm-debug.log
+          .env
+
+  test-setup-cross-platform:
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+        node-version: [20.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Create test directories
+      run: |
+        mkdir -p uploads uploads/instagram temp certs
+      shell: bash
+
+    - name: Create .env file for testing (no database)
+      run: |
+        cat > .env << EOF
+        SESSION_SECRET=test_session_secret_for_ci
+        DISCORD_BOT_TOKEN=test_discord_token
+        DISCORD_CLIENT_ID=test_discord_client
+        AIRTABLE_API_KEY=test_airtable_key
+        AIRTABLE_BASE_ID=test_airtable_base
+        FACEBOOK_APP_ID=test_facebook_id
+        FACEBOOK_APP_SECRET=test_facebook_secret
+        INSTAGRAM_APP_ID=test_instagram_id
+        INSTAGRAM_APP_SECRET=test_instagram_secret
+        IMGUR_CLIENT_ID=test_imgur_id
+        IMGUR_CLIENT_SECRET=test_imgur_secret
+        BASE_URL=http://localhost:3000
+        EOF
+      shell: bash
+
+    - name: Run TypeScript check
+      run: npm run check
 
     - name: Test build process
       run: npm run build
