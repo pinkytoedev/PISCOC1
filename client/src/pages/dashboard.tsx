@@ -205,7 +205,7 @@ export default function Dashboard() {
                     iconColor="text-primary"
                     trend={{
                       value: metrics?.articleGrowth || "0%",
-                      isPositive: !metrics?.articleGrowth.includes('-')
+                      isPositive: !(metrics?.articleGrowth || "0%").includes('-')
                     }}
                     note="from last month"
                   />
