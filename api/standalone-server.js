@@ -31,18 +31,40 @@ if (!connectionString) {
     console.error('DATABASE_URL is required');
 }
 
+// Parse connection string to handle different database providers
+let sslConfig;
+if (process.env.NODE_ENV === 'production') {
+    // Different SSL configs for different providers
+    if (connectionString.includes('neon.tech')) {
+        // Neon requires SSL
+        sslConfig = { rejectUnauthorized: false };
+    } else if (connectionString.includes('supabase')) {
+        // Supabase requires SSL
+        sslConfig = { rejectUnauthorized: false };
+    } else {
+        // Generic production SSL
+        sslConfig = { rejectUnauthorized: false };
+    }
+} else {
+    sslConfig = false;
+}
+
 const pgPool = new pg.Pool({
     connectionString,
     max: 1,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 10000,
+    ssl: sslConfig
 });
 
-// Test database connection
-pgPool.query('SELECT 1').catch(err => {
-    console.error('Database connection error:', err);
-});
+// Test database connection with better error handling
+pgPool.query('SELECT 1')
+    .then(() => console.log('Database connected successfully'))
+    .catch(err => {
+        console.error('Database connection error:', err.message);
+        console.error('Connection string present:', !!connectionString);
+        console.error('SSL config:', sslConfig);
+    });
 
 const db = drizzle(pgPool);
 
@@ -166,12 +188,29 @@ app.get('/api/user', (req, res) => {
 });
 
 // Basic health check
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+    let dbStatus = 'not_configured';
+    let dbError = null;
+    
+    if (connectionString) {
+        try {
+            await pgPool.query('SELECT 1');
+            dbStatus = 'connected';
+        } catch (err) {
+            dbStatus = 'error';
+            dbError = err.message;
+        }
+    }
+    
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV,
-        database: !!connectionString,
+        database: {
+            configured: !!connectionString,
+            status: dbStatus,
+            error: dbError
+        },
         session: !!sessionSecret
     });
 });
