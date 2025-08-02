@@ -38,6 +38,17 @@ const handleZodError = (error: ZodError) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.json({
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      database: !!process.env.DATABASE_URL,
+      session_secret: !!process.env.SESSION_SECRET
+    });
+  });
+
   // Setup authentication routes
   setupAuth(app);
 

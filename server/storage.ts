@@ -1,12 +1,12 @@
-import { 
-  users, teamMembers, articles, carouselQuotes, 
+import {
+  users, teamMembers, articles, carouselQuotes,
   imageAssets, integrationSettings, activityLogs, adminRequests,
   uploadTokens
 } from "@shared/schema";
-import type { 
-  User, InsertUser, TeamMember, InsertTeamMember, 
-  Article, InsertArticle, CarouselQuote, InsertCarouselQuote, 
-  ImageAsset, InsertImageAsset, IntegrationSetting, 
+import type {
+  User, InsertUser, TeamMember, InsertTeamMember,
+  Article, InsertArticle, CarouselQuote, InsertCarouselQuote,
+  ImageAsset, InsertImageAsset, IntegrationSetting,
   InsertIntegrationSetting, ActivityLog, InsertActivityLog,
   AdminRequest, InsertAdminRequest, UploadToken, InsertUploadToken
 } from "@shared/schema";
@@ -27,7 +27,7 @@ export interface IStorage {
   updateUserLastLogin(id: number): Promise<User | undefined>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: number): Promise<boolean>;
-  
+
   // Team member operations
   getTeamMembers(): Promise<TeamMember[]>;
   getTeamMember(id: number): Promise<TeamMember | undefined>;
@@ -35,7 +35,7 @@ export interface IStorage {
   createTeamMember(teamMember: InsertTeamMember): Promise<TeamMember>;
   updateTeamMember(id: number, teamMember: Partial<InsertTeamMember>): Promise<TeamMember | undefined>;
   deleteTeamMember(id: number): Promise<boolean>;
-  
+
   // Article operations
   getArticles(): Promise<Article[]>;
   getArticle(id: number): Promise<Article | undefined>;
@@ -45,7 +45,7 @@ export interface IStorage {
   deleteArticle(id: number): Promise<boolean>;
   getFeaturedArticles(): Promise<Article[]>;
   getArticlesByStatus(status: string): Promise<Article[]>;
-  
+
   // Carousel quote operations
   getCarouselQuotes(): Promise<CarouselQuote[]>;
   getCarouselQuote(id: number): Promise<CarouselQuote | undefined>;
@@ -53,7 +53,7 @@ export interface IStorage {
   updateCarouselQuote(id: number, quote: Partial<InsertCarouselQuote>): Promise<CarouselQuote | undefined>;
   deleteCarouselQuote(id: number): Promise<boolean>;
   getQuotesByCarousel(carousel: string): Promise<CarouselQuote[]>;
-  
+
   // Admin request operations
   getAdminRequests(): Promise<AdminRequest[]>;
   getAdminRequest(id: number): Promise<AdminRequest | undefined>;
@@ -63,7 +63,7 @@ export interface IStorage {
   getAdminRequestsByStatus(status: string): Promise<AdminRequest[]>;
   getAdminRequestsByCategory(category: string): Promise<AdminRequest[]>;
   getAdminRequestsByUrgency(urgency: string): Promise<AdminRequest[]>;
-  
+
   // Upload token operations
   getUploadTokens(): Promise<UploadToken[]>;
   getUploadToken(id: number): Promise<UploadToken | undefined>;
@@ -74,13 +74,13 @@ export interface IStorage {
   incrementUploadTokenUses(id: number): Promise<UploadToken | undefined>;
   deleteUploadToken(id: number): Promise<boolean>;
   inactivateExpiredTokens(): Promise<number>; // Returns count of inactivated tokens
-  
+
   // Image asset operations
   getImageAssets(): Promise<ImageAsset[]>;
   getImageAsset(id: number): Promise<ImageAsset | undefined>;
   createImageAsset(asset: InsertImageAsset): Promise<ImageAsset>;
   deleteImageAsset(id: number): Promise<boolean>;
-  
+
   // Integration settings operations
   getIntegrationSettings(service: string): Promise<IntegrationSetting[]>;
   getIntegrationSetting(id: number): Promise<IntegrationSetting | undefined>;
@@ -88,11 +88,11 @@ export interface IStorage {
   createIntegrationSetting(setting: InsertIntegrationSetting): Promise<IntegrationSetting>;
   updateIntegrationSetting(id: number, setting: Partial<InsertIntegrationSetting>): Promise<IntegrationSetting | undefined>;
   deleteIntegrationSetting(id: number): Promise<boolean>;
-  
+
   // Activity log operations
   getActivityLogs(): Promise<ActivityLog[]>;
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
-  
+
   // Session store
   sessionStore: session.Store;
 }
@@ -101,12 +101,18 @@ export class DatabaseStorage implements IStorage {
   sessionStore: session.Store;
 
   constructor() {
-    this.sessionStore = new PostgresSessionStore({ 
-      pool: pgPool,
-      createTableIfMissing: true,
-      tableName: 'session',
-      schemaName: 'public'
-    });
+    try {
+      this.sessionStore = new PostgresSessionStore({
+        pool: pgPool,
+        createTableIfMissing: true,
+        tableName: 'session',
+        schemaName: 'public'
+      });
+    } catch (error) {
+      console.error("Failed to initialize session store:", error);
+      // Fallback to memory store if PostgreSQL session store fails
+      this.sessionStore = new session.MemoryStore();
+    }
   }
 
   // User operations
@@ -119,7 +125,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
   }
-  
+
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
   }
@@ -128,7 +134,7 @@ export class DatabaseStorage implements IStorage {
     const [newUser] = await db.insert(users).values(user).returning();
     return newUser;
   }
-  
+
   async updateUserLastLogin(id: number): Promise<User | undefined> {
     const lastLogin = new Date();
     const [updatedUser] = await db
@@ -138,7 +144,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updatedUser;
   }
-  
+
   async updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined> {
     const [updatedUser] = await db
       .update(users)
@@ -147,7 +153,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return updatedUser;
   }
-  
+
   async deleteUser(id: number): Promise<boolean> {
     const deleted = await db
       .delete(users)
@@ -165,7 +171,7 @@ export class DatabaseStorage implements IStorage {
     const [member] = await db.select().from(teamMembers).where(eq(teamMembers.id, id));
     return member;
   }
-  
+
   async getTeamMemberByExternalId(externalId: string): Promise<TeamMember | undefined> {
     const [member] = await db
       .select()
@@ -208,7 +214,7 @@ export class DatabaseStorage implements IStorage {
     const [article] = await db.select().from(articles).where(eq(articles.id, id));
     return article;
   }
-  
+
   async getArticleByExternalId(externalId: string): Promise<Article | undefined> {
     const [article] = await db
       .select()
@@ -244,14 +250,14 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return deleted.length > 0;
   }
-  
+
   async getFeaturedArticles(): Promise<Article[]> {
     return await db
       .select()
       .from(articles)
       .where(eq(articles.featured, 'yes'));
   }
-  
+
   async getArticlesByStatus(status: string): Promise<Article[]> {
     return await db
       .select()
@@ -293,7 +299,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return deleted.length > 0;
   }
-  
+
   async getQuotesByCarousel(carousel: string): Promise<CarouselQuote[]> {
     return await db
       .select()
@@ -345,7 +351,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(integrationSettings.id, id));
     return setting;
   }
-  
+
   async getIntegrationSettingByKey(service: string, key: string): Promise<IntegrationSetting | undefined> {
     const [setting] = await db
       .select()
@@ -397,7 +403,7 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return newLog;
   }
-  
+
   // Admin request operations
   async getAdminRequests(): Promise<AdminRequest[]> {
     return await db.select().from(adminRequests);
@@ -438,21 +444,21 @@ export class DatabaseStorage implements IStorage {
       .returning();
     return deleted.length > 0;
   }
-  
+
   async getAdminRequestsByStatus(status: string): Promise<AdminRequest[]> {
     return await db
       .select()
       .from(adminRequests)
       .where(eq(adminRequests.status, status));
   }
-  
+
   async getAdminRequestsByCategory(category: string): Promise<AdminRequest[]> {
     return await db
       .select()
       .from(adminRequests)
       .where(eq(adminRequests.category, category));
   }
-  
+
   async getAdminRequestsByUrgency(urgency: string): Promise<AdminRequest[]> {
     return await db
       .select()
@@ -508,20 +514,20 @@ export class DatabaseStorage implements IStorage {
   async incrementUploadTokenUses(id: number): Promise<UploadToken | undefined> {
     const token = await this.getUploadToken(id);
     if (!token) return undefined;
-    
+
     // Handle null values safely
     const currentUses = token.uses ?? 0;
     const maxUses = token.maxUses ?? 0;
-    
+
     const [updatedToken] = await db
       .update(uploadTokens)
-      .set({ 
+      .set({
         uses: currentUses + 1,
-        active: maxUses > 0 ? currentUses + 1 < maxUses : true 
+        active: maxUses > 0 ? currentUses + 1 < maxUses : true
       })
       .where(eq(uploadTokens.id, id))
       .returning();
-    
+
     return updatedToken;
   }
 
@@ -545,7 +551,7 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .returning();
-    
+
     return result.length;
   }
 }

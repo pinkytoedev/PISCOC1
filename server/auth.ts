@@ -9,7 +9,7 @@ import { User as SelectUser, InsertUser } from "@shared/schema";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends SelectUser { }
   }
 }
 
@@ -30,15 +30,20 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSecret = process.env.SESSION_SECRET || "discord_airtable_integration_secret";
-  
+
+  // Use memory store for serverless environments, PostgreSQL store for local dev
+  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+
   const sessionSettings: session.SessionOptions = {
     secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
-    store: storage.sessionStore,
+    store: isServerless ? undefined : storage.sessionStore, // Use default memory store in serverless
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // Required for cross-site cookies in production
+      httpOnly: true
     }
   };
 
@@ -65,7 +70,7 @@ export function setupAuth(app: Express) {
   );
 
   passport.serializeUser((user, done) => done(null, user.id));
-  
+
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
@@ -81,12 +86,12 @@ export function setupAuth(app: Express) {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Authentication required to create new users" });
     }
-    
+
     // Only allow admin users to create new accounts
     if (!req.user?.isAdmin) {
       return res.status(403).json({ message: "Admin privileges required to create new users" });
     }
-    
+
     try {
       // Check if the username already exists
       const existingUser = await storage.getUserByUsername(req.body.username);
@@ -99,7 +104,7 @@ export function setupAuth(app: Express) {
         ...req.body,
         password: await hashPassword(req.body.password),
       });
-      
+
       // Log the registration activity
       await storage.createActivityLog({
         userId: req.user.id, // Log the admin who created this user
@@ -108,26 +113,42 @@ export function setupAuth(app: Express) {
         resourceId: newUser.id.toString(),
         details: { username: newUser.username, createdBy: req.user.username }
       });
-      
+
       res.status(201).json(newUser);
     } catch (error) {
       next(error);
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    // Log the login activity
-    if (req.user) {
-      storage.createActivityLog({
-        userId: req.user.id,
-        action: "login",
-        resourceType: "user",
-        resourceId: req.user.id.toString(),
-        details: { username: req.user.username }
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err, user, info) => {
+      if (err) {
+        console.error("Login error:", err);
+        return res.status(500).json({ message: "Internal server error during authentication" });
+      }
+
+      if (!user) {
+        return res.status(401).json({ message: "Invalid username or password" });
+      }
+
+      req.logIn(user, (err) => {
+        if (err) {
+          console.error("Session login error:", err);
+          return res.status(500).json({ message: "Failed to establish session" });
+        }
+
+        // Log the login activity
+        storage.createActivityLog({
+          userId: user.id,
+          action: "login",
+          resourceType: "user",
+          resourceId: user.id.toString(),
+          details: { username: user.username }
+        }).catch(console.error); // Don't block login on logging failure
+
+        res.status(200).json(user);
       });
-    }
-    
-    res.status(200).json(req.user);
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -141,7 +162,7 @@ export function setupAuth(app: Express) {
         details: { username: req.user.username }
       });
     }
-    
+
     req.logout((err) => {
       if (err) return next(err);
       res.sendStatus(200);
@@ -154,17 +175,17 @@ export function setupAuth(app: Express) {
     }
     res.json(req.user);
   });
-  
+
   // Get all users - Only for admins
   app.get("/api/users", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
-    
+
     if (!req.user?.isAdmin) {
       return res.status(403).json({ message: "Admin privileges required to view all users" });
     }
-    
+
     try {
       const users = await storage.getAllUsers();
       res.json(users);
@@ -173,35 +194,35 @@ export function setupAuth(app: Express) {
       res.status(500).json({ message: "Failed to fetch users" });
     }
   });
-  
+
   // Update a user - Only for admins
   app.put("/api/users/:id", async (req, res, next) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
-    
+
     if (!req.user?.isAdmin) {
       return res.status(403).json({ message: "Admin privileges required to update users" });
     }
-    
+
     const userId = parseInt(req.params.id);
-    
+
     try {
       // Check if the user exists
       const existingUser = await storage.getUser(userId);
       if (!existingUser) {
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       // Handle password changes separately - hash the password
       let updateData: Partial<InsertUser> = { ...req.body };
-      
+
       if (updateData.password) {
         updateData.password = await hashPassword(updateData.password);
       }
-      
+
       const updatedUser = await storage.updateUser(userId, updateData);
-      
+
       // Log the update activity
       await storage.createActivityLog({
         userId: req.user.id,
@@ -210,39 +231,39 @@ export function setupAuth(app: Express) {
         resourceId: userId.toString(),
         details: { updatedBy: req.user.username }
       });
-      
+
       res.json(updatedUser);
     } catch (error) {
       next(error);
     }
   });
-  
+
   // Delete a user - Only for admins
   app.delete("/api/users/:id", async (req, res, next) => {
     if (!req.isAuthenticated()) {
       return res.sendStatus(401);
     }
-    
+
     if (!req.user?.isAdmin) {
       return res.status(403).json({ message: "Admin privileges required to delete users" });
     }
-    
+
     const userId = parseInt(req.params.id);
-    
+
     // Prevent admins from deleting themselves
     if (userId === req.user.id) {
       return res.status(400).json({ message: "You cannot delete your own account" });
     }
-    
+
     try {
       // Check if the user exists
       const existingUser = await storage.getUser(userId);
       if (!existingUser) {
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       const deleted = await storage.deleteUser(userId);
-      
+
       if (deleted) {
         // Log the delete activity
         await storage.createActivityLog({
@@ -252,7 +273,7 @@ export function setupAuth(app: Express) {
           resourceId: userId.toString(),
           details: { username: existingUser.username, deletedBy: req.user.username }
         });
-        
+
         res.status(200).json({ message: "User deleted successfully" });
       } else {
         res.status(500).json({ message: "Failed to delete user" });
