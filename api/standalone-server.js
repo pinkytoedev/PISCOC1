@@ -115,17 +115,17 @@ passport.use(
                 [username]
             );
             const dbUser = result.rows[0];
-            
+
             if (!dbUser || !(await comparePasswords(password, dbUser.password))) {
                 return done(null, false);
             }
-            
+
             // Update last login
             await pgPool.query(
                 'UPDATE users SET last_login = NOW() WHERE id = $1',
                 [dbUser.id]
             );
-            
+
             // Map database columns to expected JavaScript properties
             const user = {
                 id: dbUser.id,
@@ -134,7 +134,7 @@ passport.use(
                 isAdmin: dbUser.is_admin,
                 lastLogin: dbUser.last_login
             };
-            
+
             return done(null, user);
         } catch (error) {
             console.error('Login error:', error);
@@ -152,11 +152,11 @@ passport.deserializeUser(async (id, done) => {
             [id]
         );
         const dbUser = result.rows[0];
-        
+
         if (!dbUser) {
             return done(null, false);
         }
-        
+
         // Map database columns to expected JavaScript properties
         const user = {
             id: dbUser.id,
@@ -164,7 +164,7 @@ passport.deserializeUser(async (id, done) => {
             isAdmin: dbUser.is_admin,
             lastLogin: dbUser.last_login
         };
-        
+
         done(null, user);
     } catch (error) {
         done(error);
@@ -217,11 +217,153 @@ app.get('/api/user', (req, res) => {
     res.json(req.user);
 });
 
+// Config endpoints
+app.get('/api/config/facebook', (req, res) => {
+    const isFacebookConfigured = !!process.env.FACEBOOK_APP_ID;
+    res.json({
+        status: 'success',
+        configured: isFacebookConfigured,
+        appId: process.env.FACEBOOK_APP_ID || ''
+    });
+});
+
+// Integration status endpoint
+app.get('/api/integration-status', (req, res) => {
+    const integrations = [
+        {
+            name: 'Database',
+            configured: !!process.env.DATABASE_URL,
+            required: true,
+            envVar: 'DATABASE_URL',
+            lastChecked: new Date().toISOString()
+        },
+        {
+            name: 'Discord',
+            configured: !!process.env.DISCORD_BOT_TOKEN && !!process.env.DISCORD_CLIENT_ID,
+            required: false,
+            envVar: 'DISCORD_BOT_TOKEN, DISCORD_CLIENT_ID',
+            lastChecked: new Date().toISOString()
+        },
+        {
+            name: 'Airtable',
+            configured: !!process.env.AIRTABLE_API_KEY && !!process.env.AIRTABLE_BASE_ID,
+            required: false,
+            envVar: 'AIRTABLE_API_KEY, AIRTABLE_BASE_ID',
+            lastChecked: new Date().toISOString()
+        },
+        {
+            name: 'Facebook/Instagram',
+            configured: !!process.env.FACEBOOK_APP_ID && !!process.env.INSTAGRAM_APP_ID,
+            required: false,
+            envVar: 'FACEBOOK_APP_ID, INSTAGRAM_APP_ID',
+            lastChecked: new Date().toISOString()
+        },
+        {
+            name: 'ImgBB',
+            configured: !!process.env.IMGBB_API_KEY,
+            required: false,
+            envVar: 'IMGBB_API_KEY',
+            lastChecked: new Date().toISOString()
+        },
+        {
+            name: 'Session Secret',
+            configured: !!process.env.SESSION_SECRET,
+            required: true,
+            envVar: 'SESSION_SECRET',
+            lastChecked: new Date().toISOString()
+        }
+    ];
+
+    res.json(integrations);
+});
+
+// Test integration access endpoint
+app.get('/api/test-integrations', async (req, res) => {
+    const tests = {
+        database: {
+            configured: !!process.env.DATABASE_URL,
+            connected: false,
+            error: null
+        },
+        discord: {
+            configured: !!process.env.DISCORD_BOT_TOKEN,
+            token_length: process.env.DISCORD_BOT_TOKEN ? process.env.DISCORD_BOT_TOKEN.length : 0
+        },
+        airtable: {
+            configured: !!process.env.AIRTABLE_API_KEY && !!process.env.AIRTABLE_BASE_ID,
+            base_id: process.env.AIRTABLE_BASE_ID ? 'set' : 'not_set'
+        },
+        imgbb: {
+            configured: !!process.env.IMGBB_API_KEY,
+            key_length: process.env.IMGBB_API_KEY ? process.env.IMGBB_API_KEY.length : 0
+        }
+    };
+
+    // Test database connection
+    if (process.env.DATABASE_URL) {
+        try {
+            await pgPool.query('SELECT 1');
+            tests.database.connected = true;
+        } catch (error) {
+            tests.database.error = error.message;
+        }
+    }
+
+    res.json(tests);
+});
+
+// Basic CRUD endpoints (minimal implementation for Vercel)
+// These would normally connect to the database, but for now we'll return empty data
+
+// Team Members
+app.get('/api/team-members', async (req, res) => {
+    try {
+        const result = await pgPool.query('SELECT * FROM team_members ORDER BY id DESC');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Team members fetch error:', error);
+        res.json([]); // Return empty array on error
+    }
+});
+
+// Articles
+app.get('/api/articles', async (req, res) => {
+    try {
+        const result = await pgPool.query('SELECT * FROM articles ORDER BY id DESC');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Articles fetch error:', error);
+        res.json([]); // Return empty array on error
+    }
+});
+
+// Carousel Quotes
+app.get('/api/carousel-quotes', async (req, res) => {
+    try {
+        const result = await pgPool.query('SELECT * FROM carousel_quotes ORDER BY id DESC');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Carousel quotes fetch error:', error);
+        res.json([]); // Return empty array on error
+    }
+});
+
+// Admin Requests
+app.get('/api/admin-requests', async (req, res) => {
+    try {
+        const result = await pgPool.query('SELECT * FROM admin_requests ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Admin requests fetch error:', error);
+        res.json([]); // Return empty array on error
+    }
+});
+
 // Basic health check
 app.get('/api/health', async (req, res) => {
     let dbStatus = 'not_configured';
     let dbError = null;
-    
+
     if (connectionString) {
         try {
             await pgPool.query('SELECT 1');
@@ -231,7 +373,7 @@ app.get('/api/health', async (req, res) => {
             dbError = err.message;
         }
     }
-    
+
     // Debug environment variables (safely)
     const envDebug = {
         NODE_ENV: process.env.NODE_ENV || 'not_set',
@@ -244,7 +386,7 @@ app.get('/api/health', async (req, res) => {
         // List all env keys (but not values for security)
         envKeys: Object.keys(process.env).sort()
     };
-    
+
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
