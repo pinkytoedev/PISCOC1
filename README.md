@@ -12,41 +12,88 @@ A comprehensive platform for managing content across multiple social media and c
 
 ### Local Development Setup
 
-#### Option 1: Manual Setup
+### Local Development Setup
 
-1. **Clone the repository**
+#### 🚀 Quick Start (Recommended)
+
+1. **Clone and install dependencies**
    ```bash
    git clone <repository-url>
    cd PISCOC1
-   ```
-
-2. **Install dependencies**
-   ```bash
    npm install
    ```
 
-3. **Set up environment variables**
+2. **Automated Environment Setup**
    ```bash
-   cp .env.example .env
+   npm run setup:env
    ```
-   
-   Edit `.env` and configure your API keys and database connection. See [API Keys Setup](#api-keys-setup) section below.
+   This guided setup will:
+   - Create your `.env` file
+   - Set up PostgreSQL (Docker recommended)
+   - Generate secure session secrets
+   - Guide you through API key setup
 
-4. **Set up PostgreSQL database**
+3. **Test your setup**
    ```bash
-   # Create database
-   createdb multi_platform_integration
-   
-   # Push database schema
-   npm run db:push
+   npm run test:setup
    ```
 
-5. **Start development server**
+4. **Start development**
    ```bash
    npm run dev
    ```
    
-   The application will be available at `http://localhost:5000`
+   The application will be available at `http://localhost:3000`
+
+#### 📋 Manual Setup Options
+
+##### Option 1: Docker PostgreSQL (Recommended)
+
+1. **Prerequisites**: Docker and Docker Compose
+2. **Start PostgreSQL**:
+   ```bash
+   npm run docker:db
+   ```
+3. **Set up database**:
+   ```bash
+   npm run db:setup
+   ```
+4. **Copy environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
+
+##### Option 2: Local PostgreSQL
+
+1. **Install PostgreSQL 16+**
+2. **Create database**:
+   ```bash
+   createdb multi_platform_integration
+   ```
+3. **Set up environment**:
+   ```bash
+   cp .env.example .env
+   # Update DATABASE_URL in .env
+   ```
+4. **Set up schema**:
+   ```bash
+   npm run db:setup
+   ```
+
+##### Option 3: Neon.tech Cloud PostgreSQL
+
+1. **Create account** at [neon.tech](https://neon.tech)
+2. **Create project** and copy connection string
+3. **Set up environment**:
+   ```bash
+   cp .env.example .env
+   # Add your Neon connection string to DATABASE_URL
+   ```
+4. **Set up schema**:
+   ```bash
+   npm run db:push
+   ```
 
 #### Option 2: Docker Setup (Recommended)
 
@@ -166,12 +213,120 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 - `npm run dev` - Start development server (HTTP)
 - `npm run dev:https` - Start development server with HTTPS (required for Facebook Login)
 - `npm run setup:https` - Generate HTTPS certificates for local development
+- `npm run setup:env` - Interactive environment setup wizard
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run check` - Run TypeScript type checking
-- `npm run db:push` - Push database schema changes
--`npm run test:setup` - Check if you are ready to start dev session
--`npm run test:neon` - Checks Database configuration from env file
+- `npm run db:push` - Push database schema changes (for Neon/cloud databases)
+- `npm run db:setup` - Set up database schema (for local databases)
+- `npm run test:setup` - Check if you are ready to start dev session
+- `npm run test:neon` - Check database configuration from env file
+- `npm run docker:db` - Start PostgreSQL container only
+- `npm run docker:db:stop` - Stop PostgreSQL container
+- `npm run docker:full` - Start full application with Docker
+- `npm run docker:full:stop` - Stop full Docker application
+
+## 🐛 Troubleshooting
+
+### Common Issues and Solutions
+
+#### 1. Database Connection Issues
+
+**Error**: `Failed to connect to database` or `The server does not support SSL connections`
+
+**Solutions**:
+- For local PostgreSQL: Make sure `sslmode=disable` in your DATABASE_URL
+- For Docker: Run `npm run docker:db` to start PostgreSQL container
+- For Neon.tech: Make sure `sslmode=require` in your DATABASE_URL
+- Test connection: `npm run test:setup`
+
+#### 2. Missing Environment Variables
+
+**Error**: Environment variables not set warnings
+
+**Solutions**:
+- Run `npm run setup:env` for guided setup
+- Copy `.env.example` to `.env` and fill in your values
+- Generate session secret: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+#### 3. Port Already in Use
+
+**Error**: `EADDRINUSE` or port conflicts
+
+**Solutions**:
+- The app automatically tries ports 3000, 3001, 3002, etc.
+- Kill existing processes: `lsof -ti:3000 | xargs kill`
+- Use Docker: `npm run docker:full`
+
+#### 4. Missing Database Tables
+
+**Error**: `relation "table_name" does not exist`
+
+**Solutions**:
+- Run `npm run db:setup` for local databases
+- Run `npm run db:push` for cloud databases (Neon)
+- Check database connection first: `npm run test:setup`
+
+#### 5. Node.js Version Issues
+
+**Error**: Compatibility issues or build failures
+
+**Solutions**:
+- Use Node.js 20+: `node --version`
+- Clear cache: `npm cache clean --force`
+- Delete node_modules: `rm -rf node_modules && npm install`
+
+#### 6. API Integration Issues
+
+**Error**: API keys not working or features not functioning
+
+**Solutions**:
+- Visit `/keys` page in the app to test API integrations
+- Check API key format in `.env` file
+- Verify external service is accessible
+- For Facebook: Use HTTPS - `npm run dev:https`
+
+#### 7. File Upload Issues
+
+**Error**: File upload failures or permission errors
+
+**Solutions**:
+- Check directory permissions: `ls -la uploads/`
+- Create directories: `mkdir -p uploads temp certs uploads/instagram`
+- For Docker: Check volume mounts
+
+#### 8. Build or TypeScript Errors
+
+**Error**: Compilation or build failures
+
+**Solutions**:
+- Check TypeScript: `npm run check`
+- Clear cache: `rm -rf dist && npm run build`
+- Update dependencies: `npm update`
+
+### Getting Help
+
+1. **Run diagnostics**: `npm run test:setup`
+2. **Check logs**: Look at console output for specific error messages
+3. **Verify environment**: Make sure all required environment variables are set
+4. **Test database**: Use `npm run test:neon` for database-specific issues
+5. **Reset setup**: Delete `.env` and run `npm run setup:env`
+
+### Quick Reset Commands
+
+```bash
+# Reset environment
+rm .env && npm run setup:env
+
+# Reset database (Docker)
+npm run docker:db:stop && npm run docker:db && npm run db:setup
+
+# Reset dependencies
+rm -rf node_modules package-lock.json && npm install
+
+# Full reset
+git clean -fdx && npm install && npm run setup:env
+```
 
 ### 🔒 HTTPS Setup for Facebook Integration
 
@@ -209,14 +364,115 @@ This application uses NEON PostgreSQL with Drizzle ORM. Database schema is defin
 
 ## 🚀 Development
 
-The application is designed to run on a single port (3000) serving both the API and frontend. Ensure your deployment environment:
+### Pre-Development Checklist
 
-1. Has Node.js 20+ installed
-2. Has PostgreSQL database available
-3. Has all required environment variables set
-4. run `npm run test:setup` & `npm run test:neon`
-4. Run `npm run dev` before 
-5. Vist to localhost page
+Before starting development, ensure your environment is properly configured:
+
+1. **✅ Environment Check**
+   ```bash
+   npm run test:setup
+   ```
+   This will verify:
+   - Node.js version (20+)
+   - npm installation
+   - PostgreSQL availability
+   - Environment variables
+   - Database connection
+   - File permissions
+
+2. **✅ Database Setup**
+   ```bash
+   # For Docker PostgreSQL (recommended)
+   npm run docker:db && npm run db:setup
+   
+   # For cloud databases (Neon.tech)
+   npm run db:push
+   ```
+
+3. **✅ API Keys Configuration**
+   - Visit the **API Keys** page (`/keys`) in the running application
+   - Follow the setup instructions for each integration
+   - Test connectivity using the built-in status checks
+
+### Development Workflow
+
+1. **Start development server**:
+   ```bash
+   npm run dev
+   ```
+   - Application: `http://localhost:3000`
+   - Auto-reloads on code changes
+   - API endpoints: `http://localhost:3000/api/*`
+
+2. **For Facebook/Instagram development**:
+   ```bash
+   npm run dev:https
+   ```
+   - HTTPS Application: `https://localhost:3001`
+   - Required for Facebook SDK integration
+   - Accept security warning for localhost
+
+3. **Database operations**:
+   ```bash
+   # Check database status
+   npm run test:neon
+   
+   # Update schema (cloud databases)
+   npm run db:push
+   
+   # Reset local database
+   npm run db:setup
+   ```
+
+### Project Structure
+
+```
+├── client/                 # React frontend (Vite)
+│   ├── src/
+│   │   ├── components/     # Reusable UI components
+│   │   ├── pages/          # Page components
+│   │   ├── hooks/          # Custom React hooks
+│   │   └── lib/            # Utility functions
+├── server/                 # Express backend
+│   ├── integrations/       # External service integrations
+│   ├── middleware/         # Express middleware
+│   ├── utils/              # Server utilities
+│   ├── routes.ts           # API routes
+│   └── index.ts            # Server entry point
+├── shared/                 # Shared types and schemas
+│   └── schema.ts           # Database schema (Drizzle)
+├── scripts/                # Development scripts
+├── uploads/                # File upload storage
+└── dist/                   # Built application
+```
+
+### API Integration Status
+
+The application integrates with multiple external services. Use the `/keys` page to:
+- View configuration status of all integrations
+- Get step-by-step setup instructions
+- Test API connectivity
+- Monitor service health
+
+### Port Configuration
+
+The application automatically handles port conflicts:
+- **Primary**: 3000 (HTTP development)
+- **HTTPS**: 3001 (for Facebook integration)
+- **Fallback**: 3002, 3003, 5000, 5001, 5002
+- **Database**: 5432 (PostgreSQL)
+
+### Environment Variables
+
+Required for basic functionality:
+- `DATABASE_URL` - PostgreSQL connection
+- `SESSION_SECRET` - Session encryption key
+
+Optional (enables specific integrations):
+- Discord: `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`
+- Airtable: `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`
+- Facebook/Instagram: `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`
+- ImgBB: `IMGBB_API_KEY`
 
 ## 🤝 Contributing
 

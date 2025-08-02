@@ -32,13 +32,29 @@ yarn-error.log*
 # Temporary files
 .tmp
 .temp
+/tmp/
+temp/
+
+# Upload directories (keep structure, ignore content)
+uploads/*
+!uploads/.gitkeep
+temp/*
+!temp/.gitkeep
+
+# SSL certificates (regeneratable)
+certs/*.pem
+certs/*.key
+certs/*.crt
+
+# Docker volumes
+postgres_data/
+piscoc_backup.sql
+
+# Deployment
+.vercelignore
+.vercel
 
 # Replit files (removed for local development)
 .replit
 replit.nix
 .replit.toml
-
-# Docker volumes
-postgres_data/piscoc_backup.sql
-.vercelignore
-.vercel
