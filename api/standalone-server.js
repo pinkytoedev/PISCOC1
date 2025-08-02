@@ -39,6 +39,11 @@ const pgPool = new pg.Pool({
     ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// Test database connection
+pgPool.query('SELECT 1').catch(err => {
+    console.error('Database connection error:', err);
+});
+
 const db = drizzle(pgPool);
 
 // Simple user table schema (matching the actual schema)
@@ -59,6 +64,8 @@ async function comparePasswords(supplied, stored) {
 }
 
 // Session configuration
+// Note: Memory store warning is expected in serverless environments
+// Each function invocation is stateless, so persistent session storage isn't practical
 const sessionSecret = process.env.SESSION_SECRET || 'default-secret';
 app.use(session({
     secret: sessionSecret,
@@ -80,9 +87,9 @@ app.use(passport.session());
 passport.use(
     new LocalStrategy(async (username, password, done) => {
         try {
-            // Query the database for the user
-            const result = await db.execute(
-                `SELECT * FROM users WHERE username = $1`,
+            // Query the database for the user using pg client directly
+            const result = await pgPool.query(
+                'SELECT * FROM users WHERE username = $1',
                 [username]
             );
             const user = result.rows[0];
@@ -92,8 +99,8 @@ passport.use(
             }
 
             // Update last login
-            await db.execute(
-                `UPDATE users SET "lastLogin" = NOW() WHERE id = $1`,
+            await pgPool.query(
+                'UPDATE users SET "lastLogin" = NOW() WHERE id = $1',
                 [user.id]
             );
 
@@ -109,8 +116,8 @@ passport.serializeUser((user, done) => done(null, user.id));
 
 passport.deserializeUser(async (id, done) => {
     try {
-        const result = await db.execute(
-            `SELECT * FROM users WHERE id = $1`,
+        const result = await pgPool.query(
+            'SELECT * FROM users WHERE id = $1',
             [id]
         );
         done(null, result.rows[0]);
