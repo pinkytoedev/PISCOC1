@@ -231,49 +231,49 @@ app.get('/api/config/facebook', (req, res) => {
 app.get('/api/integration-status', (req, res) => {
     const integrations = [
         {
-            name: 'Database',
+            name: 'database',
             configured: !!process.env.DATABASE_URL,
             required: true,
             envVar: 'DATABASE_URL',
             lastChecked: new Date().toISOString()
         },
         {
-            name: 'Discord',
+            name: 'discord',
             configured: !!process.env.DISCORD_BOT_TOKEN && !!process.env.DISCORD_CLIENT_ID,
             required: false,
             envVar: 'DISCORD_BOT_TOKEN, DISCORD_CLIENT_ID',
             lastChecked: new Date().toISOString()
         },
         {
-            name: 'Airtable',
+            name: 'airtable',
             configured: !!process.env.AIRTABLE_API_KEY && !!process.env.AIRTABLE_BASE_ID,
             required: false,
             envVar: 'AIRTABLE_API_KEY, AIRTABLE_BASE_ID',
             lastChecked: new Date().toISOString()
         },
         {
-            name: 'Facebook/Instagram',
+            name: 'instagram',
             configured: !!process.env.FACEBOOK_APP_ID && !!process.env.INSTAGRAM_APP_ID,
             required: false,
             envVar: 'FACEBOOK_APP_ID, INSTAGRAM_APP_ID',
             lastChecked: new Date().toISOString()
         },
         {
-            name: 'ImgBB',
+            name: 'imgbb',
             configured: !!process.env.IMGBB_API_KEY,
             required: false,
             envVar: 'IMGBB_API_KEY',
             lastChecked: new Date().toISOString()
         },
         {
-            name: 'Session Secret',
+            name: 'session',
             configured: !!process.env.SESSION_SECRET,
             required: true,
             envVar: 'SESSION_SECRET',
             lastChecked: new Date().toISOString()
         }
     ];
-
+    
     res.json(integrations);
 });
 
