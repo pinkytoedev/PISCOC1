@@ -677,12 +677,12 @@ export function setupAirtableRoutes(app: Express) {
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
 
       console.log(`Airtable sync: Received ${response.records.length} records from Airtable`);
-      
+
       // Log first few records to see the data structure
       if (response.records.length > 0) {
         console.log("Sample Airtable record structure (first record):");
         console.log(JSON.stringify(response.records[0], null, 2));
-        
+
         // Log all field names from the first record
         if (response.records[0].fields) {
           console.log("Available fields in Airtable records:");
@@ -836,7 +836,7 @@ export function setupAirtableRoutes(app: Express) {
 
           // Check if article already exists
           const existingArticle = await storage.getArticleByExternalId(record.id);
-          
+
           if (existingArticle) {
             console.log(`Found existing article with external ID ${record.id}: ${existingArticle.title}`);
           } else {
@@ -902,7 +902,7 @@ export function setupAirtableRoutes(app: Express) {
       console.log(`Created: ${syncResults.created}`);
       console.log(`Updated: ${syncResults.updated}`);
       console.log(`Errors: ${syncResults.errors}`);
-      
+
       // Show sample of synced data
       if (syncResults.details.length > 0) {
         console.log("\nFirst 5 sync actions:");
