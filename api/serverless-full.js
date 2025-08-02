@@ -120,7 +120,8 @@ app.use(passport.session());
 passport.use(new LocalStrategy(
     async function(username, password, done) {
         try {
-            const result = await db.execute(
+            // Use pgPool.query instead of db.execute for raw SQL
+            const result = await pgPool.query(
                 `SELECT id, username, password, is_admin as "isAdmin", last_login as "lastLogin" 
                  FROM users WHERE username = $1`,
                 [username]
@@ -139,7 +140,7 @@ passport.use(new LocalStrategy(
             }
             
             // Update last login
-            await db.execute(
+            await pgPool.query(
                 'UPDATE users SET last_login = NOW() WHERE id = $1',
                 [user.id]
             );
@@ -162,7 +163,7 @@ passport.serializeUser(function(user, done) {
 
 passport.deserializeUser(async function(id, done) {
     try {
-        const result = await db.execute(
+        const result = await pgPool.query(
             `SELECT id, username, is_admin as "isAdmin", last_login as "lastLogin" 
              FROM users WHERE id = $1`,
             [id]
@@ -243,7 +244,7 @@ app.get('/api/users', async (req, res) => {
     }
     
     try {
-        const result = await db.execute(
+        const result = await pgPool.query(
             'SELECT id, username, is_admin as "isAdmin", last_login as "lastLogin" FROM users'
         );
         res.json(result.rows);
@@ -256,7 +257,7 @@ app.get('/api/users', async (req, res) => {
 // Articles endpoints (simplified for now)
 app.get('/api/articles', async (req, res) => {
     try {
-        const result = await db.execute(
+        const result = await pgPool.query(
             'SELECT * FROM articles ORDER BY created_at DESC LIMIT 50'
         );
         res.json(result.rows);
