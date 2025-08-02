@@ -34,10 +34,12 @@ if (process.env.NODE_ENV === 'production') {
 
 const pgPool = new pg.Pool({
     connectionString,
-    max: 1,
-    idleTimeoutMillis: 10000,
-    connectionTimeoutMillis: 10000,
-    ssl: sslConfig
+    max: 3, // Increase from 1 to 3 for better concurrency
+    idleTimeoutMillis: 1000, // Reduce idle timeout for serverless
+    connectionTimeoutMillis: 30000, // Increase connection timeout to 30 seconds
+    ssl: sslConfig,
+    // Add connection retry logic
+    application_name: 'vercel-serverless'
 });
 
 // Test database connection
@@ -49,12 +51,16 @@ pgPool.query('SELECT 1')
 
 const db = drizzle(pgPool);
 
-// Configure CORS
+// Configure CORS - ensure FRONTEND_URL has no trailing spaces or newlines
+const frontendUrl = process.env.FRONTEND_URL ? process.env.FRONTEND_URL.trim() : null;
+console.log('CORS configuration - FRONTEND_URL:', frontendUrl ? `"${frontendUrl}"` : 'not set (allowing all origins)');
+
 const corsOptions = {
-    origin: process.env.FRONTEND_URL || true,
+    origin: frontendUrl || true, // If no FRONTEND_URL, allow all origins
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 };
 
 app.use(cors(corsOptions));
