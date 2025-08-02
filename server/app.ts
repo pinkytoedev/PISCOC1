@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { serveStatic, log } from "./vite";
 import { setupStaticServing } from "./middleware/staticMiddleware";
+import path from "path";
+import fs from "fs";
 
 const app = express();
 app.use(express.json());
@@ -34,7 +35,7 @@ app.use((req, res, next) => {
                 logLine = logLine.slice(0, 79) + "…";
             }
 
-            log(logLine);
+            console.log(logLine);
         }
     });
 
@@ -52,7 +53,16 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     throw err;
 });
 
-// In production, serve static files
-serveStatic(app);
+// In production, serve static files - simplified version to avoid Vite imports
+const distPath = path.resolve(process.cwd(), "dist/public");
+
+if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+
+    // fall through to index.html if the file doesn't exist
+    app.use("*", (_req, res) => {
+        res.sendFile(path.resolve(distPath, "index.html"));
+    });
+}
 
 export default app;
