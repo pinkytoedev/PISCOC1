@@ -20,7 +20,7 @@ This document provides details about the available API endpoints in the Multi-Pl
 
 ### Login
 
-- **URL**: `/auth/login`
+- **URL**: `/api/login`
 - **Method**: `POST`
 - **Description**: Authenticate user and create a session
 - **Request Body**:

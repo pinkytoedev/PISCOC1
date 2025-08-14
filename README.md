@@ -9,15 +9,43 @@ A comprehensive platform for managing content across multiple social media and c
 - Node.js 20+ 
 - PostgreSQL 16+
 - npm or yarn
+- Railway CLI (optional, recommended for local env injection)
+   'npm i -g @railway/cli'
 
 ### Local Development Setup
 
-#### Option 1: Manual Setup
+#### Option 1: Railway (Recommended)
 
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd PISCOC1
+   cd <project-folder>
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Login and link Railway** (for local env variables)
+   ```bash
+   npm i -g @railway/cli
+   railway login
+   railway link
+   ```
+
+4. **Start development server with Railway env**
+   ```bash
+   railway run npm run dev
+   ```
+   The app will start on `http://localhost:3000` (auto-fallbacks to `3001`, `3002`, etc. if ports are busy). HTTPS for Facebook runs on `https://localhost:3001`.
+
+#### Option 2: Manual Setup (without Railway)
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd <project-folder>
    ```
 
 2. **Install dependencies**
@@ -26,17 +54,13 @@ A comprehensive platform for managing content across multiple social media and c
    ```
 
 3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` and configure your API keys and database connection. See [API Keys Setup](#api-keys-setup) section below.
+   Edit `.env` and configure your API keys and database connection. See [API Keys Setup](#api-keys-setup).
 
 4. **Set up PostgreSQL database**
    ```bash
    # Create database
-   createdb multi_platform_integration
-   
+   createdb [Database name]
+
    # Push database schema
    npm run db:push
    ```
@@ -45,35 +69,7 @@ A comprehensive platform for managing content across multiple social media and c
    ```bash
    npm run dev
    ```
-   
-   The application will be available at `http://localhost:5000`
-
-#### Option 2: Docker Setup (Recommended)
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd PISCOC1
-   ```
-
-2. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit `.env` and configure your API keys. Database connection is handled automatically.
-
-3. **Start with Docker Compose**
-   ```bash
-   docker-compose up -d
-   ```
-   
-   This will start both the application and PostgreSQL database. The application will be available at `http://localhost:5000`
-
-4. **Initialize database**
-   ```bash
-   docker-compose exec app npm run db:push
-   ```
+   The app will start on `http://localhost:3000` (auto-fallbacks to `3001`, `3002`, etc. if ports are busy).
 
 ### Production Build
 
@@ -101,8 +97,6 @@ A comprehensive platform for managing content across multiple social media and c
 This application integrates with multiple external services. You'll need to obtain API keys for each service you want to use:
 
 ### Required Environment Variables (SEE .env.example)
-
-```
 
 ### Obtaining API Keys
 
@@ -163,7 +157,7 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 
 ## 🔧 Available Scripts
 
-- `npm run dev` - Start development server (HTTP)
+- `npm run dev` - Start development server (HTTP). When using Railway env vars locally, run `railway run npm run dev`.
 - `npm run dev:https` - Start development server with HTTPS (required for Facebook Login)
 - `npm run setup:https` - Generate HTTPS certificates for local development
 - `npm run build` - Build for production
@@ -171,7 +165,7 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 - `npm run check` - Run TypeScript type checking
 - `npm run db:push` - Push database schema changes
 -`npm run test:setup` - Check if you are ready to start dev session
--`npm run test:neon` - Checks Database configuration from env file
+
 
 ### 🔒 HTTPS Setup for Facebook Integration
 
@@ -209,14 +203,13 @@ This application uses NEON PostgreSQL with Drizzle ORM. Database schema is defin
 
 ## 🚀 Development
 
-The application is designed to run on a single port (3000) serving both the API and frontend. Ensure your deployment environment:
+The application serves both API and frontend from a single Express server using Vite middleware in development.
 
-1. Has Node.js 20+ installed
-2. Has PostgreSQL database available
-3. Has all required environment variables set
-4. run `npm run test:setup` & `npm run test:neon`
-4. Run `npm run dev` before 
-5. Vist to localhost page
+- Ensure you have Node.js 20+, PostgreSQL available, and required environment variables set (via `.env` or Railway).
+- Optional checks: `npm run test:setup`, will see if everything is present to start dev server
+  - With Railway env vars: `railway run npm run dev`
+  - Manually: `npm run dev`
+- Visit `http://localhost:3000` (falls back to `3001`, `3002`, ... if busy). For Facebook login testing, use `https://localhost:3001`.
 
 ## 🤝 Contributing
 

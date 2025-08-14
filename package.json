@@ -4,7 +4,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "dev": "tsx server/index.ts",
+    "dev": "NODE_ENV=development tsx server/index.ts",
     "dev:https": "NODE_ENV=development tsx server/index.ts",
     "build": "vite build && node build.config.js",
     "start": "NODE_ENV=production node dist/index.js",
