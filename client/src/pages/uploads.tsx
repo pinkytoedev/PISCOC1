@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Upload, FileIcon, Image as ImageIcon, Link, Copy, Trash2, Clock, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { format } from 'date-fns';
 import type { Article } from '../../../shared/schema';
@@ -20,7 +21,7 @@ import type { Article } from '../../../shared/schema';
 interface UploadToken {
   id: number;
   token: string;
-  uploadType: string;
+  uploadTypes: string[];
   uploadUrl: string;
   expiresAt: string;
   maxUses: number;
@@ -43,7 +44,7 @@ export default function UploadsPage() {
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [uploadType, setUploadType] = useState<'main' | 'instagram'>('main');
   const [isUploading, setIsUploading] = useState(false);
-  const [tokenUploadType, setTokenUploadType] = useState<string>('image');
+  const [tokenUploadTypes, setTokenUploadTypes] = useState<string[]>(['image']);
   const [tokenName, setTokenName] = useState<string>('');
   const [tokenNotes, setTokenNotes] = useState<string>('');
   const [tokenMaxUses, setTokenMaxUses] = useState<number>(1);
@@ -81,7 +82,7 @@ export default function UploadsPage() {
   const generateTokenMutation = useMutation({
     mutationFn: async (data: {
       articleId: string;
-      uploadType: string;
+      uploadTypes: string[];
       expirationDays: number;
       maxUses: number;
       name?: string;
@@ -162,9 +163,18 @@ export default function UploadsPage() {
       return;
     }
     
+    if (tokenUploadTypes.length === 0) {
+      toast({
+        title: 'Validation error',
+        description: 'Please select at least one upload type',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     await generateTokenMutation.mutateAsync({
       articleId: selectedArticle,
-      uploadType: tokenUploadType,
+      uploadTypes: tokenUploadTypes,
       expirationDays: tokenExpirationDays,
       maxUses: tokenMaxUses,
       name: tokenName || undefined,
@@ -590,11 +600,13 @@ export default function UploadsPage() {
                                   <Eye className="h-3 w-3" />
                                   <span>Used {token.uses} of {token.maxUses || '∞'} times</span>
                                 </div>
-                                <div className="mt-1 flex items-center gap-1">
-                                  <span className="text-xs font-medium">Type:</span>
-                                  <Badge variant="outline" className="text-xs">
-                                    {token.uploadType.replace('-', ' ')}
-                                  </Badge>
+                                <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                  <span className="text-xs font-medium">Types:</span>
+                                  {token.uploadTypes.map(type => (
+                                    <Badge key={type} variant="outline" className="text-xs">
+                                      {type.replace('-', ' ')}
+                                    </Badge>
+                                  ))}
                                 </div>
                               </div>
                               {token.notes && (
@@ -643,20 +655,60 @@ export default function UploadsPage() {
           <form onSubmit={handleGenerateToken} className="space-y-4">
             <div className="grid gap-4">
               <div className="space-y-2">
-                <Label htmlFor="token-upload-type">Upload Type</Label>
-                <Select 
-                  value={tokenUploadType} 
-                  onValueChange={setTokenUploadType}
-                >
-                  <SelectTrigger id="token-upload-type">
-                    <SelectValue placeholder="Select upload type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="image">Main Image</SelectItem>
-                    <SelectItem value="instagram-image">Instagram Image</SelectItem>
-                    <SelectItem value="html-zip">HTML ZIP</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Upload Types</Label>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="upload-type-image"
+                      checked={tokenUploadTypes.includes('image')}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setTokenUploadTypes(prev => [...prev, 'image']);
+                        } else {
+                          setTokenUploadTypes(prev => prev.filter(type => type !== 'image'));
+                        }
+                      }}
+                    />
+                    <Label htmlFor="upload-type-image" className="font-normal">
+                      Main Image
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="upload-type-instagram"
+                      checked={tokenUploadTypes.includes('instagram-image')}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setTokenUploadTypes(prev => [...prev, 'instagram-image']);
+                        } else {
+                          setTokenUploadTypes(prev => prev.filter(type => type !== 'instagram-image'));
+                        }
+                      }}
+                    />
+                    <Label htmlFor="upload-type-instagram" className="font-normal">
+                      Instagram Image
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="upload-type-html"
+                      checked={tokenUploadTypes.includes('html-zip')}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setTokenUploadTypes(prev => [...prev, 'html-zip']);
+                        } else {
+                          setTokenUploadTypes(prev => prev.filter(type => type !== 'html-zip'));
+                        }
+                      }}
+                    />
+                    <Label htmlFor="upload-type-html" className="font-normal">
+                      HTML ZIP
+                    </Label>
+                  </div>
+                </div>
+                {tokenUploadTypes.length === 0 && (
+                  <p className="text-sm text-red-500">Please select at least one upload type</p>
+                )}
               </div>
               
               <div className="space-y-2">
