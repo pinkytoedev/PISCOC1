@@ -1039,7 +1039,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
           const uploadToken = await storage.createUploadToken({
             token,
             articleId: article.id,
-            uploadType: "image",
+            uploadTypes: ["image"],
             createdById: null, // No user ID since this is from Discord
             expiresAt,
             maxUses,
@@ -1163,7 +1163,7 @@ async function handleStringSelectMenuInteraction(interaction: any) {
           const uploadToken = await storage.createUploadToken({
             token,
             articleId: article.id,
-            uploadType: "html-zip",
+            uploadTypes: ["html-zip"],
             createdById: null, // No user ID since this is from Discord
             expiresAt,
             maxUses,
@@ -1663,7 +1663,7 @@ async function handleButtonInteraction(
               const uploadToken = await storage.createUploadToken({
                 token,
                 articleId,
-                uploadType: "html-zip",
+                uploadTypes: ["html-zip"],
                 createdById: null, // No user ID since this is from Discord
                 expiresAt,
                 maxUses,
@@ -1804,7 +1804,7 @@ async function handleButtonInteraction(
             const uploadToken = await storage.createUploadToken({
               token,
               articleId: article.id,
-              uploadType: "instagram-image",
+              uploadTypes: ["instagram-image"],
               createdById: null, // No user ID since this is from Discord
               expiresAt,
               maxUses,

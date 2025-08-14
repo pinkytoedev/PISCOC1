@@ -3,13 +3,15 @@ import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { AlertCircle, Upload, FileIcon, Image as ImageIcon } from 'lucide-react';
 
 interface UploadInfo {
   success: boolean;
   token: {
     id: number;
-    uploadType: string;
+    uploadTypes: string[];
     expiresAt: string;
     maxUses: number;
     uses: number;
@@ -28,7 +30,7 @@ interface UploadInfo {
 export default function PublicUploadPage() {
   const [location] = useLocation();
   const [token, setToken] = useState<string>('');
-  const [uploadType, setUploadType] = useState<string>('');
+  const [selectedUploadType, setSelectedUploadType] = useState<string>('');
   const [tokenInfo, setTokenInfo] = useState<UploadInfo | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +42,9 @@ export default function PublicUploadPage() {
   // Extract token from URL
   useEffect(() => {
     const pathParts = location.split('/');
-    if (pathParts.length >= 3) {
-      const foundUploadType = pathParts[pathParts.length - 2];
+    if (pathParts.length >= 2) {
       const foundToken = pathParts[pathParts.length - 1];
-      
       setToken(foundToken);
-      setUploadType(foundUploadType);
     }
   }, [location]);
 
@@ -81,6 +80,13 @@ export default function PublicUploadPage() {
     fetchTokenInfo();
   }, [token]);
 
+  // Set default upload type when token info is loaded
+  useEffect(() => {
+    if (tokenInfo && tokenInfo.token.uploadTypes.length > 0 && !selectedUploadType) {
+      setSelectedUploadType(tokenInfo.token.uploadTypes[0]);
+    }
+  }, [tokenInfo, selectedUploadType]);
+
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -90,7 +96,7 @@ export default function PublicUploadPage() {
 
   // Handle file upload
   const handleUpload = async () => {
-    if (!file || !token || !uploadType) return;
+    if (!file || !token || !selectedUploadType) return;
     
     setUploading(true);
     setUploadError(null);
@@ -99,7 +105,7 @@ export default function PublicUploadPage() {
     formData.append('file', file);
     
     try {
-      const response = await fetch(`/api/public-upload/${uploadType}/${token}`, {
+      const response = await fetch(`/api/public-upload/${token}/${selectedUploadType}`, {
         method: 'POST',
         body: formData,
       });
@@ -120,7 +126,7 @@ export default function PublicUploadPage() {
 
   // Determine accepted file types based on upload type
   const getAcceptedFileTypes = () => {
-    switch (uploadType) {
+    switch (selectedUploadType) {
       case 'image':
       case 'instagram-image':
         return 'image/*';
@@ -133,7 +139,7 @@ export default function PublicUploadPage() {
 
   // Get friendly type name
   const getUploadTypeName = () => {
-    switch (uploadType) {
+    switch (selectedUploadType) {
       case 'image':
         return 'Main Article Image';
       case 'instagram-image':
@@ -169,7 +175,7 @@ export default function PublicUploadPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {uploadType === 'image' || uploadType === 'instagram-image' ? (
+            {selectedUploadType === 'image' || selectedUploadType === 'instagram-image' ? (
               <ImageIcon className="h-5 w-5" />
             ) : (
               <FileIcon className="h-5 w-5" />
@@ -191,6 +197,30 @@ export default function PublicUploadPage() {
                 )}
               </AlertDescription>
             </Alert>
+
+            {/* Upload type selection when multiple types are available */}
+            {tokenInfo && tokenInfo.token.uploadTypes.length > 1 && (
+              <div className="space-y-2">
+                <Label htmlFor="upload-type-select">Upload Type</Label>
+                <Select 
+                  value={selectedUploadType} 
+                  onValueChange={setSelectedUploadType}
+                >
+                  <SelectTrigger id="upload-type-select">
+                    <SelectValue placeholder="Select upload type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tokenInfo.token.uploadTypes.map(type => (
+                      <SelectItem key={type} value={type}>
+                        {type === 'image' && 'Main Article Image'}
+                        {type === 'instagram-image' && 'Instagram Image'}
+                        {type === 'html-zip' && 'HTML ZIP Package'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div>
               <input

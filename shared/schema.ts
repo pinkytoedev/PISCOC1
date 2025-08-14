@@ -246,7 +246,7 @@ export const uploadTokens = pgTable("upload_tokens", {
   id: serial("id").primaryKey(),
   token: varchar("token", { length: 64 }).notNull().unique(),
   articleId: integer("article_id").notNull().references(() => articles.id, { onDelete: 'cascade' }),
-  uploadType: varchar("upload_type", { length: 50 }).notNull(), // 'image', 'instagram-image', 'html-zip'
+  uploadTypes: jsonb("upload_types").notNull(), // Array of enabled upload types: ['image', 'instagram-image', 'html-zip']
   createdById: integer("created_by_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
@@ -270,4 +270,5 @@ export const insertUploadTokenSchema = createInsertSchema(uploadTokens).omit({
     z.string().transform((val) => new Date(val)),
     z.date()
   ]),
+  uploadTypes: z.array(z.enum(['image', 'instagram-image', 'html-zip'])).min(1, 'At least one upload type must be selected'),
 });

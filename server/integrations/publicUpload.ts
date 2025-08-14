@@ -3,7 +3,7 @@
  * Allows non-authenticated users to upload files using secure tokens
  */
 
-import { Express, Request, Response } from 'express';
+import { Express, Request, Response, NextFunction } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -11,6 +11,18 @@ import { storage } from '../storage';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
 import { processZipFile } from '../utils/zipProcessor';
 import { generateUniqueToken, calculateExpirationDate } from '../utils/tokenGenerator';
+import type { UploadToken, Article } from '../../shared/schema';
+
+// Extend Request interface to include our custom properties
+declare global {
+  namespace Express {
+    interface Request {
+      uploadToken?: UploadToken;
+      targetArticle?: Article;
+      requestedUploadType?: string;
+    }
+  }
+}
 
 // Configure multer for file uploads (same configuration as directUpload.ts)
 const uploadDir = path.join(process.cwd(), 'uploads');
@@ -60,7 +72,7 @@ const zipUpload = multer({
 });
 
 // Token verification middleware
-async function verifyUploadToken(req: Request, res: Response, next: Function) {
+async function verifyUploadToken(req: Request, res: Response, next: NextFunction) {
   const token = req.params.token || req.query.token;
   
   if (!token) {
@@ -111,6 +123,72 @@ async function verifyUploadToken(req: Request, res: Response, next: Function) {
   }
 }
 
+// Token verification middleware with upload type validation
+async function verifyUploadTokenWithType(req: Request, res: Response, next: NextFunction) {
+  const token = req.params.token || req.query.token;
+  const uploadType = req.params.uploadType;
+  
+  if (!token) {
+    return res.status(401).json({ message: 'No upload token provided' });
+  }
+  
+  if (!uploadType) {
+    return res.status(400).json({ message: 'Upload type is required' });
+  }
+  
+  try {
+    // Check if token exists and is valid
+    const uploadToken = await storage.getUploadTokenByToken(token as string);
+    
+    if (!uploadToken) {
+      return res.status(401).json({ message: 'Invalid upload token' });
+    }
+    
+    if (!uploadToken.active) {
+      return res.status(401).json({ message: 'Upload token is inactive' });
+    }
+    
+    const now = new Date();
+    if (uploadToken.expiresAt < now) {
+      // Update token status to inactive
+      await storage.updateUploadToken(uploadToken.id, { active: false });
+      return res.status(401).json({ message: 'Upload token has expired' });
+    }
+    
+    // Handle null values safely
+    const maxUses = uploadToken.maxUses ?? 0;
+    const uses = uploadToken.uses ?? 0;
+    
+    if (maxUses > 0 && uses >= maxUses) {
+      return res.status(401).json({ message: 'Upload token has reached maximum uses' });
+    }
+    
+    // Check if the requested upload type is supported by this token
+    const uploadTypes = Array.isArray(uploadToken.uploadTypes) ? uploadToken.uploadTypes : [];
+    if (!uploadTypes.includes(uploadType)) {
+      return res.status(403).json({ 
+        message: `This token does not support ${uploadType} uploads. Supported types: ${uploadTypes.join(', ')}` 
+      });
+    }
+    
+    // Check if article still exists
+    const article = await storage.getArticle(uploadToken.articleId);
+    if (!article) {
+      return res.status(404).json({ message: 'Target article not found' });
+    }
+    
+    // Attach token and article to the request for use in handlers
+    req.uploadToken = uploadToken;
+    req.targetArticle = article;
+    req.requestedUploadType = uploadType;
+    
+    next();
+  } catch (error) {
+    console.error('Error verifying upload token:', error);
+    return res.status(500).json({ message: 'Server error validating upload token' });
+  }
+}
+
 /**
  * Setup public direct upload routes
  * @param app Express application instance
@@ -125,7 +203,7 @@ export function setupPublicUploadRoutes(app: Express) {
       
       const { 
         articleId, 
-        uploadType = 'image', 
+        uploadTypes = ['image'], // Now accepts array of upload types
         expirationDays = 7, 
         maxUses = 1,
         name, 
@@ -138,9 +216,19 @@ export function setupPublicUploadRoutes(app: Express) {
       
       // Valid upload types
       const validUploadTypes = ['image', 'instagram-image', 'html-zip'];
-      if (!validUploadTypes.includes(uploadType)) {
+      
+      // Validate uploadTypes is an array
+      if (!Array.isArray(uploadTypes) || uploadTypes.length === 0) {
         return res.status(400).json({ 
-          message: 'Invalid upload type. Must be one of: ' + validUploadTypes.join(', ')
+          message: 'uploadTypes must be a non-empty array' 
+        });
+      }
+      
+      // Validate each upload type
+      const invalidTypes = uploadTypes.filter(type => !validUploadTypes.includes(type));
+      if (invalidTypes.length > 0) {
+        return res.status(400).json({ 
+          message: `Invalid upload types: ${invalidTypes.join(', ')}. Must be one of: ${validUploadTypes.join(', ')}`
         });
       }
       
@@ -163,12 +251,12 @@ export function setupPublicUploadRoutes(app: Express) {
       const uploadToken = await storage.createUploadToken({
         token,
         articleId: article.id,
-        uploadType,
+        uploadTypes,
         createdById: req.user?.id,
         expiresAt,
         maxUses,
         active: true,
-        name: name || `${uploadType} upload for ${article.title}`,
+        name: name || `Multi-upload for ${article.title}`,
         notes: notes || ''
       });
       
@@ -181,7 +269,7 @@ export function setupPublicUploadRoutes(app: Express) {
         details: {
           articleId: article.id,
           articleTitle: article.title,
-          uploadType,
+          uploadTypes,
           expiresAt,
           maxUses
         }
@@ -190,8 +278,8 @@ export function setupPublicUploadRoutes(app: Express) {
       return res.json({
         success: true,
         token: uploadToken.token,
-        uploadUrl: `/public-upload/${uploadToken.uploadType}/${uploadToken.token}`,
-        uploadType: uploadToken.uploadType,
+        uploadUrl: `/public-upload/${uploadToken.token}`, // New unified URL
+        uploadTypes: uploadToken.uploadTypes,
         expiresAt: uploadToken.expiresAt,
         maxUses: uploadToken.maxUses
       });
@@ -235,8 +323,8 @@ export function setupPublicUploadRoutes(app: Express) {
         tokens: tokens.map(token => ({
           id: token.id,
           token: token.token,
-          uploadType: token.uploadType,
-          uploadUrl: `/public-upload/${token.uploadType}/${token.token}`,
+          uploadTypes: token.uploadTypes,
+          uploadUrl: `/public-upload/${token.token}`, // New unified URL
           createdAt: token.createdAt,
           expiresAt: token.expiresAt,
           maxUses: token.maxUses,
@@ -286,7 +374,7 @@ export function setupPublicUploadRoutes(app: Express) {
           resourceId: tokenId.toString(),
           details: {
             articleId: token.articleId,
-            uploadType: token.uploadType
+            uploadTypes: token.uploadTypes
           }
         });
         
@@ -299,6 +387,165 @@ export function setupPublicUploadRoutes(app: Express) {
       console.error('Error deleting upload token:', error);
       return res.status(500).json({
         message: 'Failed to delete upload token',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // New unified upload endpoint that handles all upload types
+  app.post('/api/public-upload/:token/:uploadType', verifyUploadTokenWithType, (req: Request, res: Response, next: NextFunction) => {
+    // Determine which multer middleware to use based on upload type
+    const uploadType = req.params.uploadType;
+    
+    if (uploadType === 'image' || uploadType === 'instagram-image') {
+      return imageUpload.single('file')(req, res, next);
+    } else if (uploadType === 'html-zip') {
+      return zipUpload.single('file')(req, res, next);
+    } else {
+      return res.status(400).json({ message: 'Invalid upload type' });
+    }
+  }, async (req: Request, res: Response) => {
+    try {
+      // Token, article, and upload type are attached by verifyUploadTokenWithType middleware
+      if (!req.uploadToken || !req.targetArticle || !req.requestedUploadType) {
+        return res.status(500).json({ message: 'Internal server error - token data missing' });
+      }
+      
+      const uploadToken = req.uploadToken;
+      const article = req.targetArticle;
+      const uploadType = req.requestedUploadType;
+      
+      if (!req.file) {
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+      
+      console.log(`Processing unified public upload for type '${uploadType}' - article: ${article.title} (ID: ${article.id}) with token: ${uploadToken.token}`);
+      
+      let result;
+      
+      // Handle different upload types
+      if (uploadType === 'image') {
+        // Upload to ImgBB for main article image
+        const imgbbResult = await uploadImageToImgBB({
+          path: req.file.path,
+          filename: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        });
+        
+        if (!imgbbResult) {
+          return res.status(500).json({ message: 'Failed to upload image to ImgBB' });
+        }
+        
+        // Update article with image URL
+        const updateData = {
+          imageUrl: imgbbResult.url,
+          imageType: 'url'
+        };
+        
+        const updatedArticle = await storage.updateArticle(article.id, updateData);
+        
+        if (!updatedArticle) {
+          return res.status(500).json({ message: 'Failed to update article with image URL' });
+        }
+        
+        result = {
+          success: true,
+          message: 'Main image uploaded successfully',
+          imgbb: {
+            id: imgbbResult.id,
+            url: imgbbResult.url,
+            display_url: imgbbResult.display_url
+          }
+        };
+        
+      } else if (uploadType === 'instagram-image') {
+        // Upload to ImgBB for Instagram image
+        const imgbbResult = await uploadImageToImgBB({
+          path: req.file.path,
+          filename: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype
+        });
+        
+        if (!imgbbResult) {
+          return res.status(500).json({ message: 'Failed to upload Instagram image to ImgBB' });
+        }
+        
+        // Update article with Instagram image URL
+        const updateData = {
+          instagramImageUrl: imgbbResult.url
+        };
+        
+        const updatedArticle = await storage.updateArticle(article.id, updateData);
+        
+        if (!updatedArticle) {
+          return res.status(500).json({ message: 'Failed to update article with Instagram image URL' });
+        }
+        
+        result = {
+          success: true,
+          message: 'Instagram image uploaded successfully',
+          imgbb: {
+            id: imgbbResult.id,
+            url: imgbbResult.url,
+            display_url: imgbbResult.display_url
+          }
+        };
+        
+      } else if (uploadType === 'html-zip') {
+        // Process ZIP file with HTML content
+        const zipResult = await processZipFile(req.file.path, article.id);
+        
+        if (!zipResult.success) {
+          return res.status(500).json({ 
+            message: 'Failed to process ZIP file',
+            details: zipResult.message
+          });
+        }
+        
+        // The processZipFile function already updates the article with the HTML content
+        // So we don't need to do it here again
+        
+        result = {
+          success: true,
+          message: 'HTML ZIP file processed successfully',
+          details: zipResult.message
+        };
+      }
+      
+      // Increment token usage
+      await storage.incrementUploadTokenUses(uploadToken.id);
+      
+      // Log activity (without userId since it's a public upload)
+      await storage.createActivityLog({
+        action: 'upload',
+        resourceType: uploadType,
+        resourceId: article.id.toString(),
+        details: {
+          uploadType: uploadType,
+          filename: req.file.originalname,
+          uploadToken: uploadToken.token
+        }
+      });
+      
+      // Cleanup temporary file
+      if (fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      return res.json(result);
+      
+    } catch (error) {
+      console.error('Error in unified public upload:', error);
+      
+      // Clean up the temporary file if it exists
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      
+      return res.status(500).json({
+        message: 'Failed to process upload',
         error: error instanceof Error ? error.message : String(error)
       });
     }
@@ -317,7 +564,7 @@ export function setupPublicUploadRoutes(app: Express) {
       const uploadToken = req.uploadToken;
       const article = req.targetArticle;
       
-      if (uploadToken.uploadType !== 'image') {
+      if (!Array.isArray(uploadToken.uploadTypes) || !uploadToken.uploadTypes.includes('image')) {
         return res.status(400).json({ message: 'This token is not valid for image uploads' });
       }
       
@@ -409,7 +656,7 @@ export function setupPublicUploadRoutes(app: Express) {
       const uploadToken = req.uploadToken;
       const article = req.targetArticle;
       
-      if (uploadToken.uploadType !== 'instagram-image') {
+      if (!Array.isArray(uploadToken.uploadTypes) || !uploadToken.uploadTypes.includes('instagram-image')) {
         return res.status(400).json({ message: 'This token is not valid for Instagram image uploads' });
       }
       
@@ -526,7 +773,7 @@ export function setupPublicUploadRoutes(app: Express) {
       const uploadToken = req.uploadToken;
       const article = req.targetArticle;
       
-      if (uploadToken.uploadType !== 'html-zip') {
+      if (!Array.isArray(uploadToken.uploadTypes) || !uploadToken.uploadTypes.includes('html-zip')) {
         return res.status(400).json({ message: 'This token is not valid for HTML ZIP uploads' });
       }
       
@@ -602,14 +849,14 @@ export function setupPublicUploadRoutes(app: Express) {
         success: true,
         token: {
           id: uploadToken.id,
-          uploadType: uploadToken.uploadType,
+          uploadTypes: uploadToken.uploadTypes,
           expiresAt: uploadToken.expiresAt,
           maxUses: uploadToken.maxUses,
           uses: uploadToken.uses,
           active: uploadToken.active,
           name: uploadToken.name,
           notes: uploadToken.notes,
-          uploadUrl: `/api/public-upload/${uploadToken.uploadType}/${uploadToken.token}`
+          uploadUrl: `/public-upload/${uploadToken.token}` // New unified URL
         },
         article: {
           id: article.id,
