@@ -6,7 +6,7 @@ buildCommand = "npm install && npm run build"
 startCommand = "npm start"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 100
-restartPolicyType = "always"
+restartPolicyType = "on_failure"
 
 [service]
 internalPort = 3001

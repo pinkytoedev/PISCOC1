@@ -1,408 +1,308 @@
 # API Documentation
 
-This document provides details about the available API endpoints in the Multi-Platform Integration Ecosystem.
+This document lists all available API endpoints implemented by the server.
 
 ## Table of Contents
 
-- [Authentication](#authentication)
+- [Health & Config](#health--config)
+- [Authentication & Users](#authentication--users)
 - [Team Members](#team-members)
 - [Articles](#articles)
 - [Carousel Quotes](#carousel-quotes)
 - [Admin Requests](#admin-requests)
 - [Image Assets](#image-assets)
-- [Integration Settings](#integration-settings)
+- [Uploads](#uploads)
+  - [Direct Upload (authenticated)](#direct-upload-authenticated)
+  - [Public Upload (token-based)](#public-upload-token-based)
+- [Airtable Integration](#airtable-integration)
+- [ImgBB Integration](#imgbb-integration)
+- [Discord Integration](#discord-integration)
+- [Discord Bot](#discord-bot)
+- [Instagram Integration](#instagram-integration)
+- [GitHub Integration](#github-integration)
+- [Integration Settings (generic)](#integration-settings-generic)
 - [Activity Logs](#activity-logs)
 - [Metrics](#metrics)
 - [Migration Progress](#migration-progress)
 - [API Status](#api-status)
 
-## Authentication
+## Health & Config
 
-### Login
+- GET `/api/health`
+  - Returns server health info and environment flags
+- GET `/api/config/facebook`
+  - Returns Facebook configuration status or 503 if not configured
 
-- **URL**: `/api/login`
-- **Method**: `POST`
-- **Description**: Authenticate user and create a session
-- **Request Body**:
-  ```json
-  {
-    "username": "string",
-    "password": "string"
-  }
-  ```
-- **Success Response**: Status: `200 OK`
-- **Error Response**: Status: `401 Unauthorized`
+## Authentication & Users
 
-### Logout
-
-- **URL**: `/auth/logout`
-- **Method**: `POST`
-- **Description**: End the current user session
-- **Success Response**: Status: `200 OK`
-
-### Get Current User
-
-- **URL**: `/api/user`
-- **Method**: `GET`
-- **Description**: Get the current authenticated user
-- **Success Response**:
-  ```json
-  {
-    "id": "number",
-    "username": "string",
-    "role": "string"
-  }
-  ```
-- **Error Response**: Status: `401 Unauthorized`
+- POST `/api/login`
+  - Body:
+    ```json
+    {
+      "username": "string",
+      "password": "string"
+    }
+    ```
+  - Creates a session (cookie-based)
+- POST `/api/logout`
+  - Ends current session
+- GET `/api/user`
+  - Auth required: Yes
+  - Returns the authenticated user
+- POST `/api/register`
+  - Auth required: Yes (admin only)
+  - Body:
+    ```json
+    {
+      "username": "string",
+      "password": "string",
+      "isAdmin": false
+    }
+    ```
+- GET `/api/users`
+  - Auth required: Yes (admin only)
+- PUT `/api/users/:id`
+  - Auth required: Yes (admin only)
+- DELETE `/api/users/:id`
+  - Auth required: Yes (admin only)
 
 ## Team Members
 
-### Get All Team Members
-
-- **URL**: `/api/team-members`
-- **Method**: `GET`
-- **Description**: Get all team members
-- **Success Response**: Array of team member objects
-
-### Get Team Member
-
-- **URL**: `/api/team-members/:id`
-- **Method**: `GET`
-- **Description**: Get a specific team member by ID
-- **Success Response**: Team member object
-- **Error Response**: Status: `404 Not Found`
-
-### Create Team Member
-
-- **URL**: `/api/team-members`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Description**: Create a new team member
-- **Request Body**: Team member data
-- **Success Response**: Created team member object with status `201 Created`
-- **Error Response**: Status: `400 Bad Request` or `401 Unauthorized`
-
-### Update Team Member
-
-- **URL**: `/api/team-members/:id`
-- **Method**: `PUT`
-- **Auth Required**: Yes
-- **Description**: Update an existing team member
-- **Request Body**: Updated team member data
-- **Success Response**: Updated team member object
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
-
-### Delete Team Member
-
-- **URL**: `/api/team-members/:id`
-- **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Description**: Delete a team member
-- **Success Response**: Status: `204 No Content`
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
+- GET `/api/team-members`
+- GET `/api/team-members/:id`
+- POST `/api/team-members`
+  - Auth required: Yes
+- PUT `/api/team-members/:id`
+  - Auth required: Yes
+- DELETE `/api/team-members/:id`
+  - Auth required: Yes
 
 ## Articles
 
-### Get All Articles
-
-- **URL**: `/api/articles`
-- **Method**: `GET`
-- **Description**: Get all articles
-- **Success Response**: Array of article objects
-
-### Get Article
-
-- **URL**: `/api/articles/:id`
-- **Method**: `GET`
-- **Description**: Get a specific article by ID
-- **Success Response**: Article object
-- **Error Response**: Status: `404 Not Found`
-
-### Create Article
-
-- **URL**: `/api/articles`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Description**: Create a new article
-- **Request Body**: Article data
-- **Success Response**: Created article object with status `201 Created`
-- **Error Response**: Status: `400 Bad Request` or `401 Unauthorized`
-
-### Update Article
-
-- **URL**: `/api/articles/:id`
-- **Method**: `PUT`
-- **Auth Required**: Yes
-- **Description**: Update an existing article
-- **Request Body**: Updated article data
-- **Success Response**: Updated article object
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
-
-### Delete Article
-
-- **URL**: `/api/articles/:id`
-- **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Description**: Delete an article
-- **Success Response**: Status: `204 No Content`
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
-
-### Get Articles by Status
-
-- **URL**: `/api/articles/status/:status`
-- **Method**: `GET`
-- **Description**: Get articles filtered by status
-- **Success Response**: Array of article objects
-
-### Get Featured Articles
-
-- **URL**: `/api/articles/featured`
-- **Method**: `GET`
-- **Description**: Get all featured articles
-- **Success Response**: Array of article objects
+- GET `/api/articles`
+- GET `/api/articles/:id`
+- POST `/api/articles`
+  - Auth required: Yes
+  - Body: `InsertArticle` shape (see `shared/schema.ts`); `publishedAt` can be ISO string or Date
+- PUT `/api/articles/:id`
+  - Auth required: Yes
+  - Special behavior: when status changes to `published`, server may attempt an Instagram post
+- DELETE `/api/articles/:id`
+  - Auth required: Yes
+  - If article has Airtable `externalId`, it is deleted there first when configured
+- GET `/api/articles/status/:status`
+- GET `/api/articles/featured`
 
 ## Carousel Quotes
 
-### Get All Carousel Quotes
-
-- **URL**: `/api/carousel-quotes`
-- **Method**: `GET`
-- **Description**: Get all carousel quotes
-- **Success Response**: Array of carousel quote objects
-
-### Get Carousel Quote
-
-- **URL**: `/api/carousel-quotes/:id`
-- **Method**: `GET`
-- **Description**: Get a specific carousel quote by ID
-- **Success Response**: Carousel quote object
-- **Error Response**: Status: `404 Not Found`
-
-### Create Carousel Quote
-
-- **URL**: `/api/carousel-quotes`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Description**: Create a new carousel quote
-- **Request Body**: Carousel quote data
-- **Success Response**: Created carousel quote object with status `201 Created`
-- **Error Response**: Status: `400 Bad Request` or `401 Unauthorized`
-
-### Update Carousel Quote
-
-- **URL**: `/api/carousel-quotes/:id`
-- **Method**: `PUT`
-- **Auth Required**: Yes
-- **Description**: Update an existing carousel quote
-- **Request Body**: Updated carousel quote data
-- **Success Response**: Updated carousel quote object
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
-
-### Delete Carousel Quote
-
-- **URL**: `/api/carousel-quotes/:id`
-- **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Description**: Delete a carousel quote
-- **Success Response**: Status: `204 No Content`
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
-
-### Get Quotes by Carousel
-
-- **URL**: `/api/carousel-quotes/by-carousel/:carousel`
-- **Method**: `GET`
-- **Description**: Get carousel quotes filtered by carousel identifier
-- **Success Response**: Array of carousel quote objects
+- GET `/api/carousel-quotes`
+- GET `/api/carousel-quotes/:id`
+- POST `/api/carousel-quotes`
+  - Auth required: Yes
+- PUT `/api/carousel-quotes/:id`
+  - Auth required: Yes
+- DELETE `/api/carousel-quotes/:id`
+  - Auth required: Yes
+- GET `/api/carousel-quotes/by-carousel/:carousel`
 
 ## Admin Requests
 
-### Get All Admin Requests
-
-- **URL**: `/api/admin-requests`
-- **Method**: `GET`
-- **Description**: Get all admin requests
-- **Query Parameters**:
-  - `status` (optional): Filter by status (open, in-progress, resolved, closed)
-  - `category` (optional): Filter by category (Pinkytoe, PISCOC, Misc)
-  - `urgency` (optional): Filter by urgency (low, medium, high, critical)
-- **Success Response**: Array of admin request objects
-- **Example**:
-  ```
-  GET /api/admin-requests?status=open&category=PISCOC
-  ```
-
-### Get Admin Request
-
-- **URL**: `/api/admin-requests/:id`
-- **Method**: `GET`
-- **Description**: Get a specific admin request by ID
-- **Success Response**: Admin request object
-- **Error Response**: Status: `404 Not Found`
-
-### Create Admin Request
-
-- **URL**: `/api/admin-requests`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Description**: Create a new admin request
-- **Request Body**:
-  ```json
-  {
-    "title": "string",
-    "description": "string",
-    "category": "Pinkytoe | PISCOC | Misc",
-    "urgency": "low | medium | high | critical"
-  }
-  ```
-- **Success Response**: Created admin request object with status `201 Created`
-- **Error Response**: Status: `400 Bad Request` or `401 Unauthorized`
-
-### Update Admin Request
-
-- **URL**: `/api/admin-requests/:id`
-- **Method**: `PATCH`
-- **Auth Required**: Yes
-- **Description**: Update an existing admin request
-- **Request Body**: Updated fields (any of these fields can be updated)
-  ```json
-  {
-    "title": "string",
-    "description": "string",
-    "category": "Pinkytoe | PISCOC | Misc",
-    "urgency": "low | medium | high | critical",
-    "status": "open | in-progress | resolved | closed"
-  }
-  ```
-- **Success Response**: Updated admin request object
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
-
-### Delete Admin Request
-
-- **URL**: `/api/admin-requests/:id`
-- **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Description**: Delete an admin request
-- **Success Response**: Status: `204 No Content`
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
+- GET `/api/admin-requests`
+  - Optional query params: `status`, `category`, `urgency`
+- GET `/api/admin-requests/:id`
+- POST `/api/admin-requests`
+  - Auth required: Yes
+  - Body:
+    ```json
+    {
+      "title": "string",
+      "description": "string",
+      "category": "Pinkytoe|PISCOC|Misc",
+      "urgency": "low|medium|high|critical"
+    }
+    ```
+- PATCH `/api/admin-requests/:id`
+  - Auth required: Yes
+  - Body: any subset of the above plus `status`
+- DELETE `/api/admin-requests/:id`
+  - Auth required: Yes
 
 ## Image Assets
 
-### Get All Image Assets
+- GET `/api/image-assets`
+- GET `/api/image-assets/:id`
+- POST `/api/image-assets`
+  - Auth required: Yes
+- DELETE `/api/image-assets/:id`
+  - Auth required: Yes
 
-- **URL**: `/api/image-assets`
-- **Method**: `GET`
-- **Description**: Get all image assets
-- **Success Response**: Array of image asset objects
+## Uploads
 
-### Get Image Asset
+### Direct Upload (authenticated)
 
-- **URL**: `/api/image-assets/:id`
-- **Method**: `GET`
-- **Description**: Get a specific image asset by ID
-- **Success Response**: Image asset object
-- **Error Response**: Status: `404 Not Found`
+All endpoints require an authenticated session. Use `multipart/form-data` body.
 
-### Create Image Asset
+- POST `/api/direct-upload/image`
+  - Form fields:
+    - `file`: image file (<= 10MB)
+    - `articleId`: number
+  - Stores image via ImgBB and updates article `imageUrl`
+- POST `/api/direct-upload/instagram-image`
+  - Form fields:
+    - `file`: image file (<= 10MB)
+    - `articleId`: number
+  - Updates article `instagramImageUrl`
+- POST `/api/direct-upload/html-zip`
+  - Form fields:
+    - `file`: zip file (<= 50MB)
+    - `articleId`: number
+  - Processes HTML ZIP content for the article
 
-- **URL**: `/api/image-assets`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Description**: Create a new image asset
-- **Request Body**: Image asset data
-- **Success Response**: Created image asset object with status `201 Created`
-- **Error Response**: Status: `400 Bad Request` or `401 Unauthorized`
+### Public Upload (token-based)
 
-### Delete Image Asset
+Management (auth required):
+- POST `/api/public-upload/generate-token`
+  - Body:
+    ```json
+    {
+      "articleId": 123,
+      "uploadType": "image|instagram-image|html-zip",
+      "expirationDays": 7,
+      "maxUses": 1,
+      "name": "optional",
+      "notes": "optional"
+    }
+    ```
+- GET `/api/public-upload/tokens/:articleId`
+- DELETE `/api/public-upload/tokens/:id`
 
-- **URL**: `/api/image-assets/:id`
-- **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Description**: Delete an image asset
-- **Success Response**: Status: `204 No Content`
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
+Public endpoints (no auth; require valid token):
+- POST `/api/public-upload/image/:token` (form-data: `file`)
+- POST `/api/public-upload/instagram-image/:token` (form-data: `file`)
+- POST `/api/public-upload/html-zip/:token` (form-data: `file`)
+- GET `/api/public-upload/info/:token`
 
-## Integration Settings
+## Airtable Integration
 
-### Get Integration Settings
+- GET `/api/airtable/test-connection` (auth)
+- GET `/api/airtable/settings` (auth)
+- POST `/api/airtable/settings` (auth)
+- POST `/api/airtable/update-api-key` (auth)
+- POST `/api/airtable/sync/articles` (auth)
+- POST `/api/airtable/sync/team-members` (auth)
+- POST `/api/airtable/update/article/:id` (auth)
+- POST `/api/airtable/update-quote/:id` (auth)
+- POST `/api/airtable/sync/carousel-quotes` (auth)
+- POST `/api/airtable/push/carousel-quotes` (auth)
+- POST `/api/airtable/push/article/:id` (auth)
+- POST `/api/airtable/upload-image/:articleId/:fieldName` (auth)
+  - Form-data: `image` file; `fieldName` one of `MainImage|instaPhoto|MainImageLink|InstaPhotoLink`
+- POST `/api/airtable/upload-image-url/:articleId/:fieldName` (auth)
+  - Body:
+    ```json
+    {
+      "imageUrl": "https://...",
+      "filename": "name.ext"
+    }
+    ```
 
-- **URL**: `/api/integration-settings/:service`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Description**: Get all settings for a specific integration service
-- **Success Response**: Array of integration setting objects
+Dev/test utilities (intended for development):
+- GET `/api/airtable/direct-test`
+- POST `/api/airtable/test-link/:articleId` (auth)
+- POST `/api/airtable/test-migration/:articleId` (auth)
+- POST `/api/airtable/migrate-to-link-fields/:articleId` (auth)
+- POST `/api/airtable/test-batch-migration` (auth)
 
-### Get Integration Setting
+## ImgBB Integration
 
-- **URL**: `/api/integration-settings/:service/:key`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Description**: Get a specific integration setting by service and key
-- **Success Response**: Integration setting object
-- **Error Response**: Status: `404 Not Found`
+- GET `/api/imgbb/settings` (auth)
+- POST `/api/imgbb/settings/:key` (auth)
+- POST `/api/imgbb/upload-to-airtable/:articleId/:fieldName` (auth)
+  - Form-data: `image` file
+- POST `/api/imgbb/upload-url-to-airtable/:articleId/:fieldName` (auth)
+  - Body: `{ "imageUrl": "https://..." }`
 
-### Create Integration Setting
+## Discord Integration
 
-- **URL**: `/api/integration-settings`
-- **Method**: `POST`
-- **Auth Required**: Yes
-- **Description**: Create a new integration setting
-- **Request Body**: Integration setting data
-- **Success Response**: Created integration setting object with status `201 Created`
-- **Error Response**: Status: `400 Bad Request` or `401 Unauthorized`
+- GET `/api/discord/settings` (auth)
+- POST `/api/discord/settings` (auth)
 
-### Update Integration Setting
+## Discord Bot
 
-- **URL**: `/api/integration-settings/:id`
-- **Method**: `PUT`
-- **Auth Required**: Yes
-- **Description**: Update an existing integration setting
-- **Request Body**: Updated integration setting data
-- **Success Response**: Updated integration setting object
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
+- POST `/api/discord/bot/initialize`
+  - Body: `{ "token": "string", "clientId": "string" }`
+- POST `/api/discord/bot/start`
+- POST `/api/discord/bot/stop`
+- GET `/api/discord/bot/status`
+- GET `/api/discord/bot/servers`
+- GET `/api/discord/bot/invite-url`
+- POST `/api/discord/bot/send-channel-message` (auth)
+  - Body: `{ "guildId": "string", "channelId": "string", "message": "string" }`
+- POST `/api/discord/bot/webhook`
+  - Body: `{ "serverId": "string", "channelId": "string", "name": "string", "avatarUrl": "string" }`
+- POST `/api/discord/articles`
+  - Body:
+    ```json
+    {
+      "title": "string",
+      "description": "string",
+      "content": "string",
+      "author": "string",
+      "featured": false
+    }
+    ```
+  - Creates an article with `status: "draft"`
 
-### Delete Integration Setting
+## Instagram Integration
 
-- **URL**: `/api/integration-settings/:id`
-- **Method**: `DELETE`
-- **Auth Required**: Yes
-- **Description**: Delete an integration setting
-- **Success Response**: Status: `204 No Content`
-- **Error Response**: Status: `404 Not Found` or `401 Unauthorized`
+Webhooks:
+- GET `/api/instagram/webhooks/callback` (verification)
+- POST `/api/instagram/webhooks/callback` (events)
+- POST `/api/instagram/webhooks/subscribe`
+- GET `/api/instagram/webhooks/subscriptions`
+- DELETE `/api/instagram/webhooks/subscriptions/:id`
+- GET `/api/instagram/webhooks/field-groups`
+- GET `/api/instagram/webhooks/test`
+- GET `/api/instagram/webhooks/logs`
+
+Auth/config:
+- POST `/api/instagram/auth/token`
+  - Body: `{ "accessToken": "string", "userId": "string" }`
+
+Graph helpers:
+- GET `/api/instagram/account`
+- GET `/api/instagram/media` (optional `?limit=`)
+- GET `/api/instagram/media/:id`
+- POST `/api/instagram/media`
+  - Body: `{ "imageUrl": "https://...", "caption": "string" }`
+
+## GitHub Integration
+
+- GET `/api/github/settings` (auth)
+- POST `/api/github/settings/:key` (auth)
+- GET `/api/github/repository` (auth)
+
+## Integration Settings (generic)
+
+- GET `/api/integration-settings/:service` (auth)
+- GET `/api/integration-settings/:service/:key` (auth)
+- POST `/api/integration-settings` (auth)
+- PUT `/api/integration-settings/:id` (auth)
+- DELETE `/api/integration-settings/:id` (auth)
 
 ## Activity Logs
 
-### Get All Activity Logs
-
-- **URL**: `/api/activity-logs`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Description**: Get all activity logs
-- **Success Response**: Array of activity log objects
+- GET `/api/activity-logs` (auth)
 
 ## Metrics
 
-### Get Dashboard Metrics
-
-- **URL**: `/api/metrics`
-- **Method**: `GET`
-- **Auth Required**: Yes
-- **Description**: Get metrics data for dashboard
-- **Success Response**: Metrics data object
+- GET `/api/metrics` (auth)
 
 ## Migration Progress
 
-### Get Migration Progress
-
-- **URL**: `/api/migration-progress`
-- **Method**: `GET`
-- **Description**: Get current migration progress
-- **Success Response**: Migration progress data object
+- GET `/api/migration-progress`
 
 ## API Status
 
-### Get API Statuses
-
-- **URL**: `/api/status`
-- **Method**: `GET`
-- **Description**: Get status of all integrated APIs
-- **Success Response**: API status data object
+- GET `/api/status`
+- GET `/api/integration-status` (auth)
