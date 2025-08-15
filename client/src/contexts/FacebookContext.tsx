@@ -225,7 +225,7 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
       return;
     }
 
-    // Enhanced login flow for iframe environments like Replit
+    // Enhanced login flow for iframe environments
     try {
       console.log('Attempting Facebook login with fully initialized SDK');
       console.log('SDK states - FB exists:', !!window.FB, 'fbInitialized:', !!(window as any).fbInitialized, 'isInitialized:', isInitialized, 'fbInitComplete:', fbInitComplete);
@@ -237,13 +237,13 @@ export const FacebookProvider: React.FC<FacebookProviderProps> = ({ children, ap
         return;
       }
 
-      // Replit-specific handling for iframe environments
+      // Handle iframe environments
       const isInIframe = window !== window.parent;
       console.log('Is in iframe:', isInIframe);
 
-      // Alert user to authenticate on a separate window for Replit environment
+      // Alert user to authenticate on a separate window for iframe environments
       if (isInIframe) {
-        alert('The Facebook login popup may be blocked in the Replit environment. If it does not open, please try using this app outside of Replit or check for popup blockers.');
+        alert('The Facebook login popup may be blocked in iframe environments. If it does not open, please try using this app in a new browser tab or check for popup blockers.');
       }
 
       try {
