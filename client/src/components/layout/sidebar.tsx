@@ -66,12 +66,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           adminOnly: false,
         },
         {
-          name: "Direct Upload",
-          path: "/uploads",
-          icon: <Upload className="w-5 h-5" />,
-          adminOnly: false,
-        },
-        {
           name: "Team Members",
           path: "/team-members",
           icon: <Users className="w-5 h-5" />,

@@ -193,14 +193,9 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
         }
 
         // Upload to ImgBB
-        const imgbbResult = await uploadImageToImgBB({
-          path: req.file.path,
-          filename: req.file.originalname,
-          size: req.file.size,
-          mimetype: req.file.mimetype
-        });
+        const imgbbResult = await uploadImageToImgBB(req.file.path, req.file.originalname);
         
-        if (!imgbbResult) {
+        if (!imgbbResult.success) {
           throw new Error('Failed to upload image to storage service');
         }
 
@@ -281,14 +276,9 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
         }
 
         // Upload to ImgBB
-        const imgbbResult = await uploadImageToImgBB({
-          path: req.file.path,
-          filename: req.file.originalname,
-          size: req.file.size,
-          mimetype: req.file.mimetype
-        });
+        const imgbbResult = await uploadImageToImgBB(req.file.path, req.file.originalname);
         
-        if (!imgbbResult) {
+        if (!imgbbResult.success) {
           throw new Error('Failed to upload image to storage service');
         }
 
