@@ -65,7 +65,7 @@ function Router() {
       <Route path="/test" component={TestPage} />
 
       {/* Public upload routes - these don't require auth */}
-      <Route path="/public-upload/:token" component={PublicUploadPage} />
+      <Route path="/public-upload" component={PublicUploadPage} />
 
       <Route component={NotFound} />
     </Switch>
