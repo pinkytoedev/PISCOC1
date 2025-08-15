@@ -13,8 +13,8 @@ export default defineConfig({
     react(),
     runtimeErrorOverlay(),
     themePlugin(),
-    ...(process.env.NODE_ENV !== "production" &&
-      process.env.REPL_ID !== undefined
+    // Only load cartographer in Replit environment to avoid DevTools conflicts
+    ...(process.env.REPL_ID !== undefined && process.env.NODE_ENV !== "production"
       ? [
         await import("@replit/vite-plugin-cartographer").then((m) =>
           m.cartographer(),
@@ -32,6 +32,7 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
+    sourcemap: process.env.NODE_ENV === "development" ? 'inline' : false,
   },
   server: {
     hmr: {
