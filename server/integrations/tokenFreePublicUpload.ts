@@ -206,17 +206,18 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
 
         // Update article in database
         await storage.updateArticle(article.id, {
-          imageUrl: imgbbResult.url
+          imageUrl: imgbbResult.url,
+          imageType: 'url'
         });
 
         // Try to update Airtable if the article has an external ID
         if (article.externalId) {
           try {
-            const { uploadImageUrlAsLinkField } = require('../utils/airtableLink');
+            const { uploadImageUrlAsLinkField } = require('../utils/imageUploader');
             await uploadImageUrlAsLinkField(
               imgbbResult.url,
               article.externalId,
-              'ImageField'
+              'MainImageLink'
             );
           } catch (airtableError) {
             // Log error but don't fail the upload
@@ -300,7 +301,7 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
         // Try to update Airtable if the article has an external ID
         if (article.externalId) {
           try {
-            const { uploadImageUrlAsLinkField } = require('../utils/airtableLink');
+            const { uploadImageUrlAsLinkField } = require('../utils/imageUploader');
             await uploadImageUrlAsLinkField(
               imgbbResult.url,
               article.externalId,
