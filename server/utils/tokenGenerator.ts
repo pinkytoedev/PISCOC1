@@ -33,13 +33,11 @@ export function calculateExpirationDate(days: number = 7): Date {
  * @returns Base URL string appropriate for current environment
  */
 export function getBaseUrl(): string {
-  // If running in Replit dev environment, use the Replit URL
-  if (process.env.REPLIT_SLUG) {
-    return `https://${process.env.REPLIT_SLUG}.replit.dev`;
-  }
+  // Use configured BASE_URL or fallback to production URL
+  const host = process.env.HOST || process.env.HOSTNAME || 'localhost:3001';
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
   
-  // Otherwise use configured BASE_URL or fallback to production URL
-  return process.env.BASE_URL || "http://piscoc.pinkytoepaper.com";
+  return process.env.BASE_URL || `${protocol}://${host}`;
 }
 
 /**

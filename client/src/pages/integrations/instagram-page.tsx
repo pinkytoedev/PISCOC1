@@ -183,7 +183,7 @@ export default function InstagramPage() {
       console.log('Current hostname:', window.location.hostname);
       console.log('Current origin:', window.location.origin);
 
-      // For testing on Replit, we need a publicly accessible URL
+      // For production or testing environments, we need a publicly accessible URL
       // This domain needs to be registered in your Facebook App settings
       const baseUrl = window.location.origin;
       console.log('Using base URL for callback:', baseUrl);
@@ -551,15 +551,15 @@ export default function InstagramPage() {
                   </Alert>
                 )}
 
-                {/* Facebook in Replit notice */}
+                {/* Facebook iframe notice */}
                 <Alert className="mb-4">
                   <Info className="h-4 w-4" />
-                  <AlertTitle>Facebook in Replit</AlertTitle>
+                  <AlertTitle>Facebook in iframe environments</AlertTitle>
                   <AlertDescription>
-                    <p>Facebook login may not work correctly in the Replit environment due to security restrictions, especially with popup blockers and iframe limitations.</p>
+                    <p>Facebook login may not work correctly in iframe environments due to security restrictions, especially with popup blockers and iframe limitations.</p>
                     <p className="mt-2">To get around this:</p>
                     <ul className="list-disc pl-5 mt-1">
-                      <li>Try using this app outside the Replit environment</li>
+                      <li>Try using this app in a new browser tab</li>
                       <li>Disable popup blockers in your browser</li>
                       <li>Use the application in a full browser window</li>
                     </ul>

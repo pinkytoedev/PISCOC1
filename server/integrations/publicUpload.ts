@@ -194,7 +194,9 @@ async function verifyUploadTokenWithType(req: Request, res: Response, next: Next
  * @param app Express application instance
  */
 export function setupPublicUploadRoutes(app: Express) {
-  // Token generation endpoint (requires authentication)
+  // DEPRECATED: Token generation endpoint (requires authentication)
+  // Note: This endpoint is kept for Discord bot compatibility but UI has been removed
+  // Consider migrating integrations to use the new token-free endpoints
   app.post('/api/public-upload/generate-token', async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {

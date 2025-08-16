@@ -138,53 +138,13 @@ export function getFullImageUrl(relativeUrl: string): string {
     return relativeUrl;
   }
   
-  // Use Replit's domain for serving static files - this is publicly accessible
-  // Get the REPL_SLUG and REPL_OWNER from environment variables
-  const replSlug = process.env.REPL_SLUG || '';
-  const replOwner = process.env.REPL_OWNER || '';
+  // Get the host from environment variables or defaults
+  const host = process.env.HOST || process.env.HOSTNAME || 'localhost:3001';
+  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
   
-  // If we have the Replit environment variables, use the Replit domain
-  if (replSlug && replOwner) {
-    // Construct a public Replit URL
-    const host = `${replSlug}.${replOwner}.repl.co`;
-    // Ensure the path starts with a slash
-    const path = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
-    return `https://${host}${path}`;
-  }
-  
-  // Fallback to using request headers to determine host
-  // This is more reliable than hardcoding localhost
-  try {
-    // Get domain from whatever is in the request URL
-    // This will include subdomains like "7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev"
-    const requestUrl = new URL(globalThis.location?.href || '');
-    const host = requestUrl.host;
-    const protocol = 'https'; // Always use HTTPS for public URLs
-    
-    // Ensure the path starts with a slash
-    const path = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
-    return `${protocol}://${host}${path}`;
-  } catch (error) {
-    // Final fallback to using a dynamically determined host
-    const possibleHostnameEnvVars = ['REPLIT_CLUSTER_HOST', 'HOSTNAME', 'HOST'];
-    let host = '';
-    
-    for (const envVar of possibleHostnameEnvVars) {
-      if (process.env[envVar]) {
-        host = process.env[envVar] || '';
-        break;
-      }
-    }
-    
-    // If we couldn't determine host from env vars, use the current domain
-    if (!host) {
-      host = '7a30f2f5-2a4f-4e84-af67-0ef7bd40c5dd-00-25j42tn9chhi0.picard.replit.dev'; // Current domain from logs
-    }
-    
-    const protocol = 'https'; // Always use HTTPS for public URLs
-    const path = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
-    return `${protocol}://${host}${path}`;
-  }
+  // Ensure the path starts with a slash
+  const path = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
+  return `${protocol}://${host}${path}`;
 }
 
 /**

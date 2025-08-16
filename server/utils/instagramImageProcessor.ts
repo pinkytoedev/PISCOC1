@@ -128,6 +128,6 @@ export async function cleanupProcessedImages(filePath?: string, olderThanHours: 
  */
 async function getBaseUrl(): Promise<string> {
   // Always use the production domain for Instagram images
-  // as Instagram cannot access localhost or Replit preview domains
+  // as Instagram cannot access localhost or development domains
   return 'https://piscoc.pinkytoepaper.com';
 }

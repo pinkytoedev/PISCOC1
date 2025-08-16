@@ -10,6 +10,7 @@ import { postArticleToInstagram } from "./integrations/instagram";
 import { setupImgBBRoutes } from "./integrations/imgbb";
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
 import { setupPublicUploadRoutes } from "./integrations/publicUpload";
+import { setupTokenFreePublicUploadRoutes } from "./integrations/tokenFreePublicUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
@@ -57,6 +58,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Set up public upload routes
   setupPublicUploadRoutes(app);
+  
+  // Set up new token-free public upload routes
+  setupTokenFreePublicUploadRoutes(app);
 
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {

@@ -158,7 +158,19 @@ All endpoints require an authenticated session. Use `multipart/form-data` body.
     - `articleId`: number
   - Processes HTML ZIP content for the article
 
-### Public Upload (token-based)
+### Public Upload (token-free)
+
+New simplified endpoints (no authentication required):
+- GET `/api/articles/uploadable` - Get list of non-published articles available for upload
+- POST `/api/public-upload/image` (form-data: `file`, `articleId`)
+- POST `/api/public-upload/instagram-image` (form-data: `file`, `articleId`)  
+- POST `/api/public-upload/html-zip` (form-data: `file`, `articleId`)
+
+Rate limiting: 10 requests per 15 minutes per IP address.
+
+### Public Upload (token-based) - DEPRECATED
+
+> **⚠️ Deprecated**: The token-based upload system is deprecated. Use the token-free endpoints above instead. Token endpoints are kept for Discord bot compatibility only.
 
 Management (auth required):
 - POST `/api/public-upload/generate-token`

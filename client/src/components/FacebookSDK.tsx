@@ -164,7 +164,7 @@ export function FacebookSDK({
         console.log('Current domain:', window.location.hostname);
         console.log('Current origin:', window.location.origin);
 
-        // Initialize with adjusted settings for iframe/embedded environments like Replit
+        // Initialize with adjusted settings for iframe/embedded environments
         window.FB.init({
           appId: appId,
           cookie: true, // Enable cookies for session persistence

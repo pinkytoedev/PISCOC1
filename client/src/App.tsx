@@ -21,7 +21,6 @@ import DebugCenterPage from "@/pages/debug-center-page";
 import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
-import UploadsPage from "@/pages/uploads";
 
 import ImgBBPage from "@/pages/integrations/imgbb-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
@@ -48,7 +47,6 @@ function Router() {
         }}
       </Route>
       <ProtectedRoute path="/debug-center" component={DebugCenterPage} />
-      <ProtectedRoute path="/uploads" component={UploadsPage} />
       <AdminProtectedRoute path="/integrations/discord" component={DiscordPage} />
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
@@ -65,7 +63,7 @@ function Router() {
       <Route path="/test" component={TestPage} />
 
       {/* Public upload routes - these don't require auth */}
-      <Route path="/public-upload/:token" component={PublicUploadPage} />
+      <Route path="/public-upload" component={PublicUploadPage} />
 
       <Route component={NotFound} />
     </Switch>
