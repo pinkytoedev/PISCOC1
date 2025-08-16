@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,29 +8,35 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .bg-pink-pattern {
-            background-image: linear-gradient(45deg, rgba(255, 105, 180, 0.1) 25%, transparent 25%), 
-                              linear-gradient(-45deg, rgba(255, 105, 180, 0.1) 25%, transparent 25%);
+            background-image: linear-gradient(45deg, rgba(255, 105, 180, 0.1) 25%, transparent 25%),
+                linear-gradient(-45deg, rgba(255, 105, 180, 0.1) 25%, transparent 25%);
             background-size: 30px 30px;
         }
+
         .bg-pink-translucent {
             background-color: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(4px);
         }
+
         .border-pink {
             border-color: rgba(255, 105, 180, 0.5);
         }
+
         .shadow-pink {
             box-shadow: 0 4px 12px rgba(255, 105, 180, 0.2);
         }
     </style>
 </head>
+
 <body class="bg-pink-pattern min-h-screen">
     <div class="min-h-screen bg-pink-pattern flex flex-col">
         <header class="bg-pink-translucent shadow-pink py-6 px-4 border-b border-pink">
             <div class="max-w-4xl mx-auto">
                 <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
                     <svg class="h-6 w-6 text-pink-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                        </path>
                     </svg>
                     Public Upload Portal
                 </h1>
@@ -38,7 +45,7 @@
                 </p>
             </div>
         </header>
-        
+
         <main class="flex-1 py-8">
             <div class="max-w-4xl mx-auto px-4 space-y-6">
                 <!-- Article Selection -->
@@ -59,7 +66,8 @@
                     <p class="text-sm text-gray-600 mb-4">Select which types of files you want to upload</p>
                     <div class="space-y-4">
                         <label class="flex items-center space-x-2">
-                            <input type="checkbox" checked class="rounded border-pink text-pink-600 focus:ring-pink-500">
+                            <input type="checkbox" checked
+                                class="rounded border-pink text-pink-600 focus:ring-pink-500">
                             <span class="text-sm font-medium">Main Article Image</span>
                         </label>
                         <label class="flex items-center space-x-2">
@@ -77,33 +85,43 @@
                 <div class="bg-pink-translucent border-pink shadow-pink rounded-lg border p-6">
                     <h3 class="text-lg font-semibold mb-2 flex items-center gap-2">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                            </path>
                         </svg>
                         Upload Files
                     </h3>
                     <p class="text-sm text-gray-600 mb-4">Upload your selected file types</p>
-                    
+
                     <div class="space-y-6">
                         <div class="space-y-3">
                             <div class="flex items-center justify-between">
                                 <label class="text-sm font-medium">Main Article Image</label>
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                <span
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                     pending
                                 </span>
                             </div>
-                            
-                            <button class="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-pink-400 hover:bg-pink-50 transition-colors">
-                                <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+
+                            <button
+                                class="w-full border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-pink-400 hover:bg-pink-50 transition-colors">
+                                <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                                    </path>
                                 </svg>
                                 <span class="text-sm text-gray-600">Choose Main Article Image</span>
                             </button>
                         </div>
-                        
+
                         <div class="pt-4 border-t">
-                            <button class="w-full bg-pink-600 text-white py-3 px-4 rounded-md hover:bg-pink-700 transition-colors flex items-center justify-center gap-2 text-lg font-medium">
+                            <button
+                                class="w-full bg-pink-600 text-white py-3 px-4 rounded-md hover:bg-pink-700 transition-colors flex items-center justify-center gap-2 text-lg font-medium">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12">
+                                    </path>
                                 </svg>
                                 Upload All Files
                             </button>
@@ -112,7 +130,7 @@
                 </div>
             </div>
         </main>
-        
+
         <footer class="bg-pink-translucent border-t border-pink py-4 text-center text-gray-500 text-sm">
             <div class="max-w-4xl mx-auto">
                 <p>Secure Public Upload System • Files are processed safely and securely</p>
@@ -120,4 +138,5 @@
         </footer>
     </div>
 </body>
+
 </html>
