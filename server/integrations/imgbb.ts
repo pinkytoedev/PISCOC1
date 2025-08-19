@@ -12,9 +12,19 @@ const upload = multer({ dest: 'uploads/' });
 // Helper function to get ImgBB settings
 async function getImgBBSettings() {
   const settings = await storage.getIntegrationSettings('imgbb');
+  const dbApiKey = settings.find(s => s.key === 'api_key')?.value;
+  const dbEnabled = settings.find(s => s.key === 'api_key')?.enabled !== false;
+  
+  // Fallback to environment variable if not configured in database
+  const apiKey = dbApiKey || process.env.IMGBB_API_KEY;
+  
+  // If we have an API key from environment but no database entry or disabled database entry,
+  // consider it enabled
+  const enabled = !!apiKey && (dbEnabled || !dbApiKey);
+  
   return {
-    apiKey: settings.find(s => s.key === 'api_key')?.value,
-    enabled: settings.find(s => s.key === 'api_key')?.enabled !== false,
+    apiKey,
+    enabled,
   };
 }
 
