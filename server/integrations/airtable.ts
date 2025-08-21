@@ -113,11 +113,29 @@ interface AirtableTeamMember {
   DiscordID?: string;             // Single line text
   First?: string[];               // Link to another record
   "First 2"?: string[];           // Link to another record
-  image_url?: Attachment[];       // Attachment
   "Item ID"?: string;             // Long text
-  PhotoSub?: string[];            // Link to another record
+  PhotoSub?: string[];            // Link to another record (for images)
   "Published On"?: string;        // Date
-  Role?: string;                  // Long text
+  Role?: string[];                // Array of roles (for sending to Airtable)
+  "Secret Page?"?: boolean;       // Checkbox
+  Slug?: string;                  // Long text
+  "Updated On"?: string;          // Date
+}
+
+// For reading team member data from Airtable (response format)
+interface AirtableTeamMemberResponse {
+  Name: string;                   // Long text
+  AuthorSub?: string[];           // Link to another record
+  Bio?: string;                   // Long text
+  "Collection ID"?: number;       // Number
+  "Created On"?: string;          // Date
+  DiscordID?: string;             // Single line text
+  First?: string[];               // Link to another record
+  "First 2"?: string[];           // Link to another record
+  "Item ID"?: string;             // Long text
+  PhotoSub?: string[];            // Link to another record (for images)
+  "Published On"?: string;        // Date
+  Role?: string[];                // Array of roles (not single string)
   "Secret Page?"?: boolean;       // Checkbox
   Slug?: string;                  // Long text
   "Updated On"?: string;          // Date
@@ -481,7 +499,87 @@ async function convertCarouselQuoteToAirtableFormat(quote: any): Promise<Partial
   };
 }
 
+// Helper function to convert team member to Airtable format
+async function convertTeamMemberToAirtableFormat(member: any): Promise<Partial<AirtableTeamMember>> {
+  const airtableData: Partial<AirtableTeamMember> = {
+    Name: member.name,
+    Role: [member.role], // Role is an array in Airtable
+    Bio: member.bio
+  };
+
+  // Note: Teams table uses PhotoSub (link to another record) for images
+  // We cannot easily create image attachments without knowing the PhotoSub record structure
+  // For now, we'll skip image handling in push operations
+  // TODO: Implement PhotoSub resolution if needed
+
+  return airtableData;
+}
+
 export function setupAirtableRoutes(app: Express) {
+  // Debug endpoint to examine Airtable schema
+  app.get("/api/airtable/debug-schema/:tableId", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { tableId } = req.params;
+      
+      // Get Airtable settings
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+
+      if (!apiKeySetting?.value || !baseIdSetting?.value) {
+        return res.status(400).json({ message: "Airtable API key or base ID not configured" });
+      }
+
+      const apiKey = apiKeySetting.value;
+      const baseId = baseIdSetting.value;
+
+      // Make request to get sample records and analyze schema
+      const response = await airtableRequest(
+        apiKey,
+        baseId,
+        tableId,
+        "GET",
+        null,
+        { maxRecords: 3 }
+      );
+
+      // Analyze the schema
+      const analysis = {
+        tableId: tableId,
+        recordCount: response.records?.length || 0,
+        sampleRecords: response.records || [],
+        fieldAnalysis: {}
+      };
+
+      // Analyze fields from first record if available
+      if (response.records && response.records.length > 0) {
+        const firstRecord = response.records[0];
+        const fields = firstRecord.fields || {};
+        
+        analysis.fieldAnalysis = Object.keys(fields).reduce((acc: any, fieldName) => {
+          const value = (fields as any)[fieldName];
+          acc[fieldName] = {
+            type: Array.isArray(value) ? 'array' : typeof value,
+            sampleValue: Array.isArray(value) ? value.slice(0, 2) : value,
+            isAttachment: Array.isArray(value) && value.length > 0 && value[0].hasOwnProperty('url')
+          };
+          return acc;
+        }, {});
+      }
+
+      return res.json(analysis);
+    } catch (error) {
+      console.error("Airtable schema debug error:", error);
+      return res.status(500).json({
+        message: "Failed to debug Airtable schema",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   // Test Airtable API connection
   app.get("/api/airtable/test-connection", async (req, res) => {
     try {
@@ -944,7 +1042,19 @@ export function setupAirtableRoutes(app: Express) {
       const tableName = tableNameSetting.value;
 
       // Fetch team members from Airtable
-      const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableTeamMember>;
+      const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableTeamMemberResponse>;
+
+      console.log(`=== TEAM MEMBERS AIRTABLE SCHEMA ANALYSIS ===`);
+      console.log(`Table ID: ${tableName}`);
+      console.log(`Total records fetched: ${response.records?.length || 0}`);
+      
+      if (response.records && response.records.length > 0) {
+        console.log(`=== FIRST RECORD ANALYSIS ===`);
+        const firstRecord = response.records[0];
+        console.log(`Record ID: ${firstRecord.id}`);
+        console.log(`Available fields:`, Object.keys(firstRecord.fields || {}));
+        console.log(`Full record structure:`, JSON.stringify(firstRecord, null, 2));
+      }
 
       const syncResults = {
         created: 0,
@@ -975,8 +1085,13 @@ export function setupAirtableRoutes(app: Express) {
             missingFields.push("Name");
           }
 
-          if (!fields.Role) {
-            fields.Role = defaultRole;
+          // Handle Role field - it's an array in Airtable, convert to string
+          let roleValue = defaultRole;
+          if (fields.Role && Array.isArray(fields.Role) && fields.Role.length > 0) {
+            roleValue = fields.Role[0]; // Take first role
+          } else if (fields.Role && typeof fields.Role === 'string') {
+            roleValue = fields.Role;
+          } else {
             missingFields.push("Role");
           }
 
@@ -989,29 +1104,12 @@ export function setupAirtableRoutes(app: Express) {
             syncResults.details.push(`Record ${record.id}: Using default values for missing fields: ${missingFields.join(", ")}`);
           }
 
-          // Get the image URL from image_url attachment if it exists
+          // Handle image - Teams table uses PhotoSub (link to another record) instead of direct image attachment
           let imageUrl = defaultImageUrl;
-          if (fields.image_url && fields.image_url.length > 0) {
-            try {
-              // Log the full structure to better understand the Airtable format
-              console.log(`Team Member Record ${record.id}: image_url attachment structure:`, JSON.stringify(fields.image_url[0], null, 2));
-
-              // Extract the URL from the attachment object
-              // First try the url property, then check for thumbnails
-              if (fields.image_url[0].url) {
-                imageUrl = fields.image_url[0].url;
-              } else if (fields.image_url[0].thumbnails && fields.image_url[0].thumbnails.full) {
-                imageUrl = fields.image_url[0].thumbnails.full.url;
-              } else if (fields.image_url[0].thumbnails && fields.image_url[0].thumbnails.large) {
-                imageUrl = fields.image_url[0].thumbnails.large.url;
-              }
-
-              syncResults.details.push(`Record ${record.id}: Found team member image: ${imageUrl.substring(0, 50)}...`);
-            } catch (error) {
-              console.error(`Error parsing image_url for team member record ${record.id}:`, error);
-              syncResults.details.push(`Record ${record.id}: Error parsing image_url, using default`);
-              imageUrl = defaultImageUrl;
-            }
+          if (fields.PhotoSub && Array.isArray(fields.PhotoSub) && fields.PhotoSub.length > 0) {
+            // PhotoSub is a link to another record - we can't easily resolve this without another API call
+            // For now, we'll use a placeholder but note that we have a photo reference
+            syncResults.details.push(`Record ${record.id}: Has PhotoSub reference: ${fields.PhotoSub[0]}, but cannot resolve image URL without additional API call`);
           }
 
           // Check if team member already exists
@@ -1019,7 +1117,7 @@ export function setupAirtableRoutes(app: Express) {
 
           const memberData: InsertTeamMember = {
             name: fields.Name,
-            role: fields.Role || defaultRole,
+            role: roleValue,
             bio: fields.Bio || defaultBio,
             imageUrl: imageUrl,
             imageType: "url",
@@ -1063,6 +1161,149 @@ export function setupAirtableRoutes(app: Express) {
     } catch (error) {
       console.error("Airtable sync error:", error);
       res.status(500).json({ message: "Failed to sync team members from Airtable" });
+    }
+  });
+
+  // Push all team members to Airtable (batch)
+  app.post("/api/airtable/push/team-members", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get Airtable settings
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "team_members_table");
+
+      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+        return res.status(400).json({
+          success: false,
+          message: "Airtable settings are not fully configured"
+        });
+      }
+
+      const apiKey = apiKeySetting.value;
+      const baseId = baseIdSetting.value;
+      const tableName = tableNameSetting.value;
+
+      // Get all team members from the database
+      const teamMembers = await storage.getTeamMembers();
+
+      // Split into create (no externalId) and update (with externalId) operations
+      const membersToCreate = teamMembers.filter(m => !m.externalId);
+      const membersToUpdate = teamMembers.filter(m => m.externalId);
+
+      const results = {
+        created: 0,
+        updated: 0,
+        errors: 0,
+        details: [] as string[]
+      };
+
+      // Process updates first (Airtable has a limit on batch operations, so we need to be careful)
+      if (membersToUpdate.length > 0) {
+        // Convert team members to Airtable format
+        const updateRecords = await Promise.all(
+          membersToUpdate.map(async (member) => {
+            const fields = await convertTeamMemberToAirtableFormat(member);
+            return {
+              id: member.externalId,
+              fields
+            };
+          })
+        );
+
+        // Batch update records in Airtable (max 10 at a time)
+        for (let i = 0; i < updateRecords.length; i += 10) {
+          const batch = updateRecords.slice(i, i + 10);
+          try {
+            await airtableRequest(
+              apiKey,
+              baseId,
+              tableName,
+              "PATCH",
+              { records: batch }
+            );
+            results.updated += batch.length;
+            results.details.push(`Updated ${batch.length} team members in batch ${Math.floor(i / 10) + 1}`);
+          } catch (error) {
+            console.error(`Error updating batch ${Math.floor(i / 10) + 1}:`, error);
+            results.errors += batch.length;
+            results.details.push(`Error updating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
+          }
+        }
+      }
+
+      // Process creates next (for team members without externalId)
+      if (membersToCreate.length > 0) {
+        // Convert team members to Airtable format
+        const createRecords = await Promise.all(
+          membersToCreate.map(async (member) => {
+            const fields = await convertTeamMemberToAirtableFormat(member);
+            return { fields };
+          })
+        );
+
+        // Batch create records in Airtable (max 10 at a time)
+        for (let i = 0; i < createRecords.length; i += 10) {
+          const batch = createRecords.slice(i, i + 10);
+          try {
+            const response = await airtableRequest(
+              apiKey,
+              baseId,
+              tableName,
+              "POST",
+              { records: batch }
+            ) as AirtableResponse<AirtableTeamMember>;
+
+            // Update the local database with the new external IDs
+            if (response.records) {
+              for (let j = 0; j < response.records.length; j++) {
+                const createdRecord = response.records[j];
+                const originalMemberIndex = i + j;
+                if (originalMemberIndex < membersToCreate.length) {
+                  const originalMember = membersToCreate[originalMemberIndex];
+                  await storage.updateTeamMember(originalMember.id, {
+                    externalId: createdRecord.id
+                  });
+                }
+              }
+            }
+
+            results.created += batch.length;
+            results.details.push(`Created ${batch.length} team members in batch ${Math.floor(i / 10) + 1}`);
+          } catch (error) {
+            console.error(`Error creating batch ${Math.floor(i / 10) + 1}:`, error);
+            results.errors += batch.length;
+            results.details.push(`Error creating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
+          }
+        }
+      }
+
+      // Log the activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "push",
+        resourceType: "team_members",
+        details: {
+          destination: "airtable",
+          results: results
+        }
+      });
+
+      return res.json({
+        success: true,
+        message: "Team members pushed to Airtable",
+        results: results
+      });
+    } catch (error) {
+      console.error("Error pushing team members to Airtable:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to push team members to Airtable",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -1325,6 +1566,18 @@ export function setupAirtableRoutes(app: Express) {
 
       // Fetch carousel quotes from Airtable
       const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableCarouselQuote>;
+
+      console.log(`=== CAROUSEL QUOTES AIRTABLE SCHEMA ANALYSIS ===`);
+      console.log(`Table ID: ${tableName}`);
+      console.log(`Total records fetched: ${response.records?.length || 0}`);
+      
+      if (response.records && response.records.length > 0) {
+        console.log(`=== FIRST RECORD ANALYSIS ===`);
+        const firstRecord = response.records[0];
+        console.log(`Record ID: ${firstRecord.id}`);
+        console.log(`Available fields:`, Object.keys(firstRecord.fields || {}));
+        console.log(`Full record structure:`, JSON.stringify(firstRecord, null, 2));
+      }
 
       const syncResults = {
         created: 0,

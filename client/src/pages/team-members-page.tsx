@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
-import { Plus, Edit, Trash2, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function TeamMembersPage() {
@@ -77,6 +77,51 @@ export default function TeamMembersPage() {
       });
     },
   });
+
+  // Pull from Airtable (sync team members from Airtable to our application)
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/airtable/sync/team-members");
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/team-members'] });
+      const results = data?.results || { created: 0, updated: 0 };
+      toast({
+        title: "Team members pulled from Airtable",
+        description: `Successfully synced team members: ${results.created} created, ${results.updated} updated`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error pulling from Airtable",
+        description: error.message || "Failed to sync team members from Airtable. Please check your connection settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Push all team members to Airtable (batch update)
+  const pushMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/airtable/push/team-members");
+      return await res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/team-members'] });
+      toast({
+        title: "Team members pushed to Airtable",
+        description: `Successfully pushed ${data.results?.updated || 0} team members to Airtable.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error pushing to Airtable",
+        description: error.message || "Failed to push team members to Airtable. Please check your connection settings.",
+        variant: "destructive",
+      });
+    },
+  });
   
   const handleCreateClick = () => {
     setEditMember(null);
@@ -107,6 +152,20 @@ export default function TeamMembersPage() {
   const handleDeleteClick = (member: TeamMember) => {
     if (confirm(`Are you sure you want to delete ${member.name}?`)) {
       deleteMemberMutation.mutate(member.id);
+    }
+  };
+
+  // Function to pull team members from Airtable
+  const handlePullFromAirtable = () => {
+    if (confirm("This will pull all team members from Airtable. Existing members with matching IDs will be updated. Continue?")) {
+      syncMutation.mutate();
+    }
+  };
+
+  // Function to push all team members to Airtable
+  const handlePushToAirtable = () => {
+    if (confirm("This will push all team members to Airtable. Continue?")) {
+      pushMutation.mutate();
     }
   };
   
@@ -163,10 +222,28 @@ export default function TeamMembersPage() {
                   Manage your team profiles and information.
                 </p>
               </div>
-              <Button onClick={handleCreateClick}>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Team Member
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handlePullFromAirtable} disabled={syncMutation.isPending}>
+                  {syncMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Pull from Airtable
+                </Button>
+                <Button variant="outline" onClick={handlePushToAirtable} disabled={pushMutation.isPending}>
+                  {pushMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="mr-2 h-4 w-4" />
+                  )}
+                  Push to Airtable
+                </Button>
+                <Button onClick={handleCreateClick}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Team Member
+                </Button>
+              </div>
             </div>
 
             {/* Team Members Grid */}
