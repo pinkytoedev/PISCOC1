@@ -53,8 +53,6 @@ jobs:
         cat > .env << EOF
         DATABASE_URL=postgresql://postgres:postgres@localhost:5432/test_db
         SESSION_SECRET=test_session_secret_for_ci
-        DISCORD_BOT_TOKEN=test_discord_token
-        DISCORD_CLIENT_ID=test_discord_client
         AIRTABLE_API_KEY=test_airtable_key
         AIRTABLE_BASE_ID=test_airtable_base
         FACEBOOK_APP_ID=test_facebook_id
@@ -119,8 +117,6 @@ jobs:
       run: |
         cat > .env << EOF
         SESSION_SECRET=test_session_secret_for_ci
-        DISCORD_BOT_TOKEN=test_discord_token
-        DISCORD_CLIENT_ID=test_discord_client
         AIRTABLE_API_KEY=test_airtable_key
         AIRTABLE_BASE_ID=test_airtable_base
         FACEBOOK_APP_ID=test_facebook_id
