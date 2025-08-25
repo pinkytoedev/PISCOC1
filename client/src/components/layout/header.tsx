@@ -17,7 +17,7 @@ interface HeaderProps {
   onMobileMenuToggle?: () => void;
 }
 
-export function Header({ title = "Discord-Airtable Integration", onMobileMenuToggle }: HeaderProps) {
+export function Header({ title = "Airtable Integration", onMobileMenuToggle }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const [notifications] = useState<any[]>([]);
   
