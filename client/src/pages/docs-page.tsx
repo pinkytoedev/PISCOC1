@@ -350,19 +350,7 @@ const WebsiteArchitectureDiagram = () => {
           label="Integrations Core"
           type="integration"
           description="Core integration system that connects with external services."
-          connections={["express", "discord", "airtable", "instagram", "imgbb"]}
-        />
-        
-        <DiagramNode
-          id="discord"
-          x={150}
-          y={450}
-          width={120}
-          height={40}
-          label="Discord"
-          type="integration"
-          description="Integration with Discord for communication and content management through a custom bot."
-          connections={["integrations"]}
+          connections={["express", "airtable", "instagram", "imgbb"]}
         />
         
         <DiagramNode
@@ -513,13 +501,6 @@ const WebsiteArchitectureDiagram = () => {
         />
         
         {/* Integrations to Services */}
-        <Connection 
-          from={{ x: 325, y: 405 }} 
-          to={{ x: 210, y: 450 }} 
-          fromId="integrations" 
-          toId="discord"
-          color="#8b5cf6"
-        />
         
         <Connection 
           from={{ x: 360, y: 430 }} 
@@ -606,8 +587,6 @@ const DataFlowDiagram = () => {
         
         {/* Service nodes */}
         <g>
-          <rect x="120" y="150" width="120" height="40" rx="8" fill="#8b5cf6" fillOpacity="0.6" />
-          <text x="180" y="175" textAnchor="middle" fill="white" fontSize="14">Discord</text>
           
           <rect x="340" y="150" width="120" height="40" rx="8" fill="#8b5cf6" fillOpacity="0.6" />
           <text x="400" y="175" textAnchor="middle" fill="white" fontSize="14">Airtable</text>
@@ -740,7 +719,6 @@ const TechnologyStack = () => {
       { name: "Multer", description: "Middleware for handling file uploads", category: "utilities" }
     ],
     integrations: [
-      { name: "Discord.js", description: "Library for interacting with the Discord API", category: "social" },
       { name: "Airtable API", description: "Client for interacting with Airtable databases", category: "content" },
       { name: "Instagram API", description: "Interface for Instagram content and interactions", category: "social" },
       { name: "ImgBB API", description: "Service for image hosting and management", category: "media" }
