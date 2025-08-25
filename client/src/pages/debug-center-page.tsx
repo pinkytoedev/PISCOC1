@@ -71,8 +71,7 @@ const patchNotes: PatchNote[] = [
       { type: "feature", description: "Added Instagram story analytics dashboard" },
       { type: "feature", description: "Implemented automated content scheduling for Instagram" },
       { type: "improvement", description: "Enhanced user interface for mobile devices" },
-      { type: "fix", description: "Fixed issue with Airtable synchronization failing for large datasets" },
-      { type: "fix", description: "Resolved Discord notification delay problem" }
+      { type: "fix", description: "Fixed issue with Airtable synchronization failing for large datasets" }
     ]
   },
   {
@@ -85,18 +84,6 @@ const patchNotes: PatchNote[] = [
       { type: "improvement", description: "Reduced API call frequency to prevent rate limiting" },
       { type: "fix", description: "Fixed critical authentication issue affecting some users" },
       { type: "fix", description: "Addressed image upload failures with certain file types" }
-    ]
-  },
-  {
-    version: "1.1.0",
-    date: "2025-03-10",
-    title: "Discord Integration Enhancement",
-    description: "Major improvements to the Discord integration capabilities",
-    changes: [
-      { type: "feature", description: "Added multi-channel support for Discord integration" },
-      { type: "feature", description: "Implemented role-based message targeting" },
-      { type: "improvement", description: "Enhanced webhook management interface" },
-      { type: "breaking", description: "Updated Discord API integration (requires reconfiguration)" }
     ]
   }
 ];
@@ -466,7 +453,7 @@ export default function DebugCenterPage() {
                 <div>
                   <CardTitle>Admin Requests</CardTitle>
                   <CardDescription>
-                    Track and manage requests submitted via Discord or Web interface
+                    Track and manage requests submitted via Web interface
                   </CardDescription>
                 </div>
                 <Button 
@@ -541,7 +528,7 @@ export default function DebugCenterPage() {
                       <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-medium">No admin requests found</h3>
                       <p className="mt-2 text-sm text-gray-500">
-                        Admin requests submitted via Discord or web will appear here.
+                        Admin requests submitted via web will appear here.
                       </p>
                     </div>
                   </div>
