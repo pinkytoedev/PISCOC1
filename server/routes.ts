@@ -2,8 +2,6 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { setupDiscordRoutes } from "./integrations/discord";
-import { setupDiscordBotRoutes, setupArticleReceiveEndpoint, autoStartDiscordBot } from "./integrations/discordBot";
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
@@ -1010,18 +1008,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Set up integration-specific routes
-  setupDiscordRoutes(app);
-  setupDiscordBotRoutes(app);
   setupArticleReceiveEndpoint(app);
   setupAirtableRoutes(app);
   setupInstagramRoutes(app);
 
   setupImgBBRoutes(app);
   registerAirtableTestRoutes(app);
-
-  // Auto-start Discord bot if settings are available
-  autoStartDiscordBot();
 
   const httpServer = createServer(app);
   return httpServer;
