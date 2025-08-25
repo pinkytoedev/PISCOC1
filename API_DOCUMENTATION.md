@@ -16,8 +16,6 @@ This document lists all available API endpoints implemented by the server.
   - [Public Upload (token-based)](#public-upload-token-based)
 - [Airtable Integration](#airtable-integration)
 - [ImgBB Integration](#imgbb-integration)
-- [Discord Integration](#discord-integration)
-- [Discord Bot](#discord-bot)
 - [Instagram Integration](#instagram-integration)
 - [GitHub Integration](#github-integration)
 - [Integration Settings (generic)](#integration-settings-generic)
@@ -233,37 +231,6 @@ Dev/test utilities (intended for development):
   - Form-data: `image` file
 - POST `/api/imgbb/upload-url-to-airtable/:articleId/:fieldName` (auth)
   - Body: `{ "imageUrl": "https://..." }`
-
-## Discord Integration
-
-- GET `/api/discord/settings` (auth)
-- POST `/api/discord/settings` (auth)
-
-## Discord Bot
-
-- POST `/api/discord/bot/initialize`
-  - Body: `{ "token": "string", "clientId": "string" }`
-- POST `/api/discord/bot/start`
-- POST `/api/discord/bot/stop`
-- GET `/api/discord/bot/status`
-- GET `/api/discord/bot/servers`
-- GET `/api/discord/bot/invite-url`
-- POST `/api/discord/bot/send-channel-message` (auth)
-  - Body: `{ "guildId": "string", "channelId": "string", "message": "string" }`
-- POST `/api/discord/bot/webhook`
-  - Body: `{ "serverId": "string", "channelId": "string", "name": "string", "avatarUrl": "string" }`
-- POST `/api/discord/articles`
-  - Body:
-    ```json
-    {
-      "title": "string",
-      "description": "string",
-      "content": "string",
-      "author": "string",
-      "featured": false
-    }
-    ```
-  - Creates an article with `status: "draft"`
 
 ## Instagram Integration
 
