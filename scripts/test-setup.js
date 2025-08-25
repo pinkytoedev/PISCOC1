@@ -211,8 +211,6 @@ function checkEnvironmentVariables() {
     const requiredVars = [
         { name: 'DATABASE_URL', description: 'PostgreSQL connection string' },
         { name: 'SESSION_SECRET', description: 'Session encryption secret' },
-        { name: 'DISCORD_BOT_TOKEN', description: 'Discord bot authentication' },
-        { name: 'DISCORD_CLIENT_ID', description: 'Discord application ID' },
         { name: 'AIRTABLE_API_KEY', description: 'Airtable API authentication' },
         { name: 'AIRTABLE_BASE_ID', description: 'Airtable base identifier' },
         { name: 'FACEBOOK_APP_ID', description: 'Facebook app ID for Instagram' },
