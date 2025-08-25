@@ -18,7 +18,6 @@ import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
 // ApiStatusPage removed - now part of Debug Center
 import DebugCenterPage from "@/pages/debug-center-page";
-import DiscordPage from "@/pages/integrations/discord-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
 
@@ -47,7 +46,6 @@ function Router() {
         }}
       </Route>
       <ProtectedRoute path="/debug-center" component={DebugCenterPage} />
-      <AdminProtectedRoute path="/integrations/discord" component={DiscordPage} />
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
       <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
