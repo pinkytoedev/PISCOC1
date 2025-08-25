@@ -110,7 +110,6 @@ interface AirtableTeamMember {
   Bio?: string;                   // Long text
   "Collection ID"?: number;       // Number
   "Created On"?: string;          // Date
-  DiscordID?: string;             // Single line text
   First?: string[];               // Link to another record
   "First 2"?: string[];           // Link to another record
   "Item ID"?: string;             // Long text
@@ -129,7 +128,6 @@ interface AirtableTeamMemberResponse {
   Bio?: string;                   // Long text
   "Collection ID"?: number;       // Number
   "Created On"?: string;          // Date
-  DiscordID?: string;             // Single line text
   First?: string[];               // Link to another record
   "First 2"?: string[];           // Link to another record
   "Item ID"?: string;             // Long text
