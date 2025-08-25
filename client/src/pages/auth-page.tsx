@@ -9,7 +9,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
+import { SiAirtable, SiInstagram } from "react-icons/si";
 
 const loginSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -116,24 +116,11 @@ export default function AuthPage() {
         <div className="hidden md:block">
           <div className="bg-primary rounded-xl p-8 text-white">
             <h1 className="text-3xl font-bold mb-6">
-              Discord, Insta, and Airtable
+              Insta, and Airtable
             </h1>
             <p className="text-lg mb-8">
               This took so long to make like holy f**k
             </p>
-            
-            <div className="space-y-6">
-              <div className="flex items-start space-x-4">
-                <div className="bg-white/10 p-3 rounded-lg">
-                  <SiDiscord className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Discord Integration</h3>
-                  <p className="text-sm text-white/80">
-                    Collect, review, and publish content directly from Discord with slash commands.
-                  </p>
-                </div>
-              </div>
               
               <div className="flex items-start space-x-4">
                 <div className="bg-white/10 p-3 rounded-lg">
