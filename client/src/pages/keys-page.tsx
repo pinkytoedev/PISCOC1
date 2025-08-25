@@ -33,7 +33,7 @@ import {
   Code2,
   HelpCircle
 } from "lucide-react";
-import { SiDiscord, SiAirtable, SiFacebook, SiPostgresql } from "react-icons/si";
+import { SiAirtable, SiFacebook, SiPostgresql } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 
 interface IntegrationStatus {
@@ -87,24 +87,6 @@ export default function KeysPage() {
         "Create a database named 'multi_platform_integration'",
         "Set DATABASE_URL in format: postgresql://username:password@localhost:5432/multi_platform_integration",
         "Run 'npm run db:push' to create tables"
-      ]
-    },
-    {
-      name: "Discord Bot",
-      envVar: "DISCORD_BOT_TOKEN",
-      description: "Bot token for Discord integration and webhook management",
-      required: true,
-      configured: integrations?.find(i => i.name === "discord")?.configured ?? false,
-      setupUrl: "https://discord.com/developers/applications",
-      icon: <SiDiscord className="h-5 w-5" />,
-      category: "social",
-      instructions: [
-        "Go to Discord Developer Portal",
-        "Create a new application",
-        "Navigate to 'Bot' section and create a bot",
-        "Copy the Bot Token for DISCORD_BOT_TOKEN",
-        "Copy the Application ID for DISCORD_CLIENT_ID",
-        "Enable necessary bot permissions for your server"
       ]
     },
     {
@@ -455,7 +437,7 @@ export default function KeysPage() {
                   <div>
                     <h4 className="font-semibold mb-2">2. Configure Required Keys</h4>
                     <p className="text-sm text-muted-foreground">
-                      At minimum, configure DATABASE_URL, DISCORD_BOT_TOKEN, and SESSION_SECRET to get started.
+                      At minimum, configure DATABASE_URL and SESSION_SECRET to get started.
                     </p>
                   </div>
 
