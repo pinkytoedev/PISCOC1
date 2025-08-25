@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  SiDiscord,
   SiAirtable,
   SiInstagram,
   SiCloudinary, // Using Cloudinary's icon for ImgBB since there's no official ImgBB icon
@@ -87,12 +86,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           name: "API Keys",
           path: "/keys",
           icon: <Key className="w-5 h-5" />,
-          adminOnly: true,
-        },
-        {
-          name: "Discord",
-          path: "/integrations/discord",
-          icon: <SiDiscord className="w-5 h-5" />,
           adminOnly: true,
         },
         {
