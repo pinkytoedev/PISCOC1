@@ -59,7 +59,7 @@ export const articles = pgTable("articles", {
   createdAt: timestamp("created_at").defaultNow(),
   hashtags: text("hashtags"),
   externalId: text("external_id"), // For Airtable ID reference
-  source: text("source").default("manual"), // Could be 'discord', 'airtable', 'instagram', or 'manual'
+  source: text("source").default("manual"), // Could be 'airtable', 'instagram', or 'manual'
 });
 
 // Custom schema for article insert/update with publishedAt handling
@@ -111,7 +111,7 @@ export const insertImageAssetSchema = createInsertSchema(imageAssets).omit({
 // Integration settings table
 export const integrationSettings = pgTable("integration_settings", {
   id: serial("id").primaryKey(),
-  service: text("service").notNull(), // 'discord', 'airtable', 'instagram'
+  service: text("service").notNull(), // 'airtable', 'instagram'
   key: text("key").notNull(),
   value: text("value").notNull(),
   enabled: boolean("enabled").default(true),
@@ -174,8 +174,6 @@ export const adminRequests = pgTable("admin_requests", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   assignedTo: integer("assigned_to").references(() => users.id),
-  discordUserId: varchar("discord_user_id", { length: 255 }),
-  discordUserName: varchar("discord_user_name", { length: 255 }),
   notes: text("notes"),
 });
 
