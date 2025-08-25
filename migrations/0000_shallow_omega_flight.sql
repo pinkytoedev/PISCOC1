@@ -19,8 +19,6 @@ CREATE TABLE "admin_requests" (
 	"created_at" timestamp DEFAULT now(),
 	"updated_at" timestamp DEFAULT now(),
 	"assigned_to" integer,
-	"discord_user_id" varchar(255),
-	"discord_user_name" varchar(255),
 	"notes" text
 );
 --> statement-breakpoint
