@@ -39,8 +39,6 @@ interface AdminRequest {
   createdBy: string;
   createdAt: string;
   updatedAt: string | null;
-  discordUserId?: string;
-  discordUserName?: string;
   notes?: string;
 }
 
@@ -210,14 +208,6 @@ export function AdminRequestModal({ isOpen, onClose, request }: AdminRequestModa
                 </div>
                 <p className="text-gray-700 whitespace-pre-line">{request.description}</p>
               </div>
-              
-              {request.discordUserName && (
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <p className="text-sm text-gray-600">
-                    <strong>Discord User:</strong> {request.discordUserName}
-                  </p>
-                </div>
-              )}
               
               <Separator />
               
