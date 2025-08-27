@@ -219,6 +219,8 @@ The application serves both API and frontend from a single Express server using 
 4. Test thoroughly
 5. Submit a pull request
 
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed steps, commands, and PR checklist.
+
 ## 📄 License
 
 MIT License - see [LICENSE](./LICENSE) file for details.
