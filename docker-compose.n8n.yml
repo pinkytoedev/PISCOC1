@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:1.64.0
+    container_name: n8n
+    restart: unless-stopped
+    command: ["start"]
+    ports:
+      - "5678:5678"
+    environment:
+      # N8N Configuration
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_ADMIN_PASSWORD}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      
+      # Database
+      - DB_TYPE=sqlite
+      - DB_SQLITE_VACUUM_ON_STARTUP=true
+      - DB_SQLITE_DATABASE=/home/node/.n8n/database.sqlite
+      
+      # Webhooks
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      
+      # PISCOC Integration
+      - PISCOC_API_KEY=${PISCOC_API_KEY}
+      - PISCOC_BASE_URL=http://host.docker.internal:3000
+      
+      # Google Forms Integration
+      - GOOGLE_FORM_ID=${GOOGLE_FORM_ID}
+      
+      # Email Configuration
+      - NOTIFICATION_EMAIL=${NOTIFICATION_EMAIL}
+      - ADMIN_EMAIL=${ADMIN_EMAIL}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      
+      # General
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=UTC
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/home/node/.n8n/workflows
+    networks:
+      - n8n-network
+
+volumes:
+  n8n_data:
+
+networks:
+  n8n-network:
+    driver: bridge

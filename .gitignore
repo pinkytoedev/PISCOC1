@@ -48,3 +48,13 @@ replit.nix
 postgres_data/piscoc_backup.sql
 .vercelignore
 .vercel
+
+# Local n8n and env files
+.env.n8n
+.env.bak
+.n8n-local/
+
+# Local caches and auth
+.npm-cache/
+.npmrc
+cookies.txt
