@@ -191,8 +191,7 @@ The application uses session-based authentication. Default admin credentials wil
 See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed API endpoint documentation.
 
 ## 🔧 Database
-
-This application uses NEON PostgreSQL with Drizzle ORM. Database schema is defined in the `server/db.ts` file.
+Uses Postgres through Railway.
 
 ## 🚀 Development
 

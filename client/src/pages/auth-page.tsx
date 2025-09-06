@@ -21,7 +21,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export default function AuthPage() {
   const [location, navigate] = useLocation();
   const { user, loginMutation } = useAuth();
-  
+
   const loginForm = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -29,7 +29,7 @@ export default function AuthPage() {
       password: "",
     },
   });
-  
+
   // Use useEffect for navigation instead of early return
   useEffect(() => {
     if (user) {
@@ -45,7 +45,7 @@ export default function AuthPage() {
   if (user) {
     return null;
   }
-  
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
@@ -53,7 +53,7 @@ export default function AuthPage() {
           <Card className="w-full">
             <CardHeader>
               <CardTitle className="text-2xl font-bold text-center">
-               P.I.S.C.O.C Management Software
+                P.I.S.C.O.C Management Software
               </CardTitle>
               <CardDescription className="text-center">
                 Sign in to the Pinkytoe's Internal Social Communication and Online Commander. Proprietary to the Alphabet Mafia and our constitutes.
@@ -88,9 +88,9 @@ export default function AuthPage() {
                       </FormItem>
                     )}
                   />
-                  <Button 
-                    type="submit" 
-                    className="w-full" 
+                  <Button
+                    type="submit"
+                    className="w-full"
                     disabled={loginMutation.isPending}
                   >
                     {loginMutation.isPending ? (
@@ -112,7 +112,7 @@ export default function AuthPage() {
             </CardFooter>
           </Card>
         </div>
-        
+
         <div className="hidden md:block">
           <div className="bg-primary rounded-xl p-8 text-white">
             <h1 className="text-3xl font-bold mb-6">
@@ -121,29 +121,28 @@ export default function AuthPage() {
             <p className="text-lg mb-8">
               This took so long to make like holy f**k
             </p>
-              
-              <div className="flex items-start space-x-4">
-                <div className="bg-white/10 p-3 rounded-lg">
-                  <SiAirtable className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Airtable Synchronization</h3>
-                  <p className="text-sm text-white/80">
-                    Bidirectional data flow with Airtable for structured content organization.
-                  </p>
-                </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="bg-white/10 p-3 rounded-lg">
+                <SiAirtable className="h-6 w-6" />
               </div>
-              
-              <div className="flex items-start space-x-4">
-                <div className="bg-white/10 p-3 rounded-lg">
-                  <SiInstagram className="h-6 w-6" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold">Instagram Publishing W.I.P</h3>
-                  <p className="text-sm text-white/80">
-                    Sorry I can't hang I am busy learning Law so I can write a privacy policy my Meta overlords will appreciate
-                  </p>
-                </div>
+              <div>
+                <h3 className="text-lg font-semibold">Airtable Synchronization</h3>
+                <p className="text-sm text-white/80">
+                  Bidirectional data flow with Airtable for structured content organization.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="bg-white/10 p-3 rounded-lg">
+                <SiInstagram className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Instagram Publishing W.I.P</h3>
+                <p className="text-sm text-white/80">
+                  Sorry I can't hang I am busy learning Law so I can write a privacy policy my Meta overlords will appreciate
+                </p>
               </div>
             </div>
           </div>
