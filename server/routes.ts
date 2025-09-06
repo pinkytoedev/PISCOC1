@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
+import { setupArticleReceiveEndpoint } from "./integrations/articleReceive";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
 import { setupImgBBRoutes } from "./integrations/imgbb";
