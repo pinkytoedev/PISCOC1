@@ -7,11 +7,21 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
 import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+
+// Available role options based on Airtable schema
+const ROLE_OPTIONS = [
+  "Special Projects",
+  "Writter",
+  "Photo",
+  "Dev",
+  "E-Board"
+];
 
 export default function TeamMembersPage() {
   const { toast } = useToast();
@@ -25,16 +35,16 @@ export default function TeamMembersPage() {
     imageType: "url",
     imagePath: null,
   });
-  
+
   const { data: teamMembers, isLoading } = useQuery<TeamMember[]>({
     queryKey: ['/api/team-members'],
   });
-  
+
   const createMemberMutation = useMutation({
     mutationFn: async (member: InsertTeamMember) => {
       const res = await apiRequest(
-        editMember ? "PUT" : "POST", 
-        editMember ? `/api/team-members/${editMember.id}` : "/api/team-members", 
+        editMember ? "PUT" : "POST",
+        editMember ? `/api/team-members/${editMember.id}` : "/api/team-members",
         member
       );
       return await res.json();
@@ -43,8 +53,8 @@ export default function TeamMembersPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/team-members'] });
       toast({
         title: editMember ? "Team member updated" : "Team member created",
-        description: editMember 
-          ? "The team member has been updated successfully." 
+        description: editMember
+          ? "The team member has been updated successfully."
           : "The team member has been created successfully.",
       });
       handleCloseModal();
@@ -57,7 +67,7 @@ export default function TeamMembersPage() {
       });
     },
   });
-  
+
   const deleteMemberMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/team-members/${id}`);
@@ -122,7 +132,7 @@ export default function TeamMembersPage() {
       });
     },
   });
-  
+
   const handleCreateClick = () => {
     setEditMember(null);
     setFormData({
@@ -135,7 +145,7 @@ export default function TeamMembersPage() {
     });
     setIsModalOpen(true);
   };
-  
+
   const handleEditClick = (member: TeamMember) => {
     setEditMember(member);
     setFormData({
@@ -148,7 +158,7 @@ export default function TeamMembersPage() {
     });
     setIsModalOpen(true);
   };
-  
+
   const handleDeleteClick = (member: TeamMember) => {
     if (confirm(`Are you sure you want to delete ${member.name}?`)) {
       deleteMemberMutation.mutate(member.id);
@@ -168,17 +178,21 @@ export default function TeamMembersPage() {
       pushMutation.mutate();
     }
   };
-  
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-  
+
+  const handleRoleChange = (value: string) => {
+    setFormData((prev) => ({ ...prev, role: value }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMemberMutation.mutate(formData as InsertTeamMember);
   };
-  
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditMember(null);
@@ -191,7 +205,7 @@ export default function TeamMembersPage() {
       imagePath: null,
     });
   };
-  
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header title="Team Members" />
@@ -276,23 +290,23 @@ export default function TeamMembersPage() {
                       <CardContent className="p-0">
                         <div className="relative">
                           {member.imageUrl && (
-                            <img 
-                              src={member.imageUrl} 
-                              alt={member.name} 
+                            <img
+                              src={member.imageUrl}
+                              alt={member.name}
                               className="w-full h-48 object-cover"
                             />
                           )}
                           <div className="absolute top-2 right-2 flex space-x-1">
-                            <Button 
-                              size="icon" 
-                              variant="secondary" 
+                            <Button
+                              size="icon"
+                              variant="secondary"
                               onClick={() => handleEditClick(member)}
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              size="icon" 
-                              variant="destructive" 
+                            <Button
+                              size="icon"
+                              variant="destructive"
                               onClick={() => handleDeleteClick(member)}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -319,19 +333,19 @@ export default function TeamMembersPage() {
                 )}
               </div>
             )}
-            
+
             {/* Create/Edit Team Member Modal */}
             <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>{editMember ? "Edit Team Member" : "Add Team Member"}</DialogTitle>
                   <DialogDescription>
-                    {editMember 
-                      ? "Update the details for this team member." 
+                    {editMember
+                      ? "Update the details for this team member."
                       : "Fill in the information to add a new team member."}
                   </DialogDescription>
                 </DialogHeader>
-                
+
                 {editMember?.externalId && (
                   <div className="mb-4 p-4 border border-blue-200 bg-blue-50 rounded-md">
                     <div className="flex items-center">
@@ -343,7 +357,7 @@ export default function TeamMembersPage() {
                     </p>
                   </div>
                 )}
-                
+
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-1 gap-4">
                     <div>
@@ -357,19 +371,23 @@ export default function TeamMembersPage() {
                         required
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="role">Role/Position</Label>
-                      <Input
-                        id="role"
-                        name="role"
-                        value={formData.role}
-                        onChange={handleInputChange}
-                        placeholder="e.g. Software Engineer, Designer, etc."
-                        required
-                      />
+                      <Select value={formData.role || ""} onValueChange={handleRoleChange}>
+                        <SelectTrigger id="role">
+                          <SelectValue placeholder="Select a role..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {ROLE_OPTIONS.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="bio">Bio</Label>
                       <Textarea
@@ -382,7 +400,7 @@ export default function TeamMembersPage() {
                         required
                       />
                     </div>
-                    
+
                     <div>
                       <Label htmlFor="imageUrl">Profile Image URL</Label>
                       <Input
@@ -397,7 +415,7 @@ export default function TeamMembersPage() {
                       </p>
                     </div>
                   </div>
-                  
+
                   <DialogFooter>
                     <Button variant="outline" type="button" onClick={handleCloseModal}>
                       Cancel

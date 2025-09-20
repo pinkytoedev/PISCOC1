@@ -501,24 +501,23 @@ async function convertCarouselQuoteToAirtableFormat(quote: any): Promise<Partial
 
 // Helper function to map role to valid Airtable select options
 function mapRoleToAirtable(role: string): string {
-  // Common role mappings - adjust these based on your Airtable select options
+  // Role mappings based on actual Airtable select options
   const roleMappings: Record<string, string> = {
-    'website': 'website',
-    'Website': 'Website',
-    'web developer': 'web developer',
-    'Web Developer': 'Web Developer',
-    'writer': 'writer',
-    'Writer': 'Writer',
-    'editor': 'editor',
-    'Editor': 'Editor',
     'Special Projects': 'Special Projects',
-    'special projects': 'special projects',
-    'eboard': 'eboard',
-    'Eboard': 'Eboard',
-    'dev': 'dev',
+    'Writter': 'Writter',
+    'Photo': 'Photo',
     'Dev': 'Dev',
+    'E-Board': 'E-Board',
+    // Legacy mappings for backwards compatibility
+    'writer': 'Writter',
+    'Writer': 'Writter',
+    'eboard': 'E-Board',
+    'Eboard': 'E-Board',
+    'dev': 'Dev',
+    'photo': 'Photo',
+    'special projects': 'Special Projects'
   };
-  
+
   // Return mapped role or the original role if no mapping exists
   return roleMappings[role] || role;
 }
@@ -562,7 +561,7 @@ export function setupAirtableRoutes(app: Express) {
       }
 
       const { tableId } = req.params;
-      
+
       // Get Airtable settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
@@ -596,7 +595,7 @@ export function setupAirtableRoutes(app: Express) {
       if (response.records && response.records.length > 0) {
         const firstRecord = response.records[0];
         const fields = firstRecord.fields || {};
-        
+
         analysis.fieldAnalysis = Object.keys(fields).reduce((acc: any, fieldName) => {
           const value = (fields as any)[fieldName];
           acc[fieldName] = {
@@ -1085,7 +1084,7 @@ export function setupAirtableRoutes(app: Express) {
       console.log(`=== TEAM MEMBERS AIRTABLE SCHEMA ANALYSIS ===`);
       console.log(`Table ID: ${tableName}`);
       console.log(`Total records fetched: ${response.records?.length || 0}`);
-      
+
       if (response.records && response.records.length > 0) {
         console.log(`=== FIRST RECORD ANALYSIS ===`);
         const firstRecord = response.records[0];
@@ -1216,7 +1215,7 @@ export function setupAirtableRoutes(app: Express) {
 
       console.log("Airtable settings check:", {
         apiKey: apiKeySetting?.value ? "SET" : "NOT SET",
-        baseId: baseIdSetting?.value ? "SET" : "NOT SET", 
+        baseId: baseIdSetting?.value ? "SET" : "NOT SET",
         tableName: tableNameSetting?.value ? "SET" : "NOT SET"
       });
 
@@ -1230,7 +1229,7 @@ export function setupAirtableRoutes(app: Express) {
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       console.log("Using Airtable configuration:", {
         baseId: baseId,
         tableName: tableName,
@@ -1244,7 +1243,7 @@ export function setupAirtableRoutes(app: Express) {
       // Split into create (no externalId) and update (with externalId) operations
       const membersToCreate = teamMembers.filter(m => !m.externalId);
       const membersToUpdate = teamMembers.filter(m => m.externalId);
-      
+
       console.log(`Team members to create: ${membersToCreate.length}`, membersToCreate.map(m => ({ id: m.id, name: m.name, externalId: m.externalId })));
       console.log(`Team members to update: ${membersToUpdate.length}`, membersToUpdate.map(m => ({ id: m.id, name: m.name, externalId: m.externalId })));
 
@@ -1292,7 +1291,7 @@ export function setupAirtableRoutes(app: Express) {
       // Process creates next (for team members without externalId)
       if (membersToCreate.length > 0) {
         console.log(`Found ${membersToCreate.length} team members to create in Airtable`);
-        
+
         // Convert team members to Airtable format
         const createRecords = await Promise.all(
           membersToCreate.map(async (member) => {
@@ -1308,7 +1307,7 @@ export function setupAirtableRoutes(app: Express) {
         for (let i = 0; i < createRecords.length; i += 10) {
           const batch = createRecords.slice(i, i + 10);
           console.log(`Creating batch ${Math.floor(i / 10) + 1} with ${batch.length} records:`, JSON.stringify(batch, null, 2));
-          
+
           try {
             const response = await airtableRequest(
               apiKey,
@@ -1317,7 +1316,7 @@ export function setupAirtableRoutes(app: Express) {
               "POST",
               { records: batch }
             ) as AirtableResponse<AirtableTeamMember>;
-            
+
             console.log(`Airtable response for batch ${Math.floor(i / 10) + 1}:`, JSON.stringify(response, null, 2));
 
             // Update the local database with the new external IDs
@@ -1339,13 +1338,13 @@ export function setupAirtableRoutes(app: Express) {
           } catch (error) {
             console.error(`Error creating batch ${Math.floor(i / 10) + 1}:`, error);
             console.error(`Batch data that failed:`, JSON.stringify(batch, null, 2));
-            
+
             // Log more detailed error information
             if (error instanceof Error) {
               console.error(`Error message: ${error.message}`);
               console.error(`Error stack: ${error.stack}`);
             }
-            
+
             results.errors += batch.length;
             results.details.push(`Error creating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
           }
@@ -1641,7 +1640,7 @@ export function setupAirtableRoutes(app: Express) {
       console.log(`=== CAROUSEL QUOTES AIRTABLE SCHEMA ANALYSIS ===`);
       console.log(`Table ID: ${tableName}`);
       console.log(`Total records fetched: ${response.records?.length || 0}`);
-      
+
       if (response.records && response.records.length > 0) {
         console.log(`=== FIRST RECORD ANALYSIS ===`);
         const firstRecord = response.records[0];
