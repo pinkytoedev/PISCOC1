@@ -1,6 +1,6 @@
 # PISCOC1 - Multi-Platform Integration Ecosystem
 
-A comprehensive platform for managing content across multiple social media and content management platforms including Discord, Airtable, Instagram, and more.
+A comprehensive platform for managing content across multiple social media and content management platforms including Airtable, Instagram, and more.
 
 ## 🚀 Quick Start
 
@@ -85,7 +85,7 @@ A comprehensive platform for managing content across multiple social media and c
 
 ## 📊 Features
 
-- **Multi-Platform Integration**: Connect with Discord, Airtable, Instagram, and ImgBB
+- **Multi-Platform Integration**: Connect with Airtable, Instagram, and ImgBB
 - **Content Management**: Create, edit, and manage articles across platforms
 - **Team Collaboration**: Manage team members and permissions
 - **API Key Management**: Centralized configuration page for all integrations
@@ -99,13 +99,6 @@ This application integrates with multiple external services. You'll need to obta
 ### Required Environment Variables (SEE .env.example)
 
 ### Obtaining API Keys
-
-#### Discord
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Go to "Bot" section and create a bot
-4. Copy the Bot Token for `DISCORD_BOT_TOKEN`
-5. Copy the Application ID for `DISCORD_CLIENT_ID`
 
 #### Airtable
 1. Go to [Airtable API](https://airtable.com/create/tokens)
@@ -198,8 +191,7 @@ The application uses session-based authentication. Default admin credentials wil
 See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed API endpoint documentation.
 
 ## 🔧 Database
-
-This application uses NEON PostgreSQL with Drizzle ORM. Database schema is defined in the `server/db.ts` file.
+Uses Postgres through Railway.
 
 ## 🚀 Development
 

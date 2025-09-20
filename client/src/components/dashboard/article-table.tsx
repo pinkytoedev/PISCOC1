@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
 import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { SiDiscord, SiAirtable, SiInstagram } from "react-icons/si";
+import { SiAirtable, SiInstagram } from "react-icons/si";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -443,9 +443,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
   const getSourceIcon = (source: string | null) => {
     if (!source) return null;
     
-    if (source.includes('discord')) {
-      return <SiDiscord className="text-[#5865F2] mr-1" />;
-    } else if (source.includes('airtable')) {
+    if (source.includes('airtable')) {
       return <SiAirtable className="text-[#3074D8] mr-1" />;
     } else if (source.includes('instagram')) {
       return <SiInstagram className="text-pink-600 mr-1" />;

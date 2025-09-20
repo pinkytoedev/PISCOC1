@@ -19,45 +19,6 @@ interface ApiStatusResponse {
 }
 
 /**
- * Check Discord API status
- */
-async function checkDiscordStatus(): Promise<ApiStatus> {
-  try {
-    // Get Discord bot token from integration settings
-    const setting = await storage.getIntegrationSettingByKey('discord', 'bot_token');
-    
-    if (!setting?.value) {
-      return {
-        name: 'Discord',
-        status: 'unknown',
-        message: 'API token not configured',
-        lastChecked: new Date()
-      };
-    }
-    
-    // Check Discord API status by making a simple API call
-    const response = await axios.get('https://discord.com/api/v10/gateway', {
-      headers: {
-        Authorization: `Bot ${setting.value}`
-      }
-    });
-    
-    return {
-      name: 'Discord',
-      status: response.status >= 200 && response.status < 300 ? 'online' : 'offline',
-      lastChecked: new Date()
-    };
-  } catch (error) {
-    return {
-      name: 'Discord',
-      status: 'offline',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      lastChecked: new Date()
-    };
-  }
-}
-
-/**
  * Check Airtable API status
  */
 async function checkAirtableStatus(): Promise<ApiStatus> {
@@ -200,8 +161,7 @@ async function checkDatabaseStatus(): Promise<ApiStatus> {
  */
 export async function getAllApiStatuses(): Promise<ApiStatusResponse> {
   // Run all checks concurrently for better performance
-  const [discord, airtable, instagram, imgbb, database] = await Promise.all([
-    checkDiscordStatus(),
+  const [airtable, instagram, imgbb, database] = await Promise.all([
     checkAirtableStatus(),
     checkInstagramStatus(),
     checkImgBBStatus(),
@@ -209,7 +169,7 @@ export async function getAllApiStatuses(): Promise<ApiStatusResponse> {
   ]);
   
   return {
-    statuses: [discord, airtable, instagram, imgbb, database],
+    statuses: [airtable, instagram, imgbb, database],
     timestamp: new Date()
   };
 }

@@ -155,7 +155,7 @@ export default function ArticlesPage() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Articles</h1>
                 <p className="mt-1 text-sm text-gray-500">
-                  Manage and publish article content from Discord and Airtable.
+                  Manage and publish article content from Airtable.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3 w-full md:w-auto">

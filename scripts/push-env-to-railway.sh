@@ -39,12 +39,6 @@ add_to_railway "DATABASE_URL" "$DATABASE_URL"
 add_to_railway "SESSION_SECRET" "$SESSION_SECRET"
 
 echo ""
-echo "Adding Discord variables..."
-add_to_railway "DISCORD_BOT_TOKEN" "$DISCORD_BOT_TOKEN"
-add_to_railway "DISCORD_CLIENT_ID" "$DISCORD_CLIENT_ID"
-add_to_railway "DISCORD_CLIENT_SECRET" "$DISCORD_CLIENT_SECRET"
-
-echo ""
 echo "Adding integration variables..."
 add_to_railway "AIRTABLE_API_KEY" "$AIRTABLE_API_KEY"
 add_to_railway "AIRTABLE_BASE_ID" "$AIRTABLE_BASE_ID"

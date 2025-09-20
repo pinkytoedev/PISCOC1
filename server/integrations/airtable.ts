@@ -499,13 +499,51 @@ async function convertCarouselQuoteToAirtableFormat(quote: any): Promise<Partial
   };
 }
 
+// Helper function to map role to valid Airtable select options
+function mapRoleToAirtable(role: string): string {
+  // Common role mappings - adjust these based on your Airtable select options
+  const roleMappings: Record<string, string> = {
+    'website': 'website',
+    'Website': 'Website',
+    'web developer': 'web developer',
+    'Web Developer': 'Web Developer',
+    'writer': 'writer',
+    'Writer': 'Writer',
+    'editor': 'editor',
+    'Editor': 'Editor',
+    'Special Projects': 'Special Projects',
+    'special projects': 'special projects',
+    'eboard': 'eboard',
+    'Eboard': 'Eboard',
+    'dev': 'dev',
+    'Dev': 'Dev',
+  };
+  
+  // Return mapped role or the original role if no mapping exists
+  return roleMappings[role] || role;
+}
+
 // Helper function to convert team member to Airtable format
 async function convertTeamMemberToAirtableFormat(member: any): Promise<Partial<AirtableTeamMember>> {
+  console.log(`Converting team member to Airtable format:`, {
+    id: member.id,
+    name: member.name,
+    role: member.role,
+    bio: member.bio,
+    externalId: member.externalId
+  });
+
+  // Map the role to a valid Airtable select option
+  const mappedRole = member.role ? mapRoleToAirtable(member.role) : null;
+  console.log(`Mapped role "${member.role}" to "${mappedRole}"`);
+
   const airtableData: Partial<AirtableTeamMember> = {
     Name: member.name,
-    Role: [member.role], // Role is an array in Airtable
+    Role: mappedRole ? [mappedRole] : [], // Role is an array in Airtable, handle empty roles
     Bio: member.bio
   };
+
+  console.log(`Converted to Airtable format:`, airtableData);
 
   // Note: Teams table uses PhotoSub (link to another record) for images
   // We cannot easily create image attachments without knowing the PhotoSub record structure
@@ -1176,6 +1214,12 @@ export function setupAirtableRoutes(app: Express) {
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
       const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "team_members_table");
 
+      console.log("Airtable settings check:", {
+        apiKey: apiKeySetting?.value ? "SET" : "NOT SET",
+        baseId: baseIdSetting?.value ? "SET" : "NOT SET", 
+        tableName: tableNameSetting?.value ? "SET" : "NOT SET"
+      });
+
       if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
         return res.status(400).json({
           success: false,
@@ -1186,13 +1230,23 @@ export function setupAirtableRoutes(app: Express) {
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
+      
+      console.log("Using Airtable configuration:", {
+        baseId: baseId,
+        tableName: tableName,
+        apiKeyLength: apiKey.length
+      });
 
       // Get all team members from the database
       const teamMembers = await storage.getTeamMembers();
+      console.log(`Retrieved ${teamMembers.length} team members from database`);
 
       // Split into create (no externalId) and update (with externalId) operations
       const membersToCreate = teamMembers.filter(m => !m.externalId);
       const membersToUpdate = teamMembers.filter(m => m.externalId);
+      
+      console.log(`Team members to create: ${membersToCreate.length}`, membersToCreate.map(m => ({ id: m.id, name: m.name, externalId: m.externalId })));
+      console.log(`Team members to update: ${membersToUpdate.length}`, membersToUpdate.map(m => ({ id: m.id, name: m.name, externalId: m.externalId })));
 
       const results = {
         created: 0,
@@ -1237,17 +1291,24 @@ export function setupAirtableRoutes(app: Express) {
 
       // Process creates next (for team members without externalId)
       if (membersToCreate.length > 0) {
+        console.log(`Found ${membersToCreate.length} team members to create in Airtable`);
+        
         // Convert team members to Airtable format
         const createRecords = await Promise.all(
           membersToCreate.map(async (member) => {
             const fields = await convertTeamMemberToAirtableFormat(member);
+            console.log(`Converting member ${member.name} to Airtable format:`, fields);
             return { fields };
           })
         );
 
+        console.log(`Converted ${createRecords.length} records for Airtable creation`);
+
         // Batch create records in Airtable (max 10 at a time)
         for (let i = 0; i < createRecords.length; i += 10) {
           const batch = createRecords.slice(i, i + 10);
+          console.log(`Creating batch ${Math.floor(i / 10) + 1} with ${batch.length} records:`, JSON.stringify(batch, null, 2));
+          
           try {
             const response = await airtableRequest(
               apiKey,
@@ -1256,6 +1317,8 @@ export function setupAirtableRoutes(app: Express) {
               "POST",
               { records: batch }
             ) as AirtableResponse<AirtableTeamMember>;
+            
+            console.log(`Airtable response for batch ${Math.floor(i / 10) + 1}:`, JSON.stringify(response, null, 2));
 
             // Update the local database with the new external IDs
             if (response.records) {
@@ -1275,6 +1338,14 @@ export function setupAirtableRoutes(app: Express) {
             results.details.push(`Created ${batch.length} team members in batch ${Math.floor(i / 10) + 1}`);
           } catch (error) {
             console.error(`Error creating batch ${Math.floor(i / 10) + 1}:`, error);
+            console.error(`Batch data that failed:`, JSON.stringify(batch, null, 2));
+            
+            // Log more detailed error information
+            if (error instanceof Error) {
+              console.error(`Error message: ${error.message}`);
+              console.error(`Error stack: ${error.stack}`);
+            }
+            
             results.errors += batch.length;
             results.details.push(`Error creating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
           }
