@@ -184,7 +184,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     }
     
     const updatedArticle = await storage.updateArticle(articleId, {
-      content: htmlContent
+      content: htmlContent,
+      contentFormat: 'html'
     });
     
     if (!updatedArticle) {
@@ -210,7 +211,6 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           // Call Airtable API
           const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${tableIdSetting.value}/${article.externalId}`;
           console.log('Setting HTML content in Airtable');
-          
           const airtableResponse = await fetch(airtableUrl, {
             method: 'PATCH',
             headers: {
