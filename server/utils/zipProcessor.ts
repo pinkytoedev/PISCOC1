@@ -40,6 +40,42 @@ function escapeRegExp(string: string): string {
 }
 
 /**
+ * Build common path variations for matching asset references
+ */
+function getPathVariations(filePath: string): string[] {
+  const variations = new Set<string>();
+  const normalized = filePath.split(path.sep).join('/');
+  const withLeadingDot = normalized.startsWith('./') ? normalized : `./${normalized}`;
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  const basename = path.basename(normalized);
+  const encoded = encodeURI(normalized);
+  const encodedWithDot = encodeURI(withLeadingDot);
+  const encodedWithSlash = encodeURI(withLeadingSlash);
+
+  [
+    filePath,
+    normalized,
+    normalized.replace(/\\/g, '/'),
+    withLeadingDot,
+    withLeadingSlash,
+    basename,
+    encoded,
+    encodedWithDot,
+    encodedWithSlash
+  ].forEach(variant => {
+    const trimmed = variant.replace(/^\.\//, './');
+    if (trimmed) {
+      variations.add(trimmed);
+      if (!trimmed.startsWith('/')) {
+        variations.add(`/${trimmed}`);
+      }
+    }
+  });
+
+  return Array.from(variations);
+}
+
+/**
  * Process a zip file and extract HTML content
  * @param filePath Path to the uploaded ZIP file
  * @param articleId ID of the article to update with HTML content
@@ -107,7 +143,10 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     if (!htmlContent) {
       throw new Error(`HTML file is empty: ${path.basename(mainHtmlFile)}`);
     }
-    
+
+    // Find all CSS files in the extracted ZIP
+    const cssFiles = findFiles(tempDir, ['.css']);
+
     // Find all image files in the extracted ZIP
     const imageFiles = findImageFiles(tempDir);
     console.log(`Found ${imageFiles.length} image files in ZIP archive`);
@@ -161,21 +200,88 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       
       // Replace image paths in HTML content
       Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
-        // Handle different path patterns (with or without leading ./, relative paths, etc.)
-        const pathVariations = [
-          originalPath,
-          `./${originalPath}`,
-          `/${originalPath}`,
-          path.basename(originalPath)
-        ];
-        
+       
         // Replace all variations of the path with the new URL
+        const pathVariations = getPathVariations(originalPath);
+
         pathVariations.forEach(pathVar => {
-          const regex = new RegExp(`(src|href)=['"](${escapeRegExp(pathVar)})['"']`, 'gi');
-          htmlContent = htmlContent.replace(regex, `$1="${newUrl}"`);
+          const attributeRegex = new RegExp(`(src|href|data-src)=['"](${escapeRegExp(pathVar)})['"']`, 'gi');
+          const inlineStyleRegex = new RegExp(`url\(\s*(['"])${escapeRegExp(pathVar)}\\1\s*\)`, 'gi');
+          const inlineStyleNoQuoteRegex = new RegExp(`url\(\s*${escapeRegExp(pathVar)}\s*\)`, 'gi');
+
+          htmlContent = htmlContent
+            .replace(attributeRegex, `$1="${newUrl}"`)
+            .replace(inlineStyleRegex, `url(${newUrl})`)
+            .replace(inlineStyleNoQuoteRegex, `url(${newUrl})`);
         });
       });
     }
+
+    // Inline CSS references and update asset URLs within stylesheets
+    let combinedCss = '';
+
+    if (cssFiles.length > 0) {
+      console.log(`Inlining ${cssFiles.length} CSS files from ZIP archive`);
+
+      for (const cssFile of cssFiles) {
+        const relativeCssPath = path.relative(tempDir, cssFile).split(path.sep).join('/');
+        let cssContent = fs.readFileSync(cssFile, 'utf-8');
+
+        Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
+          const pathVariations = getPathVariations(originalPath);
+
+          pathVariations.forEach(pathVar => {
+            const cssUrlRegex = new RegExp(`url\(\s*(['"])${escapeRegExp(pathVar)}\\1\s*\)`, 'gi');
+            const cssUrlRegexNoQuote = new RegExp(`url\(\s*${escapeRegExp(pathVar)}\s*\)`, 'gi');
+            cssContent = cssContent
+              .replace(cssUrlRegex, `url(${newUrl})`)
+              .replace(cssUrlRegexNoQuote, `url(${newUrl})`);
+          });
+        });
+
+        combinedCss += `\n/* ${relativeCssPath} */\n${cssContent}\n`;
+
+        // Remove link tags referencing this stylesheet from HTML content
+        const cssVariations = getPathVariations(relativeCssPath);
+        cssVariations.forEach(pathVar => {
+          const linkRegex = new RegExp(`<link[^>]+href=['"]${escapeRegExp(pathVar)}['"][^>]*>`, 'gi');
+          htmlContent = htmlContent.replace(linkRegex, '');
+        });
+      }
+    }
+
+    if (combinedCss.trim().length > 0) {
+      const styleTag = `<style>${combinedCss}\n</style>`;
+      if (/<head[^>]*>/i.test(htmlContent)) {
+        htmlContent = htmlContent.replace(/<head[^>]*>/i, match => `${match}\n${styleTag}\n`);
+      } else {
+        htmlContent = `${styleTag}\n${htmlContent}`;
+      }
+    }
+
+    // Extract meaningful content from the HTML document
+    const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    let finalHtmlContent = bodyMatch ? bodyMatch[1] : htmlContent;
+
+    if (!bodyMatch) {
+      const htmlMatch = htmlContent.match(/<html[^>]*>([\s\S]*?)<\/html>/i);
+      if (htmlMatch) {
+        finalHtmlContent = htmlMatch[1];
+      }
+    }
+
+    const headMatch = htmlContent.match(/<head[^>]*>([\s\S]*?)<\/head>/i);
+    if (headMatch) {
+      let headContent = headMatch[1];
+      headContent = headContent.replace(/<title[\s\S]*?<\/title>/gi, '');
+      headContent = headContent.replace(/<meta[^>]*>/gi, '');
+
+      if (headContent.trim()) {
+        finalHtmlContent = `${headContent}\n${finalHtmlContent}`;
+      }
+    }
+
+    finalHtmlContent = finalHtmlContent.replace(/<!DOCTYPE[^>]*>/gi, '').trim();
     
     // Update article content
     const article = await storage.getArticle(articleId);
@@ -184,7 +290,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     }
     
     const updatedArticle = await storage.updateArticle(articleId, {
-      content: htmlContent,
+      content: finalHtmlContent,
       contentFormat: 'html'
     });
     
@@ -205,6 +311,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           const updatePayload = {
             fields: {
               content: htmlContent
+              body: htmlContent
             }
           };
           
@@ -238,7 +345,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       resourceId: articleId.toString(),
       details: {
         fieldName: 'content',
-        contentSize: htmlContent.length,
+        contentSize: finalHtmlContent.length,
         sourceFile: path.basename(filePath)
       }
     });
