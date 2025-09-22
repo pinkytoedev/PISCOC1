@@ -8,6 +8,7 @@ import * as path from 'path';
 import { storage } from '../storage';
 import * as util from 'util';
 import { exec } from 'child_process';
+import extract from 'extract-zip';
 import { uploadImageToImgBB, UploadedFileInfo, ImgBBUploadResponse } from './imgbbUploader';
 import { InsertImageAsset } from '../../shared/schema';
 
@@ -93,9 +94,16 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     // Create temp extraction directory
     fs.mkdirSync(tempDir, { recursive: true });
     
-    // Extract ZIP using unzip command
+    // Extract ZIP using extract-zip library to avoid system unzip dependency
     console.log(`Extracting ZIP file to ${tempDir}...`);
-    await execPromise(`unzip -o "${filePath}" -d "${tempDir}"`);
+
+    try {
+      await extract(filePath, { dir: tempDir });
+    } catch (extractError) {
+      throw new Error(
+        `Failed to extract ZIP archive: ${extractError instanceof Error ? extractError.message : String(extractError)}`
+      );
+    }
     
     // Recursive file finder helper function
     const findFiles = (dir: string, extensions: string[]): string[] => {
