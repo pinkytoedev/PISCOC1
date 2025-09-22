@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupStaticServing } from "./middleware/staticMiddleware";
 import { setupHTTPS } from "./https-dev";
+import { startPublishScheduler } from "./scheduler";
 
 const app = express();
 export { app };
@@ -107,6 +108,9 @@ app.use((req, res, next) => {
     if (app.get("env") === "development") {
       setupHTTPS(app, 3001);
     }
+
+    // Start background scheduler for auto-publishing
+    startPublishScheduler(60000); // every 60s
   } catch (error) {
     log('❌ Failed to start server on any available port');
     process.exit(1);
