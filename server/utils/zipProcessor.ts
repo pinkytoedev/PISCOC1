@@ -310,7 +310,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           // Prepare Airtable update
           const updatePayload = {
             fields: {
-              content: htmlContent
+              content: htmlContent,
               body: htmlContent
             }
           };
