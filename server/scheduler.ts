@@ -46,6 +46,14 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
             Hashtags: article.hashtags || "",
         };
 
+        // Include image link URL fields if available so the Airtable draft has them immediately
+        if (article.imageUrl) {
+            (fields as any).MainImageLink = article.imageUrl;
+        }
+        if (article.instagramImageUrl) {
+            (fields as any).InstaPhotoLink = article.instagramImageUrl;
+        }
+
         // Dates
         const scheduledDate = parseScheduledDate(article) || new Date();
         fields.Scheduled = scheduledDate.toISOString();
@@ -91,6 +99,62 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
     return article;
 }
 
+async function moveImageLinksToAirtable(article: Article): Promise<void> {
+    try {
+        // Require an existing Airtable record
+        if (!article.externalId) {
+            return;
+        }
+
+        // Gather link fields from the local article
+        const fieldsToUpdate: Record<string, string> = {};
+        if (article.imageUrl) {
+            fieldsToUpdate["MainImageLink"] = article.imageUrl;
+        }
+        if (article.instagramImageUrl) {
+            fieldsToUpdate["InstaPhotoLink"] = article.instagramImageUrl;
+        }
+
+        // Nothing to move
+        if (Object.keys(fieldsToUpdate).length === 0) {
+            return;
+        }
+
+        // Read Airtable config
+        const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+        const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+        const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+
+        if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+            log("Airtable not configured; skipping moving links for article " + article.id, "scheduler");
+            return;
+        }
+
+        const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}/${article.externalId}`;
+        const body = JSON.stringify({ fields: fieldsToUpdate });
+
+        const res = await fetch(airtableUrl, {
+            method: "PATCH",
+            headers: {
+                "Authorization": `Bearer ${apiKeySetting.value}`,
+                "Content-Type": "application/json",
+            },
+            body,
+        });
+
+        const text = await res.text();
+        if (!res.ok) {
+            // Common error when a field does not exist in Airtable
+            log(`Failed to move links to Airtable for article ${article.id} (${res.status}): ${text}`, "scheduler");
+            return;
+        }
+
+        log(`Moved image links to Airtable for article ${article.id}`, "scheduler");
+    } catch (err) {
+        log(`Error moving links to Airtable for article ${article.id}: ${String(err)}`, "scheduler");
+    }
+}
+
 async function publishArticle(article: Article): Promise<void> {
     // Mark as published in DB
     const now = new Date();
@@ -106,6 +170,9 @@ async function publishArticle(article: Article): Promise<void> {
     }
 
     log(`Published article ${article.id}: ${article.title}`, "scheduler");
+
+    // Move image links over to Airtable record (if present)
+    await moveImageLinksToAirtable(updated as unknown as Article);
 
     // Try Instagram post (best-effort)
     try {
