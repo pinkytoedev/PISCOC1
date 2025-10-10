@@ -57,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Set up public upload routes
   setupPublicUploadRoutes(app);
-  
+
   // Set up new token-free public upload routes
   setupTokenFreePublicUploadRoutes(app);
 
@@ -207,8 +207,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/articles", isAuthenticated, async (req, res) => {
     try {
+      // Debug log the incoming data
+      console.log("Creating article with data:", {
+        title: req.body.title,
+        imageUrl: req.body.imageUrl,
+        imageType: req.body.imageType,
+        instagramImageUrl: req.body.instagramImageUrl,
+        status: req.body.status
+      });
+
       const validatedData = insertArticleSchema.parse(req.body);
       const newArticle = await storage.createArticle(validatedData);
+
+      // Debug log the created article
+      console.log("Article created in database:", {
+        id: newArticle.id,
+        title: newArticle.title,
+        imageUrl: newArticle.imageUrl,
+        imageType: newArticle.imageType,
+        instagramImageUrl: newArticle.instagramImageUrl
+      });
 
       // Log activity
       await storage.createActivityLog({

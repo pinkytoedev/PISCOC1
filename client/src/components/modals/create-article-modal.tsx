@@ -548,6 +548,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     console.log("Submitting article with publishedAt:", submissionData.publishedAt);
     console.log("Airtable date field:", submissionData.date);
     console.log("Finished status:", submissionData.finished);
+    console.log("Image URL being submitted:", submissionData.imageUrl);
+    console.log("Full submission data:", submissionData);
 
     createArticleMutation.mutate(submissionData as InsertArticle);
   };

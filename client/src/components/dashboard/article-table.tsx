@@ -3,14 +3,14 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
 import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { SiAirtable, SiInstagram } from "react-icons/si";
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import { 
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -43,17 +43,18 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
   const [autoPublishingArticleId, setAutoPublishingArticleId] = useState<number | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const articlesPerPage = 15; // Show 15 articles per page
-  
+  const [recentlyPushedArticles, setRecentlyPushedArticles] = useState<Set<number>>(new Set());
+
   const { data: articles, isLoading } = useQuery<Article[]>({
     queryKey: ['/api/articles'],
   });
-  
+
   // Add mutation for updating article status to published
   const updateArticleStatusMutation = useMutation({
     mutationFn: async (article: { id: number, status: string }) => {
       setAutoPublishingArticleId(article.id);
       const response = await apiRequest(
-        "PUT", 
+        "PUT",
         `/api/articles/${article.id}`,
         { status: article.status }
       );
@@ -61,32 +62,49 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
-      
+
       // Get the updated article
       const article = articles?.find(a => a.id === variables.id);
-      
+
       // Handle Airtable synchronization when status is set to "published"
       if (article && variables.status === 'published') {
         if (article.source === 'airtable' && article.externalId) {
           // For existing Airtable articles, update them immediately
           console.log('Updating existing Airtable article:', article.id);
-          
+
           // Wait a brief moment to ensure the database has been updated
           setTimeout(() => {
             updateAirtableMutation.mutate(article.id);
           }, 500);
-          
-        } else if (article.source !== 'airtable') {
-          // For non-Airtable articles, push them to Airtable
-          console.log('Pushing new article to Airtable:', article.id);
-          
-          // Wait a brief moment to ensure the database has been updated
-          setTimeout(() => {
-            pushToAirtableMutation.mutate(article.id);
-          }, 500);
+
+        } else if (article.source !== 'airtable' && !article.externalId) {
+          // For non-Airtable articles without an external ID, push them to Airtable
+          // Check if we haven't recently pushed this article
+          if (!recentlyPushedArticles.has(article.id)) {
+            console.log('Pushing new article to Airtable:', article.id);
+
+            // Mark as recently pushed to prevent duplicates
+            setRecentlyPushedArticles(prev => new Set(prev).add(article.id));
+
+            // Wait a brief moment to ensure the database has been updated
+            setTimeout(() => {
+              pushToAirtableMutation.mutate(article.id);
+            }, 500);
+
+            // Clear from recently pushed after 5 seconds
+            setTimeout(() => {
+              setRecentlyPushedArticles(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(article.id);
+                return newSet;
+              });
+            }, 5000);
+          } else {
+            console.log('Article', article.id, 'was recently pushed, skipping duplicate push');
+          }
         }
       }
-      
+
       setAutoPublishingArticleId(null);
       toast({
         title: "Article status updated",
@@ -102,7 +120,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       });
     },
   });
-  
+
   const deleteArticleMutation = useMutation({
     mutationFn: async (id: number) => {
       await apiRequest("DELETE", `/api/articles/${id}`);
@@ -122,12 +140,12 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       });
     },
   });
-  
+
   // Add mutation for updating article in Airtable directly
   const updateAirtableMutation = useMutation({
     mutationFn: async (articleId: number) => {
       const response = await apiRequest(
-        "POST", 
+        "POST",
         `/api/airtable/update/article/${articleId}`
       );
       return await response.json();
@@ -147,13 +165,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       });
     },
   });
-  
+
   // Add mutation for pushing non-Airtable articles to Airtable
   const pushToAirtableMutation = useMutation({
     mutationFn: async (articleId: number) => {
       setPushingArticleId(articleId);
       const response = await apiRequest(
-        "POST", 
+        "POST",
         `/api/airtable/push/article/${articleId}`
       );
       return await response.json();
@@ -175,27 +193,27 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       });
     },
   });
-  
+
   // Add mutation for uploading images to ImgBB (both main and insta images)
   const uploadImageMutation = useMutation({
     mutationFn: async ({ articleId, file, fieldName }: { articleId: number, file: File, fieldName: 'MainImage' | 'instaPhoto' }) => {
       const formData = new FormData();
       formData.append('image', file);
-      
+
       // We're still using MainImage as the param, but internally the server will use MainImageLink
       const response = await fetch(`/api/imgbb/upload-to-airtable/${articleId}/${fieldName}`, {
         method: "POST",
         body: formData,
         credentials: 'include'
       });
-      
+
       return await response.json();
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       setUploadingArticleId(null);
       setUploadingField(null);
-      
+
       toast({
         title: "Image uploaded",
         description: `Image was successfully uploaded to ImgBB${data.airtable ? ' and Airtable' : ''}.`,
@@ -204,7 +222,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
     onError: (error) => {
       setUploadingArticleId(null);
       setUploadingField(null);
-      
+
       toast({
         title: "Image upload failed",
         description: error.message || "Failed to upload image. Please try again.",
@@ -212,21 +230,21 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       });
     },
   });
-  
+
   // Handle clicking the upload button for main image
   const handleMainImageUpload = (article: Article) => {
     setUploadingArticleId(article.id);
     setUploadingField('MainImage');
     mainImageFileInputRef.current?.click();
   };
-  
+
   // Handle clicking the upload button for Instagram image
   const handleInstaImageUpload = (article: Article) => {
     setUploadingArticleId(article.id);
     setUploadingField('instaPhoto');
     instaImageFileInputRef.current?.click();
   };
-  
+
   // Handle file selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -237,11 +255,11 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
         fieldName: uploadingField
       });
     }
-    
+
     // Reset the file input
     e.target.value = '';
   };
-  
+
   const handleDelete = (article: Article) => {
     if (onDelete) {
       onDelete(article);
@@ -251,32 +269,32 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       }
     }
   };
-  
+
   // Track which articles we're already processing to prevent update loops
   const [processedArticleIds, setProcessedArticleIds] = useState<Set<number>>(new Set());
-  
+
   // Function to reset the processed articles list after a time period
   // (useful when testing with the same articles repeatedly)
   const resetProcessedArticles = useCallback(() => {
     console.log("Resetting processed articles list");
     setProcessedArticleIds(new Set());
   }, []);
-  
+
   // Periodically reset the processed articles list (every hour in production)
   useEffect(() => {
     // Reset every 10 minutes
     const resetInterval = setInterval(resetProcessedArticles, 600000);
-    
+
     return () => clearInterval(resetInterval);
   }, [resetProcessedArticles]);
 
   // Function to check if an article should be published based on its scheduled date
   const checkAndPublishScheduledArticles = useCallback(() => {
     if (!articles || articles.length === 0) return;
-    
+
     const now = new Date();
     console.log("Auto-publishing check at:", now.toISOString());
-    
+
     // Find articles that are scheduled and their publication date has passed
     const articlesToPublish = articles.filter(article => {
       // Skip if no scheduled date is set - check Scheduled field first, then fallback to publishedAt
@@ -284,20 +302,20 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       if (!scheduledDateTime) {
         return false;
       }
-      
+
       // Skip if already published or if we're already processing this article
       if (article.status === 'published' || processedArticleIds.has(article.id)) {
         return false;
       }
-      
+
       // Skip if we're currently publishing this article
       if (autoPublishingArticleId === article.id) {
         return false;
       }
-      
+
       const scheduledDate = new Date(scheduledDateTime);
       const shouldPublish = scheduledDate <= now;
-      
+
       // Log potential articles for debugging
       if (shouldPublish) {
         console.log(`Article ${article.id} "${article.title}" is ready for publishing:`, {
@@ -306,13 +324,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
           currentStatus: article.status
         });
       }
-      
+
       // Check if the scheduled date has passed
       return shouldPublish;
     });
-    
+
     console.log(`Found ${articlesToPublish.length} articles to auto-publish`);
-    
+
     // Only process if there are articles to publish
     if (articlesToPublish.length > 0) {
       // Add these articles to our processed set to prevent recursive updates
@@ -321,29 +339,29 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
         newProcessedIds.add(article.id);
       });
       setProcessedArticleIds(newProcessedIds);
-      
+
       // Process one article at a time to avoid overwhelming the server
       // We'll process the first article in the list
       const article = articlesToPublish[0];
       console.log(`Auto-publishing article ${article.id}: "${article.title}"`);
-      
+
       updateArticleStatusMutation.mutate({
         id: article.id,
         status: 'published'
       });
     }
   }, [articles, processedArticleIds, updateArticleStatusMutation, autoPublishingArticleId]);
-  
+
   // Set up periodic checking for articles that need to be published
   useEffect(() => {
     // Check immediately when component mounts or articles data changes
     if (articles) {
       console.log("Articles data loaded, checking for scheduled articles...");
       checkAndPublishScheduledArticles();
-      
+
       // Set up interval to check every 60 seconds (1 minute)
       const intervalId = setInterval(checkAndPublishScheduledArticles, 60000);
-      
+
       // Clean up interval on unmount
       return () => {
         console.log("Clearing auto-publish interval");
@@ -351,22 +369,22 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       };
     }
   }, [articles, checkAndPublishScheduledArticles]);
-  
+
   // Filter articles first
   const filteredArticles = articles?.filter(article => {
     // Filter by search query
     if (searchQuery && !article.title.toLowerCase().includes(searchQuery.toLowerCase())) {
       return false;
     }
-    
+
     // Filter by status
     if (filter && article.status !== filter) {
       return false;
     }
-    
+
     return true;
   });
-  
+
   // Then sort articles based on sort parameter
   const sortedAllArticles = filteredArticles ? [...filteredArticles].sort((a, b) => {
     // Helper function to get the most relevant date for an article
@@ -376,7 +394,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       if (article.publishedAt) return new Date(article.publishedAt).getTime();
       return new Date(article.createdAt || '').getTime();
     };
-    
+
     if (!sort || sort === 'newest') {
       // Sort by newest first, prioritizing Scheduled field
       return getRelevantDate(b) - getRelevantDate(a);
@@ -385,53 +403,53 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       return getRelevantDate(a) - getRelevantDate(b);
     } else if (sort === 'chronological') {
       // Sort by the Scheduled date field from Airtable, fall back to publishedAt if not available
-      const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() : 
-                  (a.date ? new Date(a.date).getTime() : 0);
-      const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() : 
-                  (b.date ? new Date(b.date).getTime() : 0);
-      
+      const dateA = a.Scheduled ? new Date(a.Scheduled).getTime() :
+        (a.date ? new Date(a.date).getTime() : 0);
+      const dateB = b.Scheduled ? new Date(b.Scheduled).getTime() :
+        (b.date ? new Date(b.date).getTime() : 0);
+
       // If both have dates, sort by those dates
       if (dateA && dateB) {
         return dateA - dateB; // Chronological order (oldest first)
       }
-      
+
       // If only one has a date, prioritize the one with a date
       if (dateA && !dateB) return -1;
       if (!dateA && dateB) return 1;
-      
+
       // If neither has a date, fall back to createdAt
       return new Date(b.createdAt || '').getTime() - new Date(a.createdAt || '').getTime();
     }
-    
+
     return 0;
   }) : [];
-  
+
   // Calculate total pages
   const totalPages = Math.ceil((sortedAllArticles?.length || 0) / articlesPerPage);
-  
+
   // Get paginated articles
   const sortedArticles = sortedAllArticles.slice(
     (currentPage - 1) * articlesPerPage,
     currentPage * articlesPerPage
   );
-  
+
   // Handle page changes
   const handlePageChange = (page: number) => {
     // Ensure page is within valid range
     const newPage = Math.max(1, Math.min(page, totalPages));
     setCurrentPage(newPage);
-    
+
     // If we're changing page, scroll to top of the article table
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-  
+
   // Function to truncate text with ellipsis
   const truncateText = (text: string, maxLength: number) => {
     if (!text) return '';
     if (text.length <= maxLength) return text;
     return text.slice(0, maxLength) + '...';
   };
-  
+
   // Function to format tags nicely
   const formatTags = (hashtags: string | null) => {
     if (!hashtags) return [];
@@ -439,10 +457,10 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       .filter(tag => tag.trim() !== '')
       .map(tag => tag.startsWith('#') ? tag : `#${tag}`);
   };
-  
+
   const getSourceIcon = (source: string | null) => {
     if (!source) return null;
-    
+
     if (source.includes('airtable')) {
       return <SiAirtable className="text-[#3074D8] mr-1" />;
     } else if (source.includes('instagram')) {
@@ -451,7 +469,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       return null;
     }
   };
-  
+
   const getArticleDetails = (article: Article) => {
     if (article.source === 'airtable') {
       return (
@@ -472,44 +490,44 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                   {article.externalId || 'N/A'}
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Format:</div>
                 <div className="col-span-2">{article.contentFormat || 'N/A'}</div>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Featured:</div>
                 <div className="col-span-2">{article.featured === 'yes' ? 'Yes' : 'No'}</div>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Status:</div>
                 <div className="col-span-2">
                   <StatusBadge status={article.status || 'draft'} />
                 </div>
               </div>
-              
+
               {/* Publication Details */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Created:</div>
                 <div className="col-span-2">
-                  {article.date 
-                    ? new Date(article.date).toLocaleString() 
+                  {article.date
+                    ? new Date(article.date).toLocaleString()
                     : 'Not recorded'}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Scheduled:</div>
                 <div className="col-span-2">
-                  {article.Scheduled 
-                    ? new Date(article.Scheduled).toLocaleString() 
-                    : article.publishedAt 
-                      ? new Date(article.publishedAt).toLocaleString() 
+                  {article.Scheduled
+                    ? new Date(article.Scheduled).toLocaleString()
+                    : article.publishedAt
+                      ? new Date(article.publishedAt).toLocaleString()
                       : 'Not scheduled'}
                 </div>
               </div>
-              
+
               {/* Meta Details */}
               {article.author && (
                 <div className="grid grid-cols-3 gap-2">
@@ -517,14 +535,14 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                   <div className="col-span-2 truncate">{article.author}</div>
                 </div>
               )}
-              
+
               {article.photo && (
                 <div className="grid grid-cols-3 gap-2">
                   <div className="col-span-1 text-muted-foreground">Photo:</div>
                   <div className="col-span-2 truncate">{article.photo}</div>
                 </div>
               )}
-              
+
               {/* Hashtags */}
               {article.hashtags && (
                 <div className="grid grid-cols-3 gap-2">
@@ -538,13 +556,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                   </div>
                 </div>
               )}
-              
+
               {/* Content Preview */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Description:</div>
                 <div className="col-span-2 text-xs line-clamp-2">{article.description || 'N/A'}</div>
               </div>
-              
+
               <div className="mt-2 border-t pt-2">
                 <div className="text-xs text-gray-500 mb-1">Content Preview:</div>
                 <div className="text-xs bg-gray-50 p-2 rounded-md max-h-[100px] overflow-y-auto">
@@ -575,7 +593,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
     }
     return null;
   };
-  
+
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
       {/* Hidden file inputs for image uploads */}
@@ -593,15 +611,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
         accept="image/*"
         className="hidden"
       />
-      
+
       <div className="flex flex-col md:flex-row md:justify-between md:items-center p-4 border-b border-gray-200 gap-4">
         <h2 className="text-lg font-medium text-gray-900">
           {filter ? `${filter.charAt(0).toUpperCase() + filter.slice(1)} Articles` : 'All Articles'}
         </h2>
         <div className="relative w-full md:w-auto">
           <input
-            type="text" 
-            placeholder="Search articles..." 
+            type="text"
+            placeholder="Search articles..."
             className="border border-gray-300 rounded-md px-4 py-2 text-sm w-full md:w-64 focus:ring-primary focus:border-primary"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -631,8 +649,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                 Status
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center">
-                <button 
-                  onClick={() => setShowCreationDate(!showCreationDate)} 
+                <button
+                  onClick={() => setShowCreationDate(!showCreationDate)}
                   className="flex items-center group"
                   title={showCreationDate ? "Showing Creation Date (Airtable's Date field)" : "Showing Scheduled Date (Airtable's Scheduled field)"}
                 >
@@ -657,8 +675,8 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
               </tr>
             ) : sortedArticles && sortedArticles.length > 0 ? (
               sortedArticles.map((article) => (
-                <tr 
-                  key={article.id} 
+                <tr
+                  key={article.id}
                   className={`${article.source === 'airtable' ? 'bg-blue-50/30' : ''} ${highlightedArticleId === article.id ? 'discord-highlight' : ''}`}
                 >
                   <td className="px-6 py-4">
@@ -675,22 +693,22 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                         )}
                       </div>
                       <div className="ml-4 max-w-xs">
-                        <div 
+                        <div
                           className="text-sm font-medium text-gray-900 truncate max-w-[200px]"
                           title={article.title.length > 35 ? article.title : undefined}
                         >
                           {truncateText(article.title, 35)}
                         </div>
-                        
+
                         {article.description && (
-                          <div 
+                          <div
                             className="text-xs text-gray-500 truncate max-w-[200px] mt-1"
                             title={article.description.length > 40 ? article.description : undefined}
                           >
                             {truncateText(article.description, 40)}
                           </div>
                         )}
-                        
+
                         {article.hashtags && (
                           <div className="text-xs text-gray-500 mt-1 flex flex-wrap">
                             {formatTags(article.hashtags).slice(0, 3).map((tag, index) => (
@@ -699,7 +717,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                               </Badge>
                             ))}
                             {formatTags(article.hashtags).length > 3 && (
-                              <div 
+                              <div
                                 className="mr-1 mb-1 text-xs py-0 cursor-pointer"
                                 title={formatTags(article.hashtags).slice(3).join(", ")}
                               >
@@ -740,14 +758,14 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {showCreationDate 
-                      ? article.date 
-                        ? new Date(article.date).toLocaleDateString() 
+                    {showCreationDate
+                      ? article.date
+                        ? new Date(article.date).toLocaleDateString()
                         : '--'
                       : article.Scheduled && article.Scheduled.length > 0
                         ? new Date(article.Scheduled).toLocaleDateString()
-                        : article.publishedAt 
-                          ? new Date(article.publishedAt).toLocaleDateString() 
+                        : article.publishedAt
+                          ? new Date(article.publishedAt).toLocaleDateString()
                           : '--'
                     }
                   </td>
@@ -778,7 +796,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                      
+
                       {/* Main image upload button */}
                       <TooltipProvider>
                         <Tooltip>
@@ -826,7 +844,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                      
+
                       {article.source === 'airtable' && article.externalId ? (
                         // Update button for existing Airtable articles
                         <Button
@@ -889,7 +907,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
             )}
           </tbody>
         </table>
-        
+
         {/* Pagination - Desktop */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
@@ -908,14 +926,13 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                   <button
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className={`relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 ${
-                      currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 focus:z-20'
-                    }`}
+                    className={`relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 ${currentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 focus:z-20'
+                      }`}
                   >
                     <span className="sr-only">Previous</span>
                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                   </button>
-                  
+
                   {/* Page numbers */}
                   {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
                     let pageNumber;
@@ -932,28 +949,26 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                       // Otherwise, show 2 pages before and 2 pages after current page
                       pageNumber = currentPage - 2 + idx;
                     }
-                    
+
                     return (
                       <button
                         key={pageNumber}
                         onClick={() => handlePageChange(pageNumber)}
-                        className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                          currentPage === pageNumber
+                        className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${currentPage === pageNumber
                             ? 'z-10 bg-primary text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
                             : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20'
-                        }`}
+                          }`}
                       >
                         {pageNumber}
                       </button>
                     );
                   })}
-                  
+
                   <button
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className={`relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 ${
-                      currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 focus:z-20'
-                    }`}
+                    className={`relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 ${currentPage === totalPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 focus:z-20'
+                      }`}
                   >
                     <span className="sr-only">Next</span>
                     <ChevronRight className="h-5 w-5" aria-hidden="true" />
@@ -999,15 +1014,15 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
         ) : (
           <div className="space-y-4 p-4">
             {sortedArticles.map((article) => (
-              <div 
-                key={article.id} 
+              <div
+                key={article.id}
                 className={`bg-white rounded-lg shadow p-4 ${highlightedArticleId === article.id ? 'discord-highlight' : ''}`}
               >
                 <div className="flex items-center space-x-3 mb-3">
                   {article.imageUrl ? (
-                    <img 
-                      src={article.imageUrl} 
-                      alt="" 
+                    <img
+                      src={article.imageUrl}
+                      alt=""
                       className="h-12 w-12 rounded-md object-cover flex-shrink-0"
                     />
                   ) : (
@@ -1035,7 +1050,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                     )}
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2 text-xs text-gray-500 mb-3">
                   <div>
                     <span className="font-medium">Author:</span> {article.author || 'Unassigned'}
@@ -1045,14 +1060,14 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                   </div>
                   <div>
                     <span className="font-medium">{showCreationDate ? 'Created:' : 'Scheduled:'}</span> {
-                      showCreationDate 
-                        ? article.date 
-                          ? new Date(article.date).toLocaleDateString() 
+                      showCreationDate
+                        ? article.date
+                          ? new Date(article.date).toLocaleDateString()
                           : 'Not recorded'
                         : article.Scheduled && article.Scheduled.length > 0
                           ? new Date(article.Scheduled).toLocaleDateString()
-                          : article.publishedAt 
-                            ? new Date(article.publishedAt).toLocaleDateString() 
+                          : article.publishedAt
+                            ? new Date(article.publishedAt).toLocaleDateString()
                             : 'Unscheduled'
                     }
                   </div>
@@ -1073,11 +1088,11 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex flex-wrap justify-end gap-2 mt-2 border-t pt-3">
                   {/* Primary actions */}
                   {onEdit && (
-                    <Button 
+                    <Button
                       size="sm"
                       variant="outline"
                       onClick={() => onEdit(article)}
@@ -1086,9 +1101,9 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                       <Edit className="h-4 w-4 mr-2" /> Edit
                     </Button>
                   )}
-                  
+
                   {onView && (
-                    <Button 
+                    <Button
                       size="sm"
                       variant="outline"
                       onClick={() => onView(article)}
@@ -1097,7 +1112,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                       <Eye className="h-4 w-4 mr-2" /> View
                     </Button>
                   )}
-                  
+
                   {/* Secondary actions in dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1117,20 +1132,20 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                           <span>Push to Airtable</span>
                         </DropdownMenuItem>
                       )}
-                      
+
                       <DropdownMenuItem onClick={() => handleMainImageUpload(article)}>
                         <Image className="mr-2 h-4 w-4" />
                         <span>Upload main image</span>
                       </DropdownMenuItem>
-                      
+
                       <DropdownMenuItem onClick={() => handleInstaImageUpload(article)}>
                         <ImagePlus className="mr-2 h-4 w-4" />
                         <span>Upload Instagram image</span>
                       </DropdownMenuItem>
-                      
+
                       <DropdownMenuSeparator />
-                      
-                      <DropdownMenuItem 
+
+                      <DropdownMenuItem
                         onClick={() => handleDelete(article)}
                         className="text-red-500 focus:text-red-500"
                       >
@@ -1142,7 +1157,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                 </div>
               </div>
             ))}
-            
+
             {/* Pagination - Mobile */}
             {totalPages > 1 && (
               <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-4 rounded-lg shadow">
@@ -1157,22 +1172,20 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                     <button
                       onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className={`relative inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold ${
-                        currentPage === 1 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      className={`relative inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold ${currentPage === 1
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-white text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       Previous
                     </button>
                     <button
                       onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className={`relative inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold ${
-                        currentPage === totalPages 
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                      className={`relative inline-flex items-center rounded-md px-3 py-2 text-sm font-semibold ${currentPage === totalPages
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                           : 'bg-white text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
-                      }`}
+                        }`}
                     >
                       Next
                     </button>
