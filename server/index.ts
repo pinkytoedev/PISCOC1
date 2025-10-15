@@ -9,6 +9,23 @@ import { startPublishScheduler } from "./scheduler";
 
 const app = express();
 export { app };
+
+// Add middleware to handle malformed URIs before they reach Vite
+app.use((req, res, next) => {
+  try {
+    // Test if the URL can be properly decoded
+    decodeURIComponent(req.url);
+    next();
+  } catch (error) {
+    // If URL is malformed, return a 400 error instead of crashing
+    console.warn(`Malformed URI detected: ${req.url}`);
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: 'Malformed URI'
+    });
+  }
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
