@@ -23,12 +23,38 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
+  // Try different ports for Vite HMR WebSocket to avoid conflicts
+  const tryHmrPorts = [5174, 5175, 5176, 5177, 5178, 24678, 24679];
+  let hmrPort = 5174; // Default fallback
+
+  // Find an available port for HMR
+  for (const port of tryHmrPorts) {
+    try {
+      // Simple check if port is available
+      const net = await import('net');
+      const server = net.createServer();
+      await new Promise<void>((resolve, reject) => {
+        server.listen(port, () => {
+          server.close(() => resolve());
+        });
+        server.on('error', reject);
+      });
+      hmrPort = port;
+      break;
+    } catch {
+      // Port is in use, try next one
+      continue;
+    }
+  }
+
   const serverOptions = {
     middlewareMode: true,
     hmr: {
-      port: 5173,
+      port: hmrPort,
     }
   };
+
+  log(`🔥 Vite HMR WebSocket server will use port ${hmrPort}`);
 
   const vite = await createViteServer({
     ...viteConfig,
@@ -49,6 +75,17 @@ export async function setupVite(app: Express, server: Server) {
     const url = req.originalUrl;
 
     try {
+      // Additional check for malformed URLs at the Vite level
+      try {
+        decodeURIComponent(url);
+      } catch (decodeError) {
+        log(`Malformed URL in Vite handler: ${url}`, "vite");
+        return res.status(400).json({
+          error: 'Bad Request',
+          message: 'Malformed URL'
+        });
+      }
+
       const clientTemplate = path.resolve(
         __dirname,
         "..",
@@ -65,6 +102,16 @@ export async function setupVite(app: Express, server: Server) {
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
+      // Enhanced error logging
+      if (e instanceof Error) {
+        log(`Vite error for URL ${url}: ${e.message}`, "vite");
+        if (e.message.includes('URI malformed')) {
+          return res.status(400).json({
+            error: 'Bad Request',
+            message: 'Invalid URL format'
+          });
+        }
+      }
       vite.ssrFixStacktrace(e as Error);
       next(e);
     }
