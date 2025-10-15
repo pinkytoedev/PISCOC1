@@ -44,7 +44,7 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
         const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}`;
 
         let res: Response;
-        let airtableId: string;
+        let airtableId: string = article.externalId || '';
 
         if (article.externalId) {
             // Article already exists in Airtable - UPDATE it

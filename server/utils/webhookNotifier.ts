@@ -1,9 +1,30 @@
 import { log } from "../vite";
 
 /**
+ * Get webhook URL from environment variable with runtime validation
+ */
+function getArticleWebhookUrl(): string {
+    const webhookUrl = process.env.ARTICLE_WEBHOOK_URL;
+
+    if (!webhookUrl) {
+        // Allow a default only in non-production environments
+        if (process.env.NODE_ENV !== 'production') {
+            log("ARTICLE_WEBHOOK_URL not set, using default for non-production", "webhook");
+            return "https://www.pinkytoepaper.com/api/webhooks/article-published";
+        }
+
+        const error = "ARTICLE_WEBHOOK_URL environment variable is required in production";
+        log(error, "webhook");
+        throw new Error(error);
+    }
+
+    return webhookUrl;
+}
+
+/**
  * Webhook URL for notifying the website of article updates
  */
-const ARTICLE_WEBHOOK_URL = "https://www.pinkytoepaper.com/api/webhooks/article-published";
+const ARTICLE_WEBHOOK_URL = getArticleWebhookUrl();
 
 /**
  * Sends a webhook notification to refresh website content
@@ -32,6 +53,15 @@ export async function notifyArticleWebhook(
     try {
         const startTime = Date.now();
 
+        // Create abort signal with 10-second timeout
+        const abortSignal = AbortSignal.timeout ?
+            AbortSignal.timeout(10000) :
+            (() => {
+                const controller = new AbortController();
+                setTimeout(() => controller.abort(), 10000);
+                return controller.signal;
+            })();
+
         const response = await fetch(ARTICLE_WEBHOOK_URL, {
             method: "POST",
             headers: {
@@ -39,6 +69,7 @@ export async function notifyArticleWebhook(
                 "User-Agent": "PISCOC1-Webhook/1.0",
             },
             body: JSON.stringify(payload),
+            signal: abortSignal,
         });
 
         const duration = Date.now() - startTime;
@@ -79,7 +110,9 @@ export async function notifyArticleWebhook(
         }
 
         // Check for common network issues
-        if (String(error).includes('ENOTFOUND')) {
+        if (error instanceof Error && error.name === 'AbortError') {
+            log(`⏱️ Request timed out after 10 seconds - the webhook endpoint may be slow to respond`, "webhook");
+        } else if (String(error).includes('ENOTFOUND')) {
             log(`🌐 DNS resolution failed - check if ${ARTICLE_WEBHOOK_URL} is accessible`, "webhook");
         } else if (String(error).includes('ECONNREFUSED')) {
             log(`🔌 Connection refused - the webhook endpoint may be down`, "webhook");
