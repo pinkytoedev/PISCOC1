@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -317,7 +318,7 @@ export default function PublicTeamUploadPage() {
                                 <Input
                                   id="file"
                                   type="file"
-                                  accept="image/*"
+                                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                                   onChange={handleFileChange}
                                   className="hidden"
                                 />
@@ -333,7 +334,7 @@ export default function PublicTeamUploadPage() {
                               </div>
                               <p className="text-xs text-gray-500 mt-2">
                                 Recommended size: 300x300px. Max size: 10MB.
-                                <br />Supported formats: JPG, PNG, WebP.
+                                <br />Supported formats: JPG, PNG, WebP, HEIC.
                               </p>
                             </div>
                           </div>

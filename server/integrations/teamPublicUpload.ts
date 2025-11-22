@@ -7,6 +7,7 @@ import { Express, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import sharp from 'sharp';
 import { storage } from '../storage';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
 
@@ -80,13 +81,14 @@ const imageUpload = multer({
     fileFilter: (req, file, cb) => {
         const allowedMimeTypes = [
             'image/jpeg', 'image/jpg', 'image/png',
-            'image/gif', 'image/webp'
+            'image/gif', 'image/webp',
+            'image/heic', 'image/heif'
         ];
 
         if (allowedMimeTypes.includes(file.mimetype.toLowerCase())) {
             cb(null, true);
         } else {
-            cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
+            cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and HEIC images are allowed.'));
         }
     }
 });
@@ -223,12 +225,37 @@ export function setupTeamPublicUploadRoutes(app: Express) {
 
                 // 2. Handle Image Upload if present
                 if (req.file) {
+                    let filePath = req.file.path;
+                    let mimeType = req.file.mimetype;
+                    let fileName = req.file.originalname;
+                    let tempFilesToDelete: string[] = [req.file.path];
+
                     try {
+                        // Convert HEIC/HEIF to JPEG using sharp
+                        if (mimeType === 'image/heic' || mimeType === 'image/heif' ||
+                            fileName.toLowerCase().endsWith('.heic') || fileName.toLowerCase().endsWith('.heif')) {
+
+                            console.log('Detected HEIC image, converting to JPEG...');
+                            const outputPath = filePath + '.jpg';
+
+                            await sharp(filePath)
+                                .toFormat('jpeg', { quality: 90 })
+                                .toFile(outputPath);
+
+                            // Update variables to point to new file
+                            filePath = outputPath;
+                            mimeType = 'image/jpeg';
+                            fileName = fileName.replace(/\.(heic|heif)$/i, '.jpg');
+
+                            // Add new file to cleanup list
+                            tempFilesToDelete.push(outputPath);
+                        }
+
                         const imgbbResult = await uploadImageToImgBB({
-                            path: req.file.path,
-                            filename: req.file.originalname,
-                            size: req.file.size,
-                            mimetype: req.file.mimetype
+                            path: filePath,
+                            filename: fileName,
+                            size: fs.statSync(filePath).size,
+                            mimetype: mimeType
                         });
 
                         if (imgbbResult) {
@@ -236,17 +263,20 @@ export function setupTeamPublicUploadRoutes(app: Express) {
                             updateData.imageType = 'url';
                         }
                     } catch (uploadError) {
-                        console.error('Image upload failed:', uploadError);
+                        console.error('Image upload/processing failed:', uploadError);
                         // Don't fail the whole request, just log it? Or fail?
                         // If image was provided but failed, we probably should tell the user.
-                        if (fs.existsSync(req.file.path)) {
-                            fs.unlinkSync(req.file.path);
-                        }
-                        return res.status(500).json({ message: "Failed to upload image" });
+                        return res.status(500).json({ message: "Failed to upload/process image" });
                     } finally {
-                        // Cleanup
-                        if (fs.existsSync(req.file.path)) {
-                            fs.unlinkSync(req.file.path);
+                        // Cleanup all temporary files
+                        for (const fileToDelete of tempFilesToDelete) {
+                            if (fs.existsSync(fileToDelete)) {
+                                try {
+                                    fs.unlinkSync(fileToDelete);
+                                } catch (e) {
+                                    console.error(`Failed to delete temp file ${fileToDelete}:`, e);
+                                }
+                            }
                         }
                     }
                 }
