@@ -121,10 +121,12 @@ Airtable settings must be configured in the CMS:
 - Base ID
 - Articles Table Name
 
-**Scheduler behavior:**
+**Scheduler initialization:**
+The scheduler is automatically started when the server boots with a 60-second interval:
 ```javascript
-// Runs every 60 seconds (60000ms)
-startPublishScheduler(60000);
+// In server/scheduler.ts
+// This is how the scheduler is initialized in the codebase (not configurable via environment)
+startPublishScheduler(60000); // 60000ms = 60 seconds
 ```
 
 **Example flow for scheduled article:**
@@ -216,10 +218,14 @@ User sets article to publish at 2:30 PM
 1. Sync from Airtable to CMS (manual sync in CMS)
 2. Publish the article in CMS to trigger webhook
 
-### Website Caching
-**Problem:** Changes appear in CMS but not on website  
-**Reason:** The website may cache data  
-**Solution:** Check if webhook is configured correctly with `ARTICLE_WEBHOOK_URL`
+### Webhook Configuration Issues
+**Problem:** Published article changes don't appear on website  
+**Reason:** Webhook may not be configured or delivering successfully  
+**Solution:**
+1. Verify `ARTICLE_WEBHOOK_URL` environment variable is set
+2. Check server logs for webhook delivery attempts
+3. Verify the webhook endpoint URL is correct and accessible
+4. Test webhook manually by publishing an article and checking logs
 
 ---
 
@@ -294,12 +300,14 @@ User sets article to publish at 2:30 PM
 ## Configuration Checklist
 
 - [ ] `DATABASE_URL` - PostgreSQL connection (required)
-- [ ] `SESSION_SECRET` - Session encryption (required) - **Generate a strong, random secret; never use default values in production**
+- [ ] `SESSION_SECRET` - Session encryption (required)
 - [ ] `ARTICLE_WEBHOOK_URL` - Website webhook endpoint (recommended for instant updates)
 - [ ] `AIRTABLE_API_KEY` - Airtable integration (optional)
 - [ ] `AIRTABLE_BASE_ID` - Airtable base (optional)
 - [ ] `FACEBOOK_APP_ID` - Instagram integration (optional)
 - [ ] `FACEBOOK_APP_SECRET` - Instagram integration (optional)
+
+> **Note:** For security best practices including strong secrets and production configuration, see the main README.md and deployment documentation.
 
 ---
 

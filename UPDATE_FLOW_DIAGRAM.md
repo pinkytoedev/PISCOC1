@@ -403,9 +403,9 @@ Note: Website pulls from CMS, not from Airtable
 - `"edited"` - Published article was edited
 - `"deleted"` - Published article was deleted
 
-**HTTP Request:**
+**HTTP Request Example:**
 ```
-POST https://www.pinkytoepaper.com/api/webhooks/article-published
+POST https://your-website.com/api/webhooks/article-published
 Content-Type: application/json
 User-Agent: PISCOC1-Webhook/1.0
 
@@ -415,6 +415,8 @@ User-Agent: PISCOC1-Webhook/1.0
   "timestamp": "2025-11-23T21:00:00.000Z"
 }
 ```
+
+> **Note:** Replace `https://your-website.com/api/webhooks/article-published` with your actual webhook URL configured in `ARTICLE_WEBHOOK_URL` environment variable.
 
 ---
 
