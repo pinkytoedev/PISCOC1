@@ -405,7 +405,7 @@ Note: Website pulls from CMS, not from Airtable
 
 **HTTP Request Example:**
 ```
-POST https://your-website.com/api/webhooks/article-published
+POST ${ARTICLE_WEBHOOK_URL}
 Content-Type: application/json
 User-Agent: PISCOC1-Webhook/1.0
 
@@ -416,7 +416,7 @@ User-Agent: PISCOC1-Webhook/1.0
 }
 ```
 
-> **Note:** Replace `https://your-website.com/api/webhooks/article-published` with your actual webhook URL configured in `ARTICLE_WEBHOOK_URL` environment variable.
+> **Note:** The actual URL is configured via the `ARTICLE_WEBHOOK_URL` environment variable. For example: `https://www.pinkytoepaper.com/api/webhooks/article-published`
 
 ---
 
