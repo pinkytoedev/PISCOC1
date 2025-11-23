@@ -10,7 +10,7 @@ This document explains why some changes in the PISCOC1 CMS get instantly updated
 
 1. Updates within the CMS itself (always instant)
 2. Updates to external systems (Airtable, Instagram, etc.)
-3. Updates to the website (depends on how the website fetches data)
+3. Updates to the website (triggered by webhooks for published articles)
 
 ---
 
@@ -68,9 +68,10 @@ User clicks "Save Article"
 
 **Configuration:**
 ```bash
-# Environment variable
+# Environment variable - example value shown
 ARTICLE_WEBHOOK_URL=https://www.pinkytoepaper.com/api/webhooks/article-published
 ```
+> Replace with your actual website webhook URL
 
 **Webhook payload:**
 ```json
@@ -125,7 +126,8 @@ Airtable settings must be configured in the CMS:
 The scheduler is automatically started when the server boots with a 60-second interval:
 ```javascript
 // In server/scheduler.ts
-// This is how the scheduler is initialized in the codebase (not configurable via environment)
+// This is how the scheduler is initialized in the codebase
+// The interval is hardcoded but can be changed programmatically in the code
 startPublishScheduler(60000); // 60000ms = 60 seconds
 ```
 
