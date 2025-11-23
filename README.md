@@ -92,6 +92,19 @@ A comprehensive platform for managing content across multiple social media and c
 - **Real-time Status Monitoring**: Check the health of all connected services
 - **Secure Authentication**: Session-based auth with role-based access control
 
+## 📖 Understanding Update Flow
+
+**New to the platform? Learn why some changes update instantly while others don't:**
+
+- 📚 **[Quick Update Guide](./QUICK_UPDATE_GUIDE.md)** - Simple guide for content editors
+- 🔧 **[Technical Documentation](./UPDATE_FLOW_DOCUMENTATION.md)** - Deep dive into update mechanisms
+- 📊 **[Visual Diagrams](./UPDATE_FLOW_DIAGRAM.md)** - Flow charts and architecture diagrams
+
+**Quick Summary:**
+- ⚡ Published articles → Website updates instantly (via webhooks)
+- 📅 Scheduled articles → Auto-publish 0-60 seconds after scheduled time
+- ⏳ Draft articles → Not visible on website until published
+
 ## 🔑 API Keys Setup
 
 This application integrates with multiple external services. You'll need to obtain API keys for each service you want to use:
