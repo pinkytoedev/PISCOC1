@@ -389,13 +389,19 @@ Note: Website pulls from CMS, not from Airtable
 
 ## 8. Webhook Payload Structure
 
+**Webhook payload example:**
 ```json
 {
-  "action": "published",  // or "edited" or "deleted"
+  "action": "published",
   "articleId": 123,
   "timestamp": "2025-11-23T21:00:00.000Z"
 }
 ```
+
+**Possible action values:**
+- `"published"` - Article was just published
+- `"edited"` - Published article was edited
+- `"deleted"` - Published article was deleted
 
 **HTTP Request:**
 ```

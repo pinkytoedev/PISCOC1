@@ -98,7 +98,7 @@ User changes article status to "published"
 
 ---
 
-### 3. Airtable Synchronization (DELAYED - 60 seconds) ⏱️
+### 3. Airtable Synchronization (DELAYED - every 60 seconds) ⏱️
 
 **What:** Periodic sync of articles with Airtable  
 **Speed:** Delayed (runs every 60 seconds)  
@@ -189,9 +189,9 @@ User sets article to publish at 2:30 PM
 
 | Update Type | Speed | Triggers | Affects Website |
 |-------------|-------|----------|-----------------|
-| CMS UI Updates | ⚡ Instant (< 1s) | All changes | No (CMS only) |
-| Webhook to Website | ⚡ Instant (< 5s) | Published articles only | ✅ Yes |
-| Airtable Sync (Scheduled) | ⏱️ Delayed (60s) | Scheduled articles | No (unless website uses Airtable) |
+| CMS UI Updates | ⚡ Instant (< 1 second) | All changes | No (CMS only) |
+| Webhook to Website | ⚡ Instant (< 5 seconds) | Published articles only | ✅ Yes |
+| Airtable Sync (Scheduled) | ⏱️ Delayed (60 seconds) | Scheduled articles | No (unless website uses Airtable) |
 | Manual Airtable Sync | 🔄 On demand | Admin trigger | No (unless website uses Airtable) |
 | Instagram Post | ⚡ Instant | Article published | No (separate platform) |
 
@@ -294,7 +294,7 @@ User sets article to publish at 2:30 PM
 ## Configuration Checklist
 
 - [ ] `DATABASE_URL` - PostgreSQL connection (required)
-- [ ] `SESSION_SECRET` - Session encryption (required)
+- [ ] `SESSION_SECRET` - Session encryption (required) - **Generate a strong, random secret; never use default values in production**
 - [ ] `ARTICLE_WEBHOOK_URL` - Website webhook endpoint (recommended for instant updates)
 - [ ] `AIRTABLE_API_KEY` - Airtable integration (optional)
 - [ ] `AIRTABLE_BASE_ID` - Airtable base (optional)

@@ -1,6 +1,8 @@
 # Quick Update Guide
 
-**Quick reference for content editors: When will my changes appear on the website?**
+**Quick reference for content editors using the PISCOC1 Content Management System (CMS): When will my changes appear on the website?**
+
+> **Note:** PISCOC1 is a CMS that manages content for the website. Changes you make here affect the website, but they're separate systems.
 
 ---
 
