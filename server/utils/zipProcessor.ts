@@ -38,6 +38,17 @@ function escapeRegExp(string: string): string {
 }
 
 /**
+ * Build a set of common path variations so we can find and replace references
+ * regardless of leading `./`, `/`, or nested directory components.
+ */
+function getPathVariations(originalPath: string): string[] {
+  const normalizedPath = originalPath.replace(/\\/g, '/');
+  const basename = path.basename(normalizedPath);
+
+  return [normalizedPath, `./${normalizedPath}`, `/${normalizedPath}`, basename];
+}
+
+/**
  * Process a zip file and extract HTML content
  * @param filePath Path to the uploaded ZIP file
  * @param articleId ID of the article to update with HTML content
@@ -160,17 +171,20 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       // Replace image paths in HTML content
       Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
         // Handle different path patterns (with or without leading ./, relative paths, etc.)
-        const pathVariations = [
-          originalPath,
-          `./${originalPath}`,
-          `/${originalPath}`,
-          path.basename(originalPath)
-        ];
+        const pathVariations = getPathVariations(originalPath);
 
         // Replace all variations of the path with the new URL
+        const pathVariations = getPathVariations(originalPath);
+
         pathVariations.forEach(pathVar => {
-          const regex = new RegExp(`(src|href)=['"](${escapeRegExp(pathVar)})['"']`, 'gi');
-          htmlContent = htmlContent.replace(regex, `$1="${newUrl}"`);
+          const attributeRegex = new RegExp(`(src|href|data-src)=['"](${escapeRegExp(pathVar)})['"']`, 'gi');
+          const inlineStyleRegex = new RegExp(`url\(\s*(['"])${escapeRegExp(pathVar)}\\1\s*\)`, 'gi');
+          const inlineStyleNoQuoteRegex = new RegExp(`url\(\s*${escapeRegExp(pathVar)}\s*\)`, 'gi');
+
+          htmlContent = htmlContent
+            .replace(attributeRegex, `$1="${newUrl}"`)
+            .replace(inlineStyleRegex, `url(${newUrl})`)
+            .replace(inlineStyleNoQuoteRegex, `url(${newUrl})`);
         });
       });
     }
@@ -182,7 +196,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     }
 
     const updatedArticle = await storage.updateArticle(articleId, {
-      content: htmlContent
+      content: finalHtmlContent,
+      contentFormat: 'html'
     });
 
     if (!updatedArticle) {
@@ -201,7 +216,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           // Prepare Airtable update
           const updatePayload = {
             fields: {
-              content: htmlContent
+              content: finalHtmlContent,
+              body: finalHtmlContent
             }
           };
 
@@ -236,7 +252,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       resourceId: articleId.toString(),
       details: {
         fieldName: 'content',
-        contentSize: htmlContent.length,
+        contentSize: finalHtmlContent.length,
         sourceFile: path.basename(filePath)
       }
     });
