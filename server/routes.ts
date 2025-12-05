@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { unlink } from "fs/promises";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
@@ -17,6 +18,8 @@ import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
 import { log } from "./vite";
 import * as path from "path";
+import { upload as teamMemberImageUpload } from "./utils/fileUpload";
+import { uploadImageToImgBB } from "./utils/imgbbUploader";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema, insertAdminRequestSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
@@ -182,6 +185,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete team member" });
+    }
+  });
+
+  app.post("/api/team-members/upload-image", isAuthenticated, teamMemberImageUpload.single("image"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const filePath = req.file.path;
+
+    try {
+      const imgbbResult = await uploadImageToImgBB({
+        path: req.file.path,
+        filename: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      });
+
+      if (!imgbbResult) {
+        return res.status(500).json({ message: "Failed to upload image to ImgBB. Please verify your ImgBB configuration." });
+      }
+
+      let updatedTeamMember = null;
+      const rawTeamMemberId = Array.isArray(req.body?.teamMemberId)
+        ? req.body.teamMemberId[0]
+        : req.body?.teamMemberId;
+
+      if (rawTeamMemberId !== undefined && rawTeamMemberId !== null && `${rawTeamMemberId}`.trim() !== "") {
+        const teamMemberId = Number(rawTeamMemberId);
+
+        if (Number.isNaN(teamMemberId)) {
+          return res.status(400).json({ message: "Invalid team member ID provided" });
+        }
+
+        const teamMember = await storage.updateTeamMember(teamMemberId, {
+          imageUrl: imgbbResult.url,
+          imageType: "url",
+          imagePath: null,
+        });
+
+        if (!teamMember) {
+          return res.status(404).json({ message: "Team member not found" });
+        }
+
+        updatedTeamMember = teamMember;
+
+        await storage.createActivityLog({
+          userId: req.user?.id,
+          action: "update",
+          resourceType: "team_member",
+          resourceId: teamMemberId.toString(),
+          details: {
+            imageUrl: imgbbResult.url,
+            updatedField: "imageUrl",
+          },
+        });
+      }
+
+      return res.json({
+        imageUrl: imgbbResult.url,
+        imgbb: imgbbResult,
+        teamMember: updatedTeamMember,
+      });
+    } catch (error) {
+      console.error("Error uploading team member image:", error);
+
+      if (!res.headersSent) {
+        const message = error instanceof Error ? error.message : "Failed to upload team member image";
+        res.status(500).json({ message });
+      }
+    } finally {
+      await unlink(filePath).catch(() => {});
     }
   });
 
