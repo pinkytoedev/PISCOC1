@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
-import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload, Copy, Check, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function TeamMembersPage() {
@@ -27,9 +28,47 @@ export default function TeamMembersPage() {
   });
   const imageUploadInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [copied, setCopied] = useState(false);
+  
+  const { data: publicUploadStatus, isLoading: isLoadingStatus } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/public/team-upload-status'],
+  });
+
+  const toggleUploadMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest("POST", "/api/public/team-upload-status", { enabled });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/public/team-upload-status'] });
+      toast({
+        title: "Settings updated",
+        description: "Public upload settings have been updated.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const copyToClipboard = () => {
+    const url = `${window.location.origin}/team-upload`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({
+      title: "Link copied",
+      description: "Public upload link copied to clipboard.",
+    });
+  };
   
   const { data: teamMembers, isLoading } = useQuery<TeamMember[]>({
     queryKey: ['/api/team-members'],
+    refetchInterval: 5000, // Poll every 5 seconds to see public updates live
   });
   
   const createMemberMutation = useMutation({
@@ -339,6 +378,60 @@ export default function TeamMembersPage() {
                 </Button>
               </div>
             </div>
+
+            {/* Public Upload Settings */}
+            <Card className="mb-6">
+              <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-medium">Public Upload Link</h3>
+                  <p className="text-sm text-gray-500">
+                    Allow team members to update their profiles via a public link.
+                  </p>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                  {publicUploadStatus?.enabled && (
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                       <div className="relative flex-1 sm:flex-none">
+                        <Input 
+                          readOnly 
+                          value={`${window.location.origin}/team-upload`}
+                          className="w-full sm:w-64 pr-10 bg-gray-50"
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute right-0 top-0 h-full"
+                          onClick={copyToClipboard}
+                        >
+                          {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <a 
+                        href="/team-upload" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <Button size="icon" variant="outline">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </a>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {publicUploadStatus?.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <Switch
+                      checked={publicUploadStatus?.enabled || false}
+                      onCheckedChange={(checked) => toggleUploadMutation.mutate(checked)}
+                      disabled={isLoadingStatus || toggleUploadMutation.isPending}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Team Members Grid */}
             {isLoading ? (

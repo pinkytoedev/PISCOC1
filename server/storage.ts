@@ -224,6 +224,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createArticle(article: InsertArticle): Promise<Article> {
+    console.log("Storage: Creating article with imageUrl:", article.imageUrl);
     const [newArticle] = await db
       .insert(articles)
       .values({
@@ -231,6 +232,7 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date()
       })
       .returning();
+    console.log("Storage: Created article with imageUrl:", newArticle.imageUrl);
     return newArticle;
   }
 

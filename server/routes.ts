@@ -12,6 +12,7 @@ import { notifyArticlePublished, notifyArticleEdited, notifyArticleDeleted } fro
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
 import { setupPublicUploadRoutes } from "./integrations/publicUpload";
 import { setupTokenFreePublicUploadRoutes } from "./integrations/tokenFreePublicUpload";
+import { setupTeamPublicUploadRoutes } from "./integrations/teamPublicUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
@@ -64,6 +65,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Set up new token-free public upload routes
   setupTokenFreePublicUploadRoutes(app);
+
+  // Set up team public upload routes
+  setupTeamPublicUploadRoutes(app);
 
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {
