@@ -38,39 +38,14 @@ function escapeRegExp(string: string): string {
 }
 
 /**
- * Build common path variations for matching asset references
+ * Build a set of common path variations so we can find and replace references
+ * regardless of leading `./`, `/`, or nested directory components.
  */
-function getPathVariations(filePath: string): string[] {
-  const variations = new Set<string>();
-  const normalized = filePath.split(path.sep).join('/');
-  const withLeadingDot = normalized.startsWith('./') ? normalized : `./${normalized}`;
-  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  const basename = path.basename(normalized);
-  const encoded = encodeURI(normalized);
-  const encodedWithDot = encodeURI(withLeadingDot);
-  const encodedWithSlash = encodeURI(withLeadingSlash);
+function getPathVariations(originalPath: string): string[] {
+  const normalizedPath = originalPath.replace(/\\/g, '/');
+  const basename = path.basename(normalizedPath);
 
-  [
-    filePath,
-    normalized,
-    normalized.replace(/\\/g, '/'),
-    withLeadingDot,
-    withLeadingSlash,
-    basename,
-    encoded,
-    encodedWithDot,
-    encodedWithSlash
-  ].forEach(variant => {
-    const trimmed = variant.replace(/^\.\//, './');
-    if (trimmed) {
-      variations.add(trimmed);
-      if (!trimmed.startsWith('/')) {
-        variations.add(`/${trimmed}`);
-      }
-    }
-  });
-
-  return Array.from(variations);
+  return [normalizedPath, `./${normalizedPath}`, `/${normalizedPath}`, basename];
 }
 
 /**
@@ -196,12 +171,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       // Replace image paths in HTML content
       Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
         // Handle different path patterns (with or without leading ./, relative paths, etc.)
-        const pathVariations = [
-          originalPath,
-          `./${originalPath}`,
-          `/${originalPath}`,
-          path.basename(originalPath)
-        ];
+        const pathVariations = getPathVariations(originalPath);
 
         // Replace all variations of the path with the new URL
         const pathVariations = getPathVariations(originalPath);
