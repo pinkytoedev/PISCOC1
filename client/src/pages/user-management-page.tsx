@@ -52,6 +52,7 @@ type EditUserFormValues = z.infer<typeof editUserSchema>;
 
 export default function UserManagementPage() {
   const { user: currentUser } = useAuth();
+  const defaultAdminUsername = import.meta.env.VITE_DEFAULT_ADMIN_USERNAME;
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -427,11 +428,11 @@ export default function UserManagementPage() {
               </div>
             )}
             
-            {currentUser && currentUser.id === 2 && (
+            {currentUser && defaultAdminUsername && currentUser.username === defaultAdminUsername && (
               <Alert className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
-                  You are using the default admin account (admin). It is recommended to create a new admin account with a strong password.
+                  You are using the default admin account ({defaultAdminUsername}). It is recommended to create a new admin account with a strong password.
                 </AlertDescription>
               </Alert>
             )}

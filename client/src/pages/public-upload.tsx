@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,9 +21,24 @@ interface UploadFile {
   error?: string;
 }
 
+interface UploadResultInfo {
+  message?: string;
+  article?: {
+    id: number;
+    title: string;
+  };
+  result?: {
+    success?: boolean;
+    message?: string;
+  };
+}
+
+const PISCOC_BASE_URL = 'https://piscoc.pinkytoepaper.com';
+
 export default function PublicUploadPage() {
   const [selectedArticle, setSelectedArticle] = useState<string>('');
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
+  const [uploadResults, setUploadResults] = useState<Partial<Record<UploadFile['type'], UploadResultInfo>>>({});
   const [enabledUploadTypes, setEnabledUploadTypes] = useState<{
     image: boolean;
     'instagram-image': boolean;
@@ -42,6 +57,11 @@ export default function PublicUploadPage() {
     queryKey: ['/api/articles/uploadable'],
     retry: false,
   });
+
+  // Get the selected article data
+  const selectedArticleData = useMemo(() => {
+    return articles?.find(article => article.id.toString() === selectedArticle);
+  }, [articles, selectedArticle]);
 
   // Check if all enabled files have been completed
   useEffect(() => {
@@ -87,6 +107,14 @@ export default function PublicUploadPage() {
         const filtered = prev.filter(f => f.type !== type);
         return [...filtered, uploadFile];
       });
+
+      // Remove any existing result for the same type
+      setUploadResults(prev => {
+        const next = { ...prev };
+        delete next[type];
+        return next;
+      });
+
     } catch (error) {
       console.error('Error generating preview:', error);
     }
@@ -94,7 +122,17 @@ export default function PublicUploadPage() {
 
   // Remove a file from the upload list
   const removeFile = (fileId: string) => {
+    const fileToRemove = uploadFiles.find(f => f.id === fileId);
     setUploadFiles(prev => prev.filter(f => f.id !== fileId));
+
+    // Remove any existing result for the same type
+    if (fileToRemove) {
+      setUploadResults(prev => {
+        const next = { ...prev };
+        delete next[fileToRemove.type];
+        return next;
+      });
+    }
   };
 
   // Upload a single file
@@ -117,15 +155,33 @@ export default function PublicUploadPage() {
       body: formData,
     });
 
+    // Parse the response as JSON
+    const responseText = await response.text();
+    let responseData: UploadResultInfo | null = null;
+
+    if (responseText) {
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.warn('Unable to parse upload response as JSON:', parseError);
+      }
+    }
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Upload failed');
+      const message = responseData?.message || response.statusText || 'Upload failed';
+      throw new Error(message);
     }
 
     // Update to completed
     setUploadFiles(prev => prev.map(f => 
       f.id === uploadFile.id ? { ...f, status: 'completed', progress: 100 } : f
     ));
+
+    // Update the upload results
+    setUploadResults(prev => ({
+      ...prev,
+      [uploadFile.type]: responseData || { message: 'Upload completed successfully.' }
+    }));
   };
 
   // Handle submission of all uploads
@@ -143,6 +199,15 @@ export default function PublicUploadPage() {
       setError('Please select at least one file to upload');
       return;
     }
+
+    // Update the upload results
+    setUploadResults(prev => {
+      const next = { ...prev };
+      filesToUpload.forEach(file => {
+        delete next[file.type];
+      });
+      return next;
+    });
 
     setUploading(true);
     setError(null);
@@ -260,6 +325,41 @@ export default function PublicUploadPage() {
                     </div>
                   </div>
                 ))}
+
+            {/* Upload results */}
+            {Object.entries(uploadResults)
+              .filter(([type, result]) => result && enabledUploadTypes[type as UploadFile['type']])
+              .map(([type, result]) => (
+                <div key={type} className="p-4 bg-green-100/60 border border-green-200 rounded-xl text-sm text-green-700">
+                  <div className="font-semibold text-green-800 mb-1">
+                    {getTypeName(type as UploadFile['type'])}
+                  </div>
+                  {result?.message && <p>{result.message}</p>}
+                  {result?.result?.message && result.result.message !== result?.message && (
+                    <p className="mt-1">{result.result.message}</p>
+                  )}
+                  {result?.article && (
+                    <p className="mt-2 text-green-600">
+                      Updated article: <span className="font-medium">{result.article.title}</span>
+                    </p>
+                  )}
+                  {type === 'html-zip' && (
+                    <p className="mt-2">
+                      Visit{' '}
+                      <a
+                        href={PISCOC_BASE_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline font-semibold"
+                      >
+                        PISCOC
+                      </a>{' '}
+                      to verify that the article content now appears on the live site.
+                    </p>
+                  )}
+                </div>
+              ))}
+
             </div>
             <div className="text-center py-6 px-4 bg-gray-50 rounded-2xl">
               <p className="text-gray-700 font-medium mb-2">
@@ -455,7 +555,38 @@ export default function PublicUploadPage() {
                               <Progress value={existingFile.progress} className="w-full h-3 bg-gray-200" />
                             </div>
                           )}
-                          
+
+                          {/* Success + error messages */}
+                          {existingFile.status === 'completed' && uploadResults[existingFile.type] && (
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+                              <div className="font-semibold text-green-800 mb-1">
+                                {uploadResults[existingFile.type]?.message || 'Upload completed successfully.'}
+                              </div>
+                              {uploadResults[existingFile.type]?.result?.message && (
+                                <div>{uploadResults[existingFile.type]?.result?.message}</div>
+                              )}
+                              {uploadResults[existingFile.type]?.article && (
+                                <div className="mt-1 text-green-600">
+                                  Updated article: <span className="font-medium">{uploadResults[existingFile.type]?.article?.title}</span>
+                                </div>
+                              )}
+                              {existingFile.type === 'html-zip' && (
+                                <div className="mt-2 text-green-600">
+                                  Refresh the article on{' '}
+                                  <a
+                                    href={PISCOC_BASE_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="underline font-semibold"
+                                  >
+                                    PISCOC
+                                  </a>{' '}
+                                  to confirm the new HTML content is live.
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Error message */}
                           {existingFile.status === 'failed' && existingFile.error && (
                             <Alert variant="destructive" className="border-red-200 bg-red-50">
