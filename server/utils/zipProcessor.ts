@@ -40,6 +40,17 @@ function escapeRegExp(string: string): string {
 }
 
 /**
+ * Build a set of common path variations so we can find and replace references
+ * regardless of leading `./`, `/`, or nested directory components.
+ */
+function getPathVariations(originalPath: string): string[] {
+  const normalizedPath = originalPath.replace(/\\/g, '/');
+  const basename = path.basename(normalizedPath);
+
+  return [normalizedPath, `./${normalizedPath}`, `/${normalizedPath}`, basename];
+}
+
+/**
  * Process a zip file and extract HTML content
  * @param filePath Path to the uploaded ZIP file
  * @param articleId ID of the article to update with HTML content
@@ -161,13 +172,9 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       
       // Replace image paths in HTML content
       Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
+        
         // Handle different path patterns (with or without leading ./, relative paths, etc.)
-        const pathVariations = [
-          originalPath,
-          `./${originalPath}`,
-          `/${originalPath}`,
-          path.basename(originalPath)
-        ];
+        const pathVariations = getPathVariations(originalPath);
         
         // Replace all variations of the path with the new URL
         pathVariations.forEach(pathVar => {

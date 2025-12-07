@@ -184,7 +184,17 @@ Facebook requires HTTPS for OAuth login. To enable this in development:
 
 ## 🔐 Authentication
 
-The application uses session-based authentication. Default admin credentials will be created during first setup.
+The application uses session-based authentication. Default administrator credentials are pulled securely from Airtable during first setup instead of being hard-coded in the repository.
+
+1. Create an Airtable table (defaults to `AdminCredentials`) with a record that includes username and password fields (defaults to `Username` and `Password`).
+2. Configure environment variables so `scripts/createAdmin.js` can fetch the record:
+   - `AIRTABLE_API_KEY`
+   - `AIRTABLE_BASE_ID`
+   - `ADMIN_CREDENTIALS_RECORD_ID`
+   - Optional overrides: `ADMIN_CREDENTIALS_TABLE`, `ADMIN_CREDENTIALS_USERNAME_FIELD`, `ADMIN_CREDENTIALS_PASSWORD_FIELD`
+3. Run `node scripts/createAdmin.js` to create the admin account using the fetched credentials.
+
+Optionally set `VITE_DEFAULT_ADMIN_USERNAME` (to match the Airtable username) so the UI can remind you to rotate off the default account. After signing in, create a new administrator with a unique password, then disable or remove the default
 
 ## 📚 API Documentation
 
