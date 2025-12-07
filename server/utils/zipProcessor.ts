@@ -49,6 +49,17 @@ function getPathVariations(originalPath: string): string[] {
 }
 
 /**
+ * Build a set of common path variations so we can find and replace references
+ * regardless of leading `./`, `/`, or nested directory components.
+ */
+function getPathVariations(originalPath: string): string[] {
+  const normalizedPath = originalPath.replace(/\\/g, '/');
+  const basename = path.basename(normalizedPath);
+
+  return [normalizedPath, `./${normalizedPath}`, `/${normalizedPath}`, basename];
+}
+
+/**
  * Process a zip file and extract HTML content
  * @param filePath Path to the uploaded ZIP file
  * @param articleId ID of the article to update with HTML content
@@ -187,6 +198,9 @@ export async function processZipFile(filePath: string, articleId: number): Promi
       });
     }
 
+    // Capture the final HTML after all replacements so we consistently persist the same string
+    const finalHtmlContent = htmlContent;
+
     // Update article content
     const article = await storage.getArticle(articleId);
     if (!article) {
@@ -194,8 +208,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     }
 
     const updatedArticle = await storage.updateArticle(articleId, {
-      content: finalHtmlContent,
-      contentFormat: 'html'
+      content: finalHtmlContent
     });
 
     if (!updatedArticle) {
@@ -214,8 +227,7 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           // Prepare Airtable update
           const updatePayload = {
             fields: {
-              content: finalHtmlContent,
-              body: finalHtmlContent
+              content: finalHtmlContent
             }
           };
 
