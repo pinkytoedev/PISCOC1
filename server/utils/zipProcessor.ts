@@ -49,17 +49,6 @@ function getPathVariations(originalPath: string): string[] {
 }
 
 /**
- * Build a set of common path variations so we can find and replace references
- * regardless of leading `./`, `/`, or nested directory components.
- */
-function getPathVariations(originalPath: string): string[] {
-  const normalizedPath = originalPath.replace(/\\/g, '/');
-  const basename = path.basename(normalizedPath);
-
-  return [normalizedPath, `./${normalizedPath}`, `/${normalizedPath}`, basename];
-}
-
-/**
  * Process a zip file and extract HTML content
  * @param filePath Path to the uploaded ZIP file
  * @param articleId ID of the article to update with HTML content
