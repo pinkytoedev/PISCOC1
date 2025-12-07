@@ -1,6 +1,7 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
+import { notifyArticlePublished, notifyArticleEdited } from "../utils/webhookNotifier";
 import { upload } from "../utils/fileUpload";
 import {
   uploadImageToAirtable,
@@ -320,7 +321,8 @@ export async function deleteAirtableRecord(
 }
 
 // Helper function to convert an Article to Airtable format
-async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
+export async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
+
   // Get the team member for author reference (if applicable)
   let authorRecord = null;
   if (article.author && article.author !== "Anonymous") {
@@ -343,8 +345,6 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     message_sent: article.status === "published" // If the article is published, assume it was sent
   };
 
-  // Log for debugging
-  console.log("Finished status:", airtableData.Finished, "Article status:", article.status);
 
   // Add _updatedTime to track when this article was last updated
   airtableData._updatedTime = new Date().toISOString();
@@ -382,44 +382,9 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     airtableData.Photo = [];
   }
 
-  // Handle MainImage field if article has an imageUrl
+  // Handle MainImage link if article has an imageUrl
   if (article.imageUrl && article.imageUrl !== "") {
-    // Only add MainImage if it's a URL - for other image types we'd need a different approach
-    if (article.imageType === "url") {
-      try {
-        // Extract file extension to determine proper MIME type
-        const urlLower = article.imageUrl.toLowerCase();
-        let mimeType = "image/jpeg"; // Default
-        let fileExt = "jpg";
-
-        // Determine MIME type based on URL extension
-        if (urlLower.endsWith('.png')) {
-          mimeType = "image/png";
-          fileExt = "png";
-        } else if (urlLower.endsWith('.gif')) {
-          mimeType = "image/gif";
-          fileExt = "gif";
-        } else if (urlLower.endsWith('.webp')) {
-          mimeType = "image/webp";
-          fileExt = "webp";
-        } else if (urlLower.endsWith('.svg')) {
-          mimeType = "image/svg+xml";
-          fileExt = "svg";
-        }
-
-        // Extract filename or create a default one with proper extension
-        const filename = article.imageUrl.split('/').pop() || `main_image.${fileExt}`;
-
-        // Using Link field for MainImage instead of attachment field
-        // Use the MainImageLink field which accepts a URL string
-        // Use the MainImageLink field which accepts a URL string
-        airtableData.MainImageLink = article.imageUrl;
-
-        console.log("Setting MainImageLink:", article.imageUrl);
-      } catch (error) {
-        console.error("Error creating MainImage attachment:", error);
-      }
-    }
+    airtableData.MainImageLink = article.imageUrl;
   }
 
   // Handle instaPhoto field separately if we have an Instagram image URL
@@ -448,8 +413,6 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       // Using Link field for instaPhoto instead of attachment field
       // Use the InstaPhotoLink field which accepts a URL string
       airtableData.InstaPhotoLink = article.instagramImageUrl;
-
-      console.log("Setting InstaPhotoLink:", article.instagramImageUrl);
     } catch (error) {
       console.error("Error creating instaPhoto attachment:", error);
     }
@@ -481,8 +444,6 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
       // Using Link field for instaPhoto fallback instead of attachment field
       // Use the InstaPhotoLink field which accepts a URL string
       airtableData.InstaPhotoLink = article.imageUrl;
-
-      console.log("Using main image for InstaPhotoLink:", article.imageUrl);
     } catch (error) {
       console.error("Error creating fallback instaPhoto attachment:", error);
     }
@@ -518,7 +479,7 @@ function mapRoleToAirtable(role: string): string {
     'dev': 'dev',
     'Dev': 'Dev',
   };
-  
+
   // Return mapped role or the original role if no mapping exists
   return roleMappings[role] || role;
 }
@@ -562,7 +523,7 @@ export function setupAirtableRoutes(app: Express) {
       }
 
       const { tableId } = req.params;
-      
+
       // Get Airtable settings
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
@@ -596,7 +557,7 @@ export function setupAirtableRoutes(app: Express) {
       if (response.records && response.records.length > 0) {
         const firstRecord = response.records[0];
         const fields = firstRecord.fields || {};
-        
+
         analysis.fieldAnalysis = Object.keys(fields).reduce((acc: any, fieldName) => {
           const value = (fields as any)[fieldName];
           acc[fieldName] = {
@@ -1085,7 +1046,7 @@ export function setupAirtableRoutes(app: Express) {
       console.log(`=== TEAM MEMBERS AIRTABLE SCHEMA ANALYSIS ===`);
       console.log(`Table ID: ${tableName}`);
       console.log(`Total records fetched: ${response.records?.length || 0}`);
-      
+
       if (response.records && response.records.length > 0) {
         console.log(`=== FIRST RECORD ANALYSIS ===`);
         const firstRecord = response.records[0];
@@ -1216,7 +1177,7 @@ export function setupAirtableRoutes(app: Express) {
 
       console.log("Airtable settings check:", {
         apiKey: apiKeySetting?.value ? "SET" : "NOT SET",
-        baseId: baseIdSetting?.value ? "SET" : "NOT SET", 
+        baseId: baseIdSetting?.value ? "SET" : "NOT SET",
         tableName: tableNameSetting?.value ? "SET" : "NOT SET"
       });
 
@@ -1230,7 +1191,7 @@ export function setupAirtableRoutes(app: Express) {
       const apiKey = apiKeySetting.value;
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
-      
+
       console.log("Using Airtable configuration:", {
         baseId: baseId,
         tableName: tableName,
@@ -1244,7 +1205,7 @@ export function setupAirtableRoutes(app: Express) {
       // Split into create (no externalId) and update (with externalId) operations
       const membersToCreate = teamMembers.filter(m => !m.externalId);
       const membersToUpdate = teamMembers.filter(m => m.externalId);
-      
+
       console.log(`Team members to create: ${membersToCreate.length}`, membersToCreate.map(m => ({ id: m.id, name: m.name, externalId: m.externalId })));
       console.log(`Team members to update: ${membersToUpdate.length}`, membersToUpdate.map(m => ({ id: m.id, name: m.name, externalId: m.externalId })));
 
@@ -1292,7 +1253,7 @@ export function setupAirtableRoutes(app: Express) {
       // Process creates next (for team members without externalId)
       if (membersToCreate.length > 0) {
         console.log(`Found ${membersToCreate.length} team members to create in Airtable`);
-        
+
         // Convert team members to Airtable format
         const createRecords = await Promise.all(
           membersToCreate.map(async (member) => {
@@ -1308,7 +1269,7 @@ export function setupAirtableRoutes(app: Express) {
         for (let i = 0; i < createRecords.length; i += 10) {
           const batch = createRecords.slice(i, i + 10);
           console.log(`Creating batch ${Math.floor(i / 10) + 1} with ${batch.length} records:`, JSON.stringify(batch, null, 2));
-          
+
           try {
             const response = await airtableRequest(
               apiKey,
@@ -1317,7 +1278,7 @@ export function setupAirtableRoutes(app: Express) {
               "POST",
               { records: batch }
             ) as AirtableResponse<AirtableTeamMember>;
-            
+
             console.log(`Airtable response for batch ${Math.floor(i / 10) + 1}:`, JSON.stringify(response, null, 2));
 
             // Update the local database with the new external IDs
@@ -1339,13 +1300,13 @@ export function setupAirtableRoutes(app: Express) {
           } catch (error) {
             console.error(`Error creating batch ${Math.floor(i / 10) + 1}:`, error);
             console.error(`Batch data that failed:`, JSON.stringify(batch, null, 2));
-            
+
             // Log more detailed error information
             if (error instanceof Error) {
               console.error(`Error message: ${error.message}`);
               console.error(`Error stack: ${error.stack}`);
             }
-            
+
             results.errors += batch.length;
             results.details.push(`Error creating batch ${Math.floor(i / 10) + 1}: ${String(error)}`);
           }
@@ -1459,6 +1420,11 @@ export function setupAirtableRoutes(app: Express) {
           externalId: article.externalId || undefined
         }
       });
+
+      // Send webhook notification if the article is published
+      if (article.status === 'published') {
+        await notifyArticleEdited(articleId, article.title);
+      }
 
       res.json({
         message: "Article updated in Airtable",
@@ -1641,7 +1607,7 @@ export function setupAirtableRoutes(app: Express) {
       console.log(`=== CAROUSEL QUOTES AIRTABLE SCHEMA ANALYSIS ===`);
       console.log(`Table ID: ${tableName}`);
       console.log(`Total records fetched: ${response.records?.length || 0}`);
-      
+
       if (response.records && response.records.length > 0) {
         console.log(`=== FIRST RECORD ANALYSIS ===`);
         const firstRecord = response.records[0];
@@ -1890,11 +1856,15 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(404).json({ message: "Article not found" });
       }
 
+
       // Save article details for error handling
       articleDetails = {
         externalId: article.externalId || undefined,
         title: article.title
       };
+
+      // Note: We no longer skip articles with existing external IDs
+      // Instead, we'll update them in Airtable to ensure data consistency
 
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
@@ -1912,85 +1882,89 @@ export function setupAirtableRoutes(app: Express) {
       const baseId = baseIdSetting.value;
       const tableName = tableNameSetting.value;
 
-      // Prepare the data for Airtable
-      const fields: any = {
-        Name: article.title,
-        Description: article.description,
-        Body: article.content,
-        // Convert featured from "yes"/"no" to boolean
-        Featured: article.featured === "yes" ? true : false,
-        // Use the dedicated finished field or fall back to status
-        Finished: article.finished !== undefined ? article.finished : (article.status === "published")
-      };
-
-      // Date handling: prioritize the date field from Airtable
-      if (article.date) {
-        // Use the direct date field if available (preferred)
-        // Keep the full ISO format for Airtable which expects timestamps
-        fields.Date = article.date;
-      } else if (article.publishedAt) {
-        // Fall back to publishedAt if date not available
-        // Use the full ISO string with time for Airtable (not just YYYY-MM-DD)
-        fields.Date = new Date(article.publishedAt).toISOString();
-      }
-
-      // Add hashtags if they exist
-      if (article.hashtags) fields.Hashtags = article.hashtags;
-
-      // Handle author relationship
-      // Note: this doesn't actually create the relationship in Airtable
-      // but we store the author name for reference
-      if (article.author) {
-        // We don't set Author directly as it's a linked record - 
-        // this would require creating/finding the author record first
-        // Just log that this would need proper linking
-        console.log(`Author ${article.author} would need to be linked in Airtable`);
-      }
+      // Prepare the data for Airtable using the central converter so link fields are included
+      const fields: any = await convertToAirtableFormat(article);
 
       let response;
+      let airtableId: string;
 
-      // Always create a new record - don't check for existing record
-      console.log("Creating new record in Airtable");
-      console.log("Pushing article to Airtable:", JSON.stringify(fields, null, 2));
+      if (article.externalId) {
+        // Article already exists in Airtable - UPDATE it
 
-      response = await airtableRequest(
-        apiKey,
-        baseId,
-        tableName,
-        "POST",
-        {
-          records: [
-            {
-              fields
-            }
-          ]
-        }
-      );
+        response = await airtableRequest(
+          apiKey,
+          baseId,
+          tableName,
+          "PATCH",
+          {
+            records: [
+              {
+                id: article.externalId,
+                fields
+              }
+            ]
+          }
+        );
 
-      // Get the Airtable ID
-      const airtableId = response.records[0].id;
+        airtableId = article.externalId;
+      } else {
+        // Article doesn't exist in Airtable - CREATE it
 
-      // Update the article with the Airtable ID and change its source
-      await storage.updateArticle(articleId, {
-        externalId: airtableId,
-        source: 'airtable'  // Change the source to 'airtable'
-      });
+        response = await airtableRequest(
+          apiKey,
+          baseId,
+          tableName,
+          "POST",
+          {
+            records: [
+              {
+                fields
+              }
+            ]
+          }
+        );
+
+        // Get the Airtable ID from the response
+        airtableId = response.records[0].id;
+
+        // Update the article with the Airtable ID and change its source
+        await storage.updateArticle(articleId, {
+          externalId: airtableId,
+          source: 'airtable'  // Change the source to 'airtable'
+        });
+      }
 
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
-        action: "create",
+        action: article.externalId ? "update" : "create",
         resourceType: "article",
         resourceId: article.id.toString(),
         details: {
           service: "airtable",
           article: article.title,
-          airtableId
+          airtableId,
+          operation: article.externalId ? "update" : "create"
         }
       });
 
+      // Send webhook notification if the article is published
+      if (article.status === 'published') {
+        if (article.externalId) {
+          // This was an update to an existing published article
+          await notifyArticleEdited(article.id, article.title);
+        } else {
+          // This was a newly published article
+          await notifyArticlePublished(article.id, article.title);
+        }
+      }
+
       res.json({
-        message: "Article pushed to Airtable successfully",
+        message: article.externalId ?
+          "Article updated in Airtable successfully" :
+          "Article created in Airtable successfully",
+        operation: article.externalId ? "update" : "create",
+        airtableId,
         response
       });
     } catch (error) {

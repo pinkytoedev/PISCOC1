@@ -25,6 +25,7 @@ import ImgBBPage from "@/pages/integrations/imgbb-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TestPage from "@/pages/test-page";
 import PublicUploadPage from "@/pages/public-upload";
+import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
 import NotFound from "@/pages/not-found";
 
@@ -62,6 +63,7 @@ function Router() {
 
       {/* Public upload routes - these don't require auth */}
       <Route path="/public-upload" component={PublicUploadPage} />
+      <Route path="/team-upload" component={PublicTeamUploadPage} />
 
       <Route component={NotFound} />
     </Switch>

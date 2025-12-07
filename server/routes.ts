@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { unlink } from "fs/promises";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
@@ -7,14 +8,18 @@ import { setupArticleReceiveEndpoint } from "./integrations/articleReceive";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
 import { setupImgBBRoutes } from "./integrations/imgbb";
+import { notifyArticlePublished, notifyArticleEdited, notifyArticleDeleted } from "./utils/webhookNotifier";
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
 import { setupPublicUploadRoutes } from "./integrations/publicUpload";
 import { setupTokenFreePublicUploadRoutes } from "./integrations/tokenFreePublicUpload";
+import { setupTeamPublicUploadRoutes } from "./integrations/teamPublicUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
 import { getAllApiStatuses } from "./api-status";
 import { log } from "./vite";
 import * as path from "path";
+import { upload as teamMemberImageUpload } from "./utils/fileUpload";
+import { uploadImageToImgBB } from "./utils/imgbbUploader";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema, insertAdminRequestSchema } from "@shared/schema";
 import { ZodError } from "zod";
 
@@ -57,9 +62,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Set up public upload routes
   setupPublicUploadRoutes(app);
-  
+
   // Set up new token-free public upload routes
   setupTokenFreePublicUploadRoutes(app);
+
+  // Set up team public upload routes
+  setupTeamPublicUploadRoutes(app);
 
   // Serve Privacy Policy without authentication
   app.get("/privacy", (req, res) => {
@@ -180,6 +188,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/team-members/upload-image", isAuthenticated, teamMemberImageUpload.single("image"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const filePath = req.file.path;
+
+    try {
+      const imgbbResult = await uploadImageToImgBB({
+        path: req.file.path,
+        filename: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      });
+
+      if (!imgbbResult) {
+        return res.status(500).json({ message: "Failed to upload image to ImgBB. Please verify your ImgBB configuration." });
+      }
+
+      let updatedTeamMember = null;
+      const rawTeamMemberId = Array.isArray(req.body?.teamMemberId)
+        ? req.body.teamMemberId[0]
+        : req.body?.teamMemberId;
+
+      if (rawTeamMemberId !== undefined && rawTeamMemberId !== null && `${rawTeamMemberId}`.trim() !== "") {
+        const teamMemberId = Number(rawTeamMemberId);
+
+        if (Number.isNaN(teamMemberId)) {
+          return res.status(400).json({ message: "Invalid team member ID provided" });
+        }
+
+        const teamMember = await storage.updateTeamMember(teamMemberId, {
+          imageUrl: imgbbResult.url,
+          imageType: "url",
+          imagePath: null,
+        });
+
+        if (!teamMember) {
+          return res.status(404).json({ message: "Team member not found" });
+        }
+
+        updatedTeamMember = teamMember;
+
+        await storage.createActivityLog({
+          userId: req.user?.id,
+          action: "update",
+          resourceType: "team_member",
+          resourceId: teamMemberId.toString(),
+          details: {
+            imageUrl: imgbbResult.url,
+            updatedField: "imageUrl",
+          },
+        });
+      }
+
+      return res.json({
+        imageUrl: imgbbResult.url,
+        imgbb: imgbbResult,
+        teamMember: updatedTeamMember,
+      });
+    } catch (error) {
+      console.error("Error uploading team member image:", error);
+
+      if (!res.headersSent) {
+        const message = error instanceof Error ? error.message : "Failed to upload team member image";
+        res.status(500).json({ message });
+      }
+    } finally {
+      await unlink(filePath).catch(() => {});
+    }
+  });
+
   // Article routes
   app.get("/api/articles", async (req, res) => {
     try {
@@ -207,8 +287,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/articles", isAuthenticated, async (req, res) => {
     try {
+      // Debug log the incoming data
+      console.log("Creating article with data:", {
+        title: req.body.title,
+        imageUrl: req.body.imageUrl,
+        imageType: req.body.imageType,
+        instagramImageUrl: req.body.instagramImageUrl,
+        status: req.body.status
+      });
+
       const validatedData = insertArticleSchema.parse(req.body);
       const newArticle = await storage.createArticle(validatedData);
+
+      // Debug log the created article
+      console.log("Article created in database:", {
+        id: newArticle.id,
+        title: newArticle.title,
+        imageUrl: newArticle.imageUrl,
+        imageType: newArticle.imageType,
+        instagramImageUrl: newArticle.instagramImageUrl
+      });
 
       // Log activity
       await storage.createActivityLog({
@@ -269,6 +367,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         log(`Article status changed to published, triggering Instagram post for article ID ${id}`, 'instagram');
 
+        // Send webhook notification for newly published article
+        await notifyArticlePublished(id, updatedArticle.title);
+
         // Post to Instagram
         const instagramResult = await postArticleToInstagram(updatedArticle);
 
@@ -300,6 +401,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           return res.json(responseWithInstagramError);
         }
+      }
+
+      // Check if this is an edit to an already published article
+      if (updatedArticle.status === 'published' && !statusChangedToPublished) {
+        // This is an edit to an already published article
+        await notifyArticleEdited(id, updatedArticle.title);
       }
 
       // Return the updated article (if we didn't already return with Instagram info)
@@ -376,6 +483,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
+
+      // Send webhook notification if the deleted article was published
+      if (article.status === 'published') {
+        await notifyArticleDeleted(id, article.title);
+      }
 
       res.status(204).send();
     } catch (error) {
@@ -1007,6 +1119,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       status: 'success',
       appId
     });
+  });
+
+  // Test webhook endpoint for debugging
+  app.post("/api/test-webhook", isAuthenticated, async (req, res) => {
+    try {
+      const { articleId = 999, action = "published", title = "Test Article" } = req.body;
+
+      log(`🧪 Manual webhook test triggered by user ${req.user?.username}`, "webhook");
+
+      if (action === "published") {
+        await notifyArticlePublished(articleId, title);
+      } else if (action === "edited") {
+        await notifyArticleEdited(articleId, title);
+      } else if (action === "deleted") {
+        await notifyArticleDeleted(articleId, title);
+      } else {
+        return res.status(400).json({ message: "Invalid action. Use 'published', 'edited', or 'deleted'" });
+      }
+
+      res.json({
+        message: "Test webhook sent",
+        details: { articleId, action, title }
+      });
+    } catch (error) {
+      log(`❌ Test webhook failed: ${String(error)}`, "webhook");
+      res.status(500).json({ message: "Test webhook failed", error: String(error) });
+    }
   });
 
   setupArticleReceiveEndpoint(app);

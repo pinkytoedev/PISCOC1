@@ -23,19 +23,19 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const { toast } = useToast();
   const isEditing = !!editArticle;
   const isFromAirtable = editArticle?.source === 'airtable';
-  
+
   // Refs for file inputs
   const mainImageFileInputRef = useRef<HTMLInputElement>(null);
   const instagramImageFileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // State for tracking uploads
   const [mainImageUploading, setMainImageUploading] = useState(false);
   const [instagramImageUploading, setInstagramImageUploading] = useState(false);
-  
+
   // ImgBB integration status
   const [imgbbEnabled, setImgBBEnabled] = useState(false);
   const [imgbbApiKey, setImgBBApiKey] = useState("");
-  
+
   // Default values for new article
   const defaultForm: Partial<InsertArticle> = {
     title: "",
@@ -56,11 +56,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     date: "", // Airtable Date field
     finished: false, // Airtable Finished checkbox
   };
-  
+
   const [formData, setFormData] = useState<Partial<InsertArticle>>(
     editArticle || defaultForm
   );
-  
+
   // Reset form when modal opens/closes or article changes
   // Fetch ImgBB settings when modal opens
   useEffect(() => {
@@ -70,7 +70,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         if (response.ok) {
           const settings = await response.json();
           const apiKeySetting = settings.find((s: any) => s.key === 'api_key');
-          
+
           if (apiKeySetting) {
             setImgBBApiKey(apiKeySetting.value);
             // Consider ImgBB enabled if we have a valid API key and it's not disabled
@@ -89,7 +89,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         setImgBBEnabled(false);
       }
     };
-    
+
     if (isOpen) {
       fetchImgBBSettings();
     }
@@ -98,7 +98,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   useEffect(() => {
     if (isOpen) {
       let formDataToUse = editArticle ? { ...editArticle } : defaultForm;
-      
+
       // Convert publishedAt to a Date object if it exists and is a string
       if (formDataToUse.publishedAt && typeof formDataToUse.publishedAt === 'string') {
         formDataToUse = {
@@ -106,11 +106,11 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
           publishedAt: new Date(formDataToUse.publishedAt)
         };
       }
-      
+
       // Format scheduled date for datetime-local input
       if (formDataToUse.publishedAt instanceof Date) {
         const dateObj = formDataToUse.publishedAt;
-        
+
         // Format the date as YYYY-MM-DDThh:mm (format required by datetime-local)
         // This will convert to local time zone
         const year = dateObj.getFullYear();
@@ -118,21 +118,21 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         const day = String(dateObj.getDate()).padStart(2, '0');
         const hours = String(dateObj.getHours()).padStart(2, '0');
         const minutes = String(dateObj.getMinutes()).padStart(2, '0');
-        
+
         // Use scheduled field instead of date for the publication datetime
         formDataToUse.scheduled = `${year}-${month}-${day}T${hours}:${minutes}`;
-      } 
+      }
       // Use the direct scheduled field if it exists and publishedAt doesn't
       else if (formDataToUse.scheduled && !formDataToUse.publishedAt) {
         // If we have a scheduled value but no publishedAt, keep the scheduled value
         // This is already correctly formatted
       }
-      
+
       // Set photo to "none" if it's empty for select component
       if (!formDataToUse.photo) {
         formDataToUse.photo = "none";
       }
-      
+
       setFormData(formDataToUse);
     }
   }, [isOpen, editArticle]);
@@ -144,8 +144,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const createArticleMutation = useMutation({
     mutationFn: async (article: InsertArticle) => {
       const res = await apiRequest(
-        isEditing ? "PUT" : "POST", 
-        isEditing ? `/api/articles/${editArticle.id}` : "/api/articles", 
+        isEditing ? "PUT" : "POST",
+        isEditing ? `/api/articles/${editArticle.id}` : "/api/articles",
         article
       );
       return await res.json();
@@ -154,8 +154,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       toast({
         title: isEditing ? "Article updated" : "Article created",
-        description: isEditing 
-          ? "The article has been updated successfully." 
+        description: isEditing
+          ? "The article has been updated successfully."
           : "The article has been created successfully.",
       });
       onClose();
@@ -177,7 +177,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-  
+
   const handleCheckboxChange = (name: string, checked: boolean) => {
     if (name === "featured") {
       setFormData((prev) => ({ ...prev, [name]: checked ? "yes" : "no" }));
@@ -185,7 +185,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       setFormData((prev) => ({ ...prev, [name]: checked ? "published" : "draft" }));
     }
   };
-  
+
   // Handle image upload for MainImage field
   const uploadMainImageMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -198,18 +198,18 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         });
         throw new Error("Cannot upload directly to Airtable");
       }
-      
+
       const response = await fetch(`/api/airtable/upload-image/${editArticle.id}/MainImage`, {
         method: 'POST',
         body: formData,
         credentials: 'include', // Include session cookies for authentication
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to upload image");
       }
-      
+
       return await response.json();
     },
     onSuccess: (data) => {
@@ -217,13 +217,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         title: "Image uploaded successfully",
         description: "The image was uploaded to Airtable and attached to the article",
       });
-      
+
       // Update the form data with the new image URL
       setFormData(prev => ({
         ...prev,
         imageUrl: data.attachment.url
       }));
-      
+
       setMainImageUploading(false);
     },
     onError: (error) => {
@@ -235,7 +235,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       setMainImageUploading(false);
     }
   });
-  
+
   // Handle image upload for instaPhoto field
   const uploadInstagramImageMutation = useMutation({
     mutationFn: async (formData: FormData) => {
@@ -248,18 +248,18 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         });
         throw new Error("Cannot upload directly to Airtable");
       }
-      
+
       const response = await fetch(`/api/airtable/upload-image/${editArticle.id}/instaPhoto`, {
         method: 'POST',
         body: formData,
         credentials: 'include', // Include session cookies for authentication
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to upload image");
       }
-      
+
       return await response.json();
     },
     onSuccess: (data) => {
@@ -267,13 +267,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         title: "Instagram image uploaded successfully",
         description: "The image was uploaded to Airtable and attached to the article",
       });
-      
+
       // Update the form data with the new image URL
       setFormData(prev => ({
         ...prev,
         instagramImageUrl: data.attachment.url
       }));
-      
+
       setInstagramImageUploading(false);
     },
     onError: (error) => {
@@ -285,19 +285,19 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       setInstagramImageUploading(false);
     }
   });
-  
+
   // Handle main image file selection
   const handleMainImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
     }
-    
+
     const file = event.target.files[0];
     const formData = new FormData();
     formData.append('image', file);
-    
+
     setMainImageUploading(true);
-    
+
     // Use ImgBB integration if enabled, otherwise use direct Airtable upload
     if (imgbbEnabled) {
       // Use the imgbb-to-airtable endpoint which handles the ImgBB upload and Airtable update
@@ -306,103 +306,103 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         body: formData,
         credentials: 'include',
       })
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(errorData => {
-            throw new Error(errorData.message || "Failed to upload image via ImgBB");
-          });
-        }
-        return response.json();
-      })
-      .then(data => {
-        toast({
-          title: "Main image uploaded via ImgBB successfully",
-          description: "The image was uploaded to ImgBB and linked to Airtable",
-        });
-        
-        // Update the form data with the new image URL from ImgBB
-        // The response can have different structures based on the endpoint
-        let imageUrl: string | null = null;
-        
-        // Handle different response formats from various endpoints
-        if (data.imgbb && data.imgbb.url) {
-          imageUrl = data.imgbb.url;
-        } else if (data.imgbbUrl) {
-          imageUrl = data.imgbbUrl;
-        } else if (data.imgbbLink) {
-          imageUrl = data.imgbbLink;
-        } else if (data.airtable && data.airtable.url) {
-          imageUrl = data.airtable.url;
-        } else if (data.attachment && data.attachment.url) {
-          imageUrl = data.attachment.url;
-        } else if (data.link) {
-          imageUrl = data.link;
-        }
-        
-        // Fallback to any URL field in the response
-        if (!imageUrl) {
-          console.log("Trying to find URL in response data:", data);
-          if (typeof data === 'object') {
-            Object.keys(data).forEach(key => {
-              if (!imageUrl && typeof data[key] === 'string' && data[key].startsWith('http')) {
-                imageUrl = data[key] as string;
-              } else if (!imageUrl && typeof data[key] === 'object' && data[key] !== null) {
-                if (data[key].url && typeof data[key].url === 'string') {
-                  imageUrl = data[key].url as string;
-                } else if (data[key].link && typeof data[key].link === 'string') {
-                  imageUrl = data[key].link as string;
-                }
-              }
+        .then(response => {
+          if (!response.ok) {
+            return response.json().then(errorData => {
+              throw new Error(errorData.message || "Failed to upload image via ImgBB");
             });
           }
-        }
-        
-        // If all attempts fail, use a default message
-        if (!imageUrl) {
-          console.error("Could not extract image URL from response:", data);
+          return response.json();
+        })
+        .then(data => {
           toast({
-            title: "Warning: Image URL not found in response",
-            description: "The image was uploaded, but we couldn't extract its URL from the response",
+            title: "Main image uploaded via ImgBB successfully",
+            description: "The image was uploaded to ImgBB and linked to Airtable",
+          });
+
+          // Update the form data with the new image URL from ImgBB
+          // The response can have different structures based on the endpoint
+          let imageUrl: string | null = null;
+
+          // Handle different response formats from various endpoints
+          if (data.imgbb && data.imgbb.url) {
+            imageUrl = data.imgbb.url;
+          } else if (data.imgbbUrl) {
+            imageUrl = data.imgbbUrl;
+          } else if (data.imgbbLink) {
+            imageUrl = data.imgbbLink;
+          } else if (data.airtable && data.airtable.url) {
+            imageUrl = data.airtable.url;
+          } else if (data.attachment && data.attachment.url) {
+            imageUrl = data.attachment.url;
+          } else if (data.link) {
+            imageUrl = data.link;
+          }
+
+          // Fallback to any URL field in the response
+          if (!imageUrl) {
+            console.log("Trying to find URL in response data:", data);
+            if (typeof data === 'object') {
+              Object.keys(data).forEach(key => {
+                if (!imageUrl && typeof data[key] === 'string' && data[key].startsWith('http')) {
+                  imageUrl = data[key] as string;
+                } else if (!imageUrl && typeof data[key] === 'object' && data[key] !== null) {
+                  if (data[key].url && typeof data[key].url === 'string') {
+                    imageUrl = data[key].url as string;
+                  } else if (data[key].link && typeof data[key].link === 'string') {
+                    imageUrl = data[key].link as string;
+                  }
+                }
+              });
+            }
+          }
+
+          // If all attempts fail, use a default message
+          if (!imageUrl) {
+            console.error("Could not extract image URL from response:", data);
+            toast({
+              title: "Warning: Image URL not found in response",
+              description: "The image was uploaded, but we couldn't extract its URL from the response",
+              variant: "destructive",
+            });
+            setMainImageUploading(false);
+            return;
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            imageUrl: imageUrl as string
+          }));
+
+          console.log("ImgBB upload response for Main image:", data);
+          setMainImageUploading(false);
+        })
+        .catch(error => {
+          toast({
+            title: "Failed to upload image via ImgBB",
+            description: error.message || "There was an error uploading the image",
             variant: "destructive",
           });
           setMainImageUploading(false);
-          return;
-        }
-        
-        setFormData(prev => ({
-          ...prev,
-          imageUrl: imageUrl as string
-        }));
-        
-        console.log("ImgBB upload response for Main image:", data);
-        setMainImageUploading(false);
-      })
-      .catch(error => {
-        toast({
-          title: "Failed to upload image via ImgBB",
-          description: error.message || "There was an error uploading the image",
-          variant: "destructive",
         });
-        setMainImageUploading(false);
-      });
     } else {
       // Use direct Airtable upload
       uploadMainImageMutation.mutate(formData);
     }
   };
-  
+
   // Handle Instagram image file selection
   const handleInstagramImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) {
       return;
     }
-    
+
     const file = event.target.files[0];
     const formData = new FormData();
     formData.append('image', file);
-    
+
     setInstagramImageUploading(true);
-    
+
     // Use ImgBB integration if enabled, otherwise use direct Airtable upload
     if (imgbbEnabled) {
       // Use the imgbb-to-airtable endpoint which handles the ImgBB upload and Airtable update
@@ -411,85 +411,85 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
         body: formData,
         credentials: 'include',
       })
-      .then(response => {
-        if (!response.ok) {
-          return response.json().then(errorData => {
-            throw new Error(errorData.message || "Failed to upload image via ImgBB");
-          });
-        }
-        return response.json();
-      })
-      .then(data => {
-        toast({
-          title: "Instagram image uploaded via ImgBB successfully",
-          description: "The image was uploaded to ImgBB and linked to Airtable",
-        });
-        
-        // Update the form data with the new image URL from ImgBB
-        // The response can have different structures based on the endpoint
-        let imageUrl: string | null = null;
-        
-        // Handle different response formats from various endpoints
-        if (data.imgbb && data.imgbb.url) {
-          imageUrl = data.imgbb.url;
-        } else if (data.imgbbUrl) {
-          imageUrl = data.imgbbUrl;
-        } else if (data.imgbbLink) {
-          imageUrl = data.imgbbLink;
-        } else if (data.airtable && data.airtable.url) {
-          imageUrl = data.airtable.url;
-        } else if (data.attachment && data.attachment.url) {
-          imageUrl = data.attachment.url;
-        } else if (data.link) {
-          imageUrl = data.link;
-        }
-        
-        // Fallback to any URL field in the response
-        if (!imageUrl) {
-          console.log("Trying to find URL in response data:", data);
-          if (typeof data === 'object') {
-            Object.keys(data).forEach(key => {
-              if (!imageUrl && typeof data[key] === 'string' && data[key].startsWith('http')) {
-                imageUrl = data[key] as string;
-              } else if (!imageUrl && typeof data[key] === 'object' && data[key] !== null) {
-                if (data[key].url && typeof data[key].url === 'string') {
-                  imageUrl = data[key].url as string;
-                } else if (data[key].link && typeof data[key].link === 'string') {
-                  imageUrl = data[key].link as string;
-                }
-              }
+        .then(response => {
+          if (!response.ok) {
+            return response.json().then(errorData => {
+              throw new Error(errorData.message || "Failed to upload image via ImgBB");
             });
           }
-        }
-        
-        // If all attempts fail, use a default message
-        if (!imageUrl) {
-          console.error("Could not extract image URL from response:", data);
+          return response.json();
+        })
+        .then(data => {
           toast({
-            title: "Warning: Image URL not found in response",
-            description: "The image was uploaded, but we couldn't extract its URL from the response",
+            title: "Instagram image uploaded via ImgBB successfully",
+            description: "The image was uploaded to ImgBB and linked to Airtable",
+          });
+
+          // Update the form data with the new image URL from ImgBB
+          // The response can have different structures based on the endpoint
+          let imageUrl: string | null = null;
+
+          // Handle different response formats from various endpoints
+          if (data.imgbb && data.imgbb.url) {
+            imageUrl = data.imgbb.url;
+          } else if (data.imgbbUrl) {
+            imageUrl = data.imgbbUrl;
+          } else if (data.imgbbLink) {
+            imageUrl = data.imgbbLink;
+          } else if (data.airtable && data.airtable.url) {
+            imageUrl = data.airtable.url;
+          } else if (data.attachment && data.attachment.url) {
+            imageUrl = data.attachment.url;
+          } else if (data.link) {
+            imageUrl = data.link;
+          }
+
+          // Fallback to any URL field in the response
+          if (!imageUrl) {
+            console.log("Trying to find URL in response data:", data);
+            if (typeof data === 'object') {
+              Object.keys(data).forEach(key => {
+                if (!imageUrl && typeof data[key] === 'string' && data[key].startsWith('http')) {
+                  imageUrl = data[key] as string;
+                } else if (!imageUrl && typeof data[key] === 'object' && data[key] !== null) {
+                  if (data[key].url && typeof data[key].url === 'string') {
+                    imageUrl = data[key].url as string;
+                  } else if (data[key].link && typeof data[key].link === 'string') {
+                    imageUrl = data[key].link as string;
+                  }
+                }
+              });
+            }
+          }
+
+          // If all attempts fail, use a default message
+          if (!imageUrl) {
+            console.error("Could not extract image URL from response:", data);
+            toast({
+              title: "Warning: Image URL not found in response",
+              description: "The image was uploaded, but we couldn't extract its URL from the response",
+              variant: "destructive",
+            });
+            setInstagramImageUploading(false);
+            return;
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            instagramImageUrl: imageUrl as string
+          }));
+
+          console.log("ImgBB upload response for Instagram image:", data);
+          setInstagramImageUploading(false);
+        })
+        .catch(error => {
+          toast({
+            title: "Failed to upload image via ImgBB",
+            description: error.message || "There was an error uploading the image",
             variant: "destructive",
           });
           setInstagramImageUploading(false);
-          return;
-        }
-        
-        setFormData(prev => ({
-          ...prev,
-          instagramImageUrl: imageUrl as string
-        }));
-        
-        console.log("ImgBB upload response for Instagram image:", data);
-        setInstagramImageUploading(false);
-      })
-      .catch(error => {
-        toast({
-          title: "Failed to upload image via ImgBB",
-          description: error.message || "There was an error uploading the image",
-          variant: "destructive",
         });
-        setInstagramImageUploading(false);
-      });
     } else {
       // Use direct Airtable upload
       uploadInstagramImageMutation.mutate(formData);
@@ -498,57 +498,59 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Create a copy of the form data to modify
     const submissionData = { ...formData };
-    
-    // Always set the creation timestamp in the "date" field
-  // This will be sent to Airtable's "Date" field to track when the article was created
-  submissionData.date = new Date().toISOString();
 
-  // Handle publication date & time from the datetime-local input (for Scheduled field)
-  if (submissionData.Scheduled) {
-    // Convert Scheduled string from datetime-local to Date object for publishedAt
-    try {
-      const dateTime = new Date(submissionData.Scheduled);
-      
-      // Check if valid date
-      if (!isNaN(dateTime.getTime())) {
-        // Use this date for publishedAt
-        submissionData.publishedAt = dateTime;
-        
-        // Keep the ISO string format for Airtable Scheduled field
-        // submissionData.Scheduled is already correctly formatted from the input
-      } else {
-        console.warn("Invalid date format from datetime-local input");
-        // If Scheduled date is invalid and status is published, default to current
+    // Always set the creation timestamp in the "date" field
+    // This will be sent to Airtable's "Date" field to track when the article was created
+    submissionData.date = new Date().toISOString();
+
+    // Handle publication date & time from the datetime-local input (for Scheduled field)
+    if (submissionData.Scheduled) {
+      // Convert Scheduled string from datetime-local to Date object for publishedAt
+      try {
+        const dateTime = new Date(submissionData.Scheduled);
+
+        // Check if valid date
+        if (!isNaN(dateTime.getTime())) {
+          // Use this date for publishedAt
+          submissionData.publishedAt = dateTime;
+
+          // Keep the ISO string format for Airtable Scheduled field
+          // submissionData.Scheduled is already correctly formatted from the input
+        } else {
+          console.warn("Invalid date format from datetime-local input");
+          // If Scheduled date is invalid and status is published, default to current
+          if (submissionData.status === "published") {
+            submissionData.publishedAt = new Date();
+            submissionData.Scheduled = submissionData.publishedAt.toISOString();
+          }
+        }
+      } catch (error) {
+        console.error("Error parsing scheduled date:", error);
+        // If parsing fails and status is published, default to current
         if (submissionData.status === "published") {
           submissionData.publishedAt = new Date();
           submissionData.Scheduled = submissionData.publishedAt.toISOString();
         }
       }
-    } catch (error) {
-      console.error("Error parsing scheduled date:", error);
-      // If parsing fails and status is published, default to current
-      if (submissionData.status === "published") {
-        submissionData.publishedAt = new Date();
-        submissionData.Scheduled = submissionData.publishedAt.toISOString();
-      }
     }
-  }
-  // If no Scheduled date is provided but status is published, set current date
-  else if (submissionData.status === "published") {
-    submissionData.publishedAt = new Date();
-    submissionData.Scheduled = submissionData.publishedAt.toISOString();
-  }
-    
+    // If no Scheduled date is provided but status is published, set current date
+    else if (submissionData.status === "published") {
+      submissionData.publishedAt = new Date();
+      submissionData.Scheduled = submissionData.publishedAt.toISOString();
+    }
+
     // Set the finished field based on status
     submissionData.finished = submissionData.status === "published";
-    
+
     console.log("Submitting article with publishedAt:", submissionData.publishedAt);
     console.log("Airtable date field:", submissionData.date);
     console.log("Finished status:", submissionData.finished);
-    
+    console.log("Image URL being submitted:", submissionData.imageUrl);
+    console.log("Full submission data:", submissionData);
+
     createArticleMutation.mutate(submissionData as InsertArticle);
   };
 
@@ -589,7 +591,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             </span>
           </div>
         )}
-        
+
         {/* ImgBB Integration Status */}
         {isFromAirtable && (
           <div className={`mb-4 p-4 border rounded-md ${imgbbEnabled ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
@@ -600,8 +602,8 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
               </h5>
             </div>
             <p className={`text-sm mt-1 ${imgbbEnabled ? 'text-green-600' : 'text-gray-600'}`}>
-              {imgbbEnabled 
-                ? 'Images will be uploaded to ImgBB first, then the URL will be sent to Airtable.' 
+              {imgbbEnabled
+                ? 'Images will be uploaded to ImgBB first, then the URL will be sent to Airtable.'
                 : 'Images will be uploaded directly to Airtable. To enable ImgBB integration, visit the ImgBB settings page.'}
             </p>
             {imgbbEnabled && (
@@ -654,9 +656,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                   </SelectTrigger>
                 </Select>
               ) : (
-                <Select 
-                  name="author" 
-                  value={formData.author} 
+                <Select
+                  name="author"
+                  value={formData.author}
                   onValueChange={(value) => handleSelectChange("author", value)}
                 >
                   <SelectTrigger>
@@ -676,9 +678,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
             <div>
               <Label htmlFor="contentFormat">Content Format</Label>
-              <Select 
-                name="contentFormat" 
-                value={formData.contentFormat} 
+              <Select
+                name="contentFormat"
+                value={formData.contentFormat}
                 onValueChange={(value) => handleSelectChange("contentFormat", value)}
               >
                 <SelectTrigger>
@@ -718,7 +720,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                   className="flex-grow"
                 />
                 {isFromAirtable && (
-                  <Button 
+                  <Button
                     type="button"
                     variant="outline"
                     className="flex items-center gap-1"
@@ -793,7 +795,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                   className="flex-grow"
                 />
                 {isFromAirtable && (
-                  <Button 
+                  <Button
                     type="button"
                     variant="outline"
                     className="flex items-center gap-1"
@@ -865,9 +867,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                   </SelectTrigger>
                 </Select>
               ) : (
-                <Select 
-                  name="photo" 
-                  value={formData.photo || ''} 
+                <Select
+                  name="photo"
+                  value={formData.photo || ''}
                   onValueChange={(value) => handleSelectChange("photo", value)}
                 >
                   <SelectTrigger>
@@ -903,7 +905,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 Separate hashtags with spaces
               </p>
             </div>
-            
+
             <div>
               <Label htmlFor="Scheduled">Publication Date & Time</Label>
               <Input
@@ -921,9 +923,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
             <div>
               <Label htmlFor="featured">Featured</Label>
-              <Select 
-                name="featured" 
-                value={formData.featured} 
+              <Select
+                name="featured"
+                value={formData.featured}
                 onValueChange={(value) => handleSelectChange("featured", value)}
               >
                 <SelectTrigger>
@@ -938,9 +940,9 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
             <div>
               <Label htmlFor="status">Status</Label>
-              <Select 
-                name="status" 
-                value={formData.status} 
+              <Select
+                name="status"
+                value={formData.status}
                 onValueChange={(value) => handleSelectChange("status", value)}
               >
                 <SelectTrigger>

@@ -428,7 +428,7 @@ export default function UserManagementPage() {
               </div>
             )}
             
-            {currentUser && currentUser.username === defaultAdminUsername && (
+            {currentUser && defaultAdminUsername && currentUser.username === defaultAdminUsername && (
               <Alert className="mt-4">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>

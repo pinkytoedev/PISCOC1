@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
-import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload, Copy, Check, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export default function TeamMembersPage() {
@@ -25,9 +26,49 @@ export default function TeamMembersPage() {
     imageType: "url",
     imagePath: null,
   });
+  const imageUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [copied, setCopied] = useState(false);
+  
+  const { data: publicUploadStatus, isLoading: isLoadingStatus } = useQuery<{ enabled: boolean }>({
+    queryKey: ['/api/public/team-upload-status'],
+  });
+
+  const toggleUploadMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest("POST", "/api/public/team-upload-status", { enabled });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/public/team-upload-status'] });
+      toast({
+        title: "Settings updated",
+        description: "Public upload settings have been updated.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const copyToClipboard = () => {
+    const url = `${window.location.origin}/team-upload`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast({
+      title: "Link copied",
+      description: "Public upload link copied to clipboard.",
+    });
+  };
   
   const { data: teamMembers, isLoading } = useQuery<TeamMember[]>({
     queryKey: ['/api/team-members'],
+    refetchInterval: 5000, // Poll every 5 seconds to see public updates live
   });
   
   const createMemberMutation = useMutation({
@@ -133,9 +174,10 @@ export default function TeamMembersPage() {
       imageType: "url",
       imagePath: null,
     });
+    setIsUploadingImage(false);
     setIsModalOpen(true);
   };
-  
+
   const handleEditClick = (member: TeamMember) => {
     setEditMember(member);
     setFormData({
@@ -146,6 +188,7 @@ export default function TeamMembersPage() {
       imageType: member.imageType,
       imagePath: member.imagePath,
     });
+    setIsUploadingImage(false);
     setIsModalOpen(true);
   };
   
@@ -171,14 +214,100 @@ export default function TeamMembersPage() {
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "imageUrl"
+        ? {
+            imageType: "url",
+            imagePath: null,
+          }
+        : {}),
+    }));
   };
-  
+
+  const handleImageFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || event.target.files.length === 0) {
+      return;
+    }
+
+    const file = event.target.files[0];
+    const formDataUpload = new FormData();
+    formDataUpload.append("image", file);
+
+    if (editMember) {
+      formDataUpload.append("teamMemberId", String(editMember.id));
+    }
+
+    setIsUploadingImage(true);
+
+    try {
+      const response = await fetch("/api/team-members/upload-image", {
+        method: "POST",
+        body: formDataUpload,
+        credentials: "include",
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        const message = data?.message || "Failed to upload image";
+        throw new Error(message);
+      }
+
+      const newImageUrl = typeof data?.imageUrl === "string" ? data.imageUrl : "";
+
+      if (!newImageUrl) {
+        throw new Error("Upload completed but no image URL was returned");
+      }
+
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: newImageUrl,
+        imageType: "url",
+        imagePath: null,
+      }));
+
+      if (data?.teamMember) {
+        const updatedMember = data.teamMember as TeamMember;
+        setEditMember(updatedMember);
+        setFormData((prev) => ({
+          ...prev,
+          imageUrl: updatedMember.imageUrl,
+          imageType: updatedMember.imageType,
+          imagePath: updatedMember.imagePath,
+        }));
+      } else if (editMember) {
+        setEditMember((prev) => (prev ? { ...prev, imageUrl: newImageUrl, imageType: "url", imagePath: null } : prev));
+      }
+
+      if (editMember) {
+        queryClient.invalidateQueries({ queryKey: ['/api/team-members'] });
+      }
+
+      toast({
+        title: "Profile photo uploaded",
+        description: editMember
+          ? "The new photo has been published to the live site."
+          : "The uploaded photo URL has been added to this team member.",
+      });
+    } catch (error) {
+      toast({
+        title: "Failed to upload image",
+        description: error instanceof Error ? error.message : "An unexpected error occurred while uploading the image.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingImage(false);
+      event.target.value = "";
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMemberMutation.mutate(formData as InsertTeamMember);
   };
-  
+
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditMember(null);
@@ -190,6 +319,10 @@ export default function TeamMembersPage() {
       imageType: "url",
       imagePath: null,
     });
+    setIsUploadingImage(false);
+    if (imageUploadInputRef.current) {
+      imageUploadInputRef.current.value = "";
+    }
   };
   
   return (
@@ -245,6 +378,60 @@ export default function TeamMembersPage() {
                 </Button>
               </div>
             </div>
+
+            {/* Public Upload Settings */}
+            <Card className="mb-6">
+              <CardContent className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <h3 className="text-lg font-medium">Public Upload Link</h3>
+                  <p className="text-sm text-gray-500">
+                    Allow team members to update their profiles via a public link.
+                  </p>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                  {publicUploadStatus?.enabled && (
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                       <div className="relative flex-1 sm:flex-none">
+                        <Input 
+                          readOnly 
+                          value={`${window.location.origin}/team-upload`}
+                          className="w-full sm:w-64 pr-10 bg-gray-50"
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="absolute right-0 top-0 h-full"
+                          onClick={copyToClipboard}
+                        >
+                          {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <a 
+                        href="/team-upload" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                      >
+                        <Button size="icon" variant="outline">
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </a>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">
+                      {publicUploadStatus?.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <Switch
+                      checked={publicUploadStatus?.enabled || false}
+                      onCheckedChange={(checked) => toggleUploadMutation.mutate(checked)}
+                      disabled={isLoadingStatus || toggleUploadMutation.isPending}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Team Members Grid */}
             {isLoading ? (
@@ -384,16 +571,64 @@ export default function TeamMembersPage() {
                     </div>
                     
                     <div>
-                      <Label htmlFor="imageUrl">Profile Image URL</Label>
-                      <Input
-                        id="imageUrl"
-                        name="imageUrl"
-                        value={formData.imageUrl}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com/profile-image.jpg"
+                      <Label htmlFor="imageUrl">Profile Image</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="imageUrl"
+                          name="imageUrl"
+                          value={formData.imageUrl}
+                          onChange={handleInputChange}
+                          placeholder="https://example.com/profile-image.jpg"
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => imageUploadInputRef.current?.click()}
+                          disabled={isUploadingImage}
+                          className="shrink-0 flex items-center gap-1"
+                        >
+                          {isUploadingImage ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4" />
+                              <span>Upload photo</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <input
+                        ref={imageUploadInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageFileChange}
                       />
+                      {formData.imageUrl && (
+                        <div className="mt-2 flex items-center gap-3">
+                          <div className="h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-gray-100">
+                            <img
+                              src={formData.imageUrl}
+                              alt={`${formData.name || "Team member"} profile preview`}
+                              className="h-full w-full object-cover"
+                              onError={(event) => {
+                                event.currentTarget.src = "https://placehold.co/200x200?text=Image";
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-500 break-all">
+                            {formData.imageUrl}
+                          </span>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-500 mt-1">
-                        Provide a direct link to the profile image. Recommended size: 300x300 pixels.
+                        {editMember
+                          ? "Upload a new photo or paste an image URL to instantly refresh the live team page."
+                          : "Upload a photo or paste an image URL. Save the team member to publish the new image."}
                       </p>
                     </div>
                   </div>
