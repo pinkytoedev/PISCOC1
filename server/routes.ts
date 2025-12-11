@@ -8,7 +8,6 @@ import { setupArticleReceiveEndpoint } from "./integrations/articleReceive";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
 import { setupImgBBRoutes } from "./integrations/imgbb";
-import { notifyArticlePublished, notifyArticleEdited, notifyArticleDeleted } from "./utils/webhookNotifier";
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
 import { setupPublicUploadRoutes } from "./integrations/publicUpload";
 import { setupTokenFreePublicUploadRoutes } from "./integrations/tokenFreePublicUpload";
@@ -367,9 +366,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         log(`Article status changed to published, triggering Instagram post for article ID ${id}`, 'instagram');
 
-        // Send webhook notification for newly published article
-        await notifyArticlePublished(id, updatedArticle.title);
-
         // Post to Instagram
         const instagramResult = await postArticleToInstagram(updatedArticle);
 
@@ -401,12 +397,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           return res.json(responseWithInstagramError);
         }
-      }
-
-      // Check if this is an edit to an already published article
-      if (updatedArticle.status === 'published' && !statusChangedToPublished) {
-        // This is an edit to an already published article
-        await notifyArticleEdited(id, updatedArticle.title);
       }
 
       // Return the updated article (if we didn't already return with Instagram info)
@@ -483,11 +473,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { id }
       });
-
-      // Send webhook notification if the deleted article was published
-      if (article.status === 'published') {
-        await notifyArticleDeleted(id, article.title);
-      }
 
       res.status(204).send();
     } catch (error) {
@@ -1119,33 +1104,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       status: 'success',
       appId
     });
-  });
-
-  // Test webhook endpoint for debugging
-  app.post("/api/test-webhook", isAuthenticated, async (req, res) => {
-    try {
-      const { articleId = 999, action = "published", title = "Test Article" } = req.body;
-
-      log(`🧪 Manual webhook test triggered by user ${req.user?.username}`, "webhook");
-
-      if (action === "published") {
-        await notifyArticlePublished(articleId, title);
-      } else if (action === "edited") {
-        await notifyArticleEdited(articleId, title);
-      } else if (action === "deleted") {
-        await notifyArticleDeleted(articleId, title);
-      } else {
-        return res.status(400).json({ message: "Invalid action. Use 'published', 'edited', or 'deleted'" });
-      }
-
-      res.json({
-        message: "Test webhook sent",
-        details: { articleId, action, title }
-      });
-    } catch (error) {
-      log(`❌ Test webhook failed: ${String(error)}`, "webhook");
-      res.status(500).json({ message: "Test webhook failed", error: String(error) });
-    }
   });
 
   setupArticleReceiveEndpoint(app);
