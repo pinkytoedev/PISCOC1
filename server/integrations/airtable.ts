@@ -1,7 +1,6 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
-import { notifyArticlePublished, notifyArticleEdited } from "../utils/webhookNotifier";
 import { upload } from "../utils/fileUpload";
 import {
   uploadImageToAirtable,
@@ -321,7 +320,16 @@ export async function deleteAirtableRecord(
 }
 
 // Helper function to convert an Article to Airtable format
-export async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
+async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
+  // Debug logging to trace the issue
+  console.log("Converting article to Airtable format:", {
+    id: article.id,
+    title: article.title,
+    imageUrl: article.imageUrl,
+    imageType: article.imageType,
+    instagramImageUrl: article.instagramImageUrl,
+    status: article.status
+  });
 
   // Get the team member for author reference (if applicable)
   let authorRecord = null;
@@ -345,6 +353,8 @@ export async function convertToAirtableFormat(article: Article): Promise<Partial
     message_sent: article.status === "published" // If the article is published, assume it was sent
   };
 
+  // Log for debugging
+  console.log("Finished status:", airtableData.Finished, "Article status:", article.status);
 
   // Add _updatedTime to track when this article was last updated
   airtableData._updatedTime = new Date().toISOString();
@@ -382,9 +392,13 @@ export async function convertToAirtableFormat(article: Article): Promise<Partial
     airtableData.Photo = [];
   }
 
-  // Handle MainImage link if article has an imageUrl
+  // CRITICAL: Handle MainImage link if article has an imageUrl
+  // This must be included for the image to transfer to Airtable
   if (article.imageUrl && article.imageUrl !== "") {
     airtableData.MainImageLink = article.imageUrl;
+    console.log("Setting MainImageLink in Airtable data:", article.imageUrl);
+  } else {
+    console.log("WARNING: No imageUrl found on article, MainImageLink will not be set");
   }
 
   // Handle instaPhoto field separately if we have an Instagram image URL
@@ -413,6 +427,8 @@ export async function convertToAirtableFormat(article: Article): Promise<Partial
       // Using Link field for instaPhoto instead of attachment field
       // Use the InstaPhotoLink field which accepts a URL string
       airtableData.InstaPhotoLink = article.instagramImageUrl;
+
+      console.log("Setting InstaPhotoLink:", article.instagramImageUrl);
     } catch (error) {
       console.error("Error creating instaPhoto attachment:", error);
     }
@@ -444,6 +460,8 @@ export async function convertToAirtableFormat(article: Article): Promise<Partial
       // Using Link field for instaPhoto fallback instead of attachment field
       // Use the InstaPhotoLink field which accepts a URL string
       airtableData.InstaPhotoLink = article.imageUrl;
+
+      console.log("Using main image for InstaPhotoLink:", article.imageUrl);
     } catch (error) {
       console.error("Error creating fallback instaPhoto attachment:", error);
     }
@@ -1421,11 +1439,6 @@ export function setupAirtableRoutes(app: Express) {
         }
       });
 
-      // Send webhook notification if the article is published
-      if (article.status === 'published') {
-        await notifyArticleEdited(articleId, article.title);
-      }
-
       res.json({
         message: "Article updated in Airtable",
         article: response
@@ -1856,6 +1869,16 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(404).json({ message: "Article not found" });
       }
 
+      // Debug log the article data
+      console.log("Article retrieved from database for push:", {
+        id: article.id,
+        title: article.title,
+        imageUrl: article.imageUrl,
+        imageType: article.imageType,
+        instagramImageUrl: article.instagramImageUrl,
+        status: article.status,
+        source: article.source
+      });
 
       // Save article details for error handling
       articleDetails = {
@@ -1863,8 +1886,15 @@ export function setupAirtableRoutes(app: Express) {
         title: article.title
       };
 
-      // Note: We no longer skip articles with existing external IDs
-      // Instead, we'll update them in Airtable to ensure data consistency
+      // Check if article already has an external ID (already in Airtable)
+      if (article.externalId) {
+        console.log(`Article ${articleId} already has external ID ${article.externalId}, skipping push`);
+        return res.status(200).json({
+          message: "Article already exists in Airtable",
+          skipped: true,
+          externalId: article.externalId
+        });
+      }
 
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
       const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
@@ -1885,86 +1915,53 @@ export function setupAirtableRoutes(app: Express) {
       // Prepare the data for Airtable using the central converter so link fields are included
       const fields: any = await convertToAirtableFormat(article);
 
+      // Log the converted fields to debug missing MainImageLink
+      console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
+
       let response;
-      let airtableId: string;
 
-      if (article.externalId) {
-        // Article already exists in Airtable - UPDATE it
+      // Always create a new record - don't check for existing record
+      console.log("Creating new record in Airtable");
+      console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
 
-        response = await airtableRequest(
-          apiKey,
-          baseId,
-          tableName,
-          "PATCH",
-          {
-            records: [
-              {
-                id: article.externalId,
-                fields
-              }
-            ]
-          }
-        );
+      response = await airtableRequest(
+        apiKey,
+        baseId,
+        tableName,
+        "POST",
+        {
+          records: [
+            {
+              fields
+            }
+          ]
+        }
+      );
 
-        airtableId = article.externalId;
-      } else {
-        // Article doesn't exist in Airtable - CREATE it
+      // Get the Airtable ID
+      const airtableId = response.records[0].id;
 
-        response = await airtableRequest(
-          apiKey,
-          baseId,
-          tableName,
-          "POST",
-          {
-            records: [
-              {
-                fields
-              }
-            ]
-          }
-        );
-
-        // Get the Airtable ID from the response
-        airtableId = response.records[0].id;
-
-        // Update the article with the Airtable ID and change its source
-        await storage.updateArticle(articleId, {
-          externalId: airtableId,
-          source: 'airtable'  // Change the source to 'airtable'
-        });
-      }
+      // Update the article with the Airtable ID and change its source
+      await storage.updateArticle(articleId, {
+        externalId: airtableId,
+        source: 'airtable'  // Change the source to 'airtable'
+      });
 
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
-        action: article.externalId ? "update" : "create",
+        action: "create",
         resourceType: "article",
         resourceId: article.id.toString(),
         details: {
           service: "airtable",
           article: article.title,
-          airtableId,
-          operation: article.externalId ? "update" : "create"
+          airtableId
         }
       });
 
-      // Send webhook notification if the article is published
-      if (article.status === 'published') {
-        if (article.externalId) {
-          // This was an update to an existing published article
-          await notifyArticleEdited(article.id, article.title);
-        } else {
-          // This was a newly published article
-          await notifyArticlePublished(article.id, article.title);
-        }
-      }
-
       res.json({
-        message: article.externalId ?
-          "Article updated in Airtable successfully" :
-          "Article created in Airtable successfully",
-        operation: article.externalId ? "update" : "create",
-        airtableId,
+        message: "Article pushed to Airtable successfully",
         response
       });
     } catch (error) {

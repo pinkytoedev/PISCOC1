@@ -2,10 +2,6 @@ import { storage } from "./storage";
 import { log } from "./vite";
 import { postArticleToInstagram } from "./integrations/instagram";
 import type { Article } from "@shared/schema";
-// Import the comprehensive Airtable conversion function
-import { convertToAirtableFormat } from "./integrations/airtable";
-// Import webhook notification function
-import { notifyArticlePublished } from "./utils/webhookNotifier";
 
 let isRunning = false;
 let intervalHandle: NodeJS.Timeout | null = null;
@@ -28,94 +24,77 @@ function parseScheduledDate(article: Article): Date | null {
 
 async function ensureArticleOnAirtable(article: Article): Promise<Article> {
     try {
+        // If already on Airtable, nothing to do
+        if (article.externalId) return article;
+
         // Check Airtable settings
         const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
         const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
         const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
 
         if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-            log("Airtable not configured; skipping sync for article " + article.id, "scheduler");
+            log("Airtable not configured; skipping push for article " + article.id, "scheduler");
             return article;
         }
 
-        // Use the comprehensive conversion function that the manual sync uses
-        const fields = await convertToAirtableFormat(article);
+        const fields: any = {
+            Name: article.title,
+            Description: article.description || "",
+            Body: article.content || "",
+            Featured: article.featured === "yes",
+            Finished: article.status === "published" || article.finished === true,
+            Hashtags: article.hashtags || "",
+        };
+
+        // Include image link URL fields if available so the Airtable draft has them immediately
+        if (article.imageUrl) {
+            (fields as any).MainImageLink = article.imageUrl;
+        }
+        if (article.instagramImageUrl) {
+            (fields as any).InstaPhotoLink = article.instagramImageUrl;
+        }
+
+        // Dates
+        const scheduledDate = parseScheduledDate(article) || new Date();
+        fields.Scheduled = scheduledDate.toISOString();
+        fields.Date = article.date || new Date().toISOString();
 
         const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}`;
+        const body = JSON.stringify({ records: [{ fields }] });
 
-        let res: Response;
-        let airtableId: string = article.externalId || '';
-
-        if (article.externalId) {
-            // Article already exists in Airtable - UPDATE it
-            log(`Updating existing Airtable record ${article.externalId} for article ${article.id}`, "scheduler");
-
-            const body = JSON.stringify({
-                records: [{
-                    id: article.externalId,
-                    fields
-                }]
-            });
-
-            res = await fetch(url, {
-                method: "PATCH",
-                headers: {
-                    "Authorization": `Bearer ${apiKeySetting.value}`,
-                    "Content-Type": "application/json",
-                },
-                body,
-            });
-
-            airtableId = article.externalId;
-        } else {
-            // Article doesn't exist in Airtable - CREATE it
-            log(`Creating new Airtable record for article ${article.id}`, "scheduler");
-
-            const body = JSON.stringify({ records: [{ fields }] });
-
-            res = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKeySetting.value}`,
-                    "Content-Type": "application/json",
-                },
-                body,
-            });
-        }
+        const res = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKeySetting.value}`,
+                "Content-Type": "application/json",
+            },
+            body,
+        });
 
         const text = await res.text();
         if (!res.ok) {
-            log(`Airtable sync failed (${res.status}): ${text}`, "scheduler");
+            log(`Airtable push failed (${res.status}): ${text}`, "scheduler");
             return article;
         }
 
-        // For POST requests, extract the new Airtable ID
-        if (!article.externalId) {
-            const data = JSON.parse(text) as { records?: Array<{ id: string }> };
-            const newAirtableId = data.records && data.records[0]?.id;
-            if (!newAirtableId) {
-                log("Airtable creation returned no record id", "scheduler");
-                return article;
-            }
-            airtableId = newAirtableId;
-
-            // Update the article with the new Airtable ID
-            const updated = await storage.updateArticle(article.id, {
-                externalId: airtableId,
-                source: "airtable",
-            } as any);
-
-            if (updated) {
-                log(`Article ${article.id} created in Airtable with id ${airtableId}`, "scheduler");
-                return updated as Article;
-            }
-        } else {
-            // For PATCH requests, the article already has the externalId
-            log(`Article ${article.id} updated in Airtable (id: ${airtableId})`, "scheduler");
+        const data = JSON.parse(text) as { records?: Array<{ id: string }> };
+        const airtableId = data.records && data.records[0]?.id;
+        if (!airtableId) {
+            log("Airtable push returned no record id", "scheduler");
+            return article;
         }
 
+        const updated = await storage.updateArticle(article.id, {
+            externalId: airtableId,
+            source: "airtable",
+        } as any);
+
+        if (updated) {
+            log(`Article ${article.id} pushed to Airtable with id ${airtableId}`, "scheduler");
+            return updated as Article;
+        }
     } catch (err) {
-        log(`Error syncing article ${article.id} with Airtable: ${String(err)}`, "scheduler");
+        log(`Error ensuring Airtable push for article ${article.id}: ${String(err)}`, "scheduler");
     }
     return article;
 }
@@ -191,9 +170,6 @@ async function publishArticle(article: Article): Promise<void> {
     }
 
     log(`Published article ${article.id}: ${article.title}`, "scheduler");
-
-    // Send webhook notification for published article
-    await notifyArticlePublished(article.id, article.title);
 
     // Move image links over to Airtable record (if present)
     await moveImageLinksToAirtable(updated as unknown as Article);
