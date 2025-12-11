@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { SiAirtable, SiInstagram } from "react-icons/si";
 import {
   DropdownMenu,
@@ -122,6 +122,31 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
       toast({
         title: "Status update failed",
         description: error.message || "Failed to update article status.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Re-upload mutation
+  const reuploadMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      const response = await apiRequest(
+        "POST",
+        `/api/articles/${articleId}/reupload`
+      );
+      return await response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({
+        title: "Re-upload Mode Started",
+        description: "Article is now in draft mode and ready for upload. Finished status in Airtable has been unchecked.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to start re-upload",
+        description: error.message || "Could not set article to re-upload mode.",
         variant: "destructive",
       });
     },
@@ -932,6 +957,37 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                           </Tooltip>
                         </TooltipProvider>
                       )}
+
+                      {/* Re-upload Button for published/finished articles */}
+                      {(article.status === 'published' || article.finished) && (
+                         <TooltipProvider>
+                           <Tooltip>
+                             <TooltipTrigger asChild>
+                               <Button
+                                 variant="ghost"
+                                 size="icon"
+                                 onClick={() => {
+                                    if (confirm("Start re-upload mode? This will unpublish the article temporarily.")) {
+                                      reuploadMutation.mutate(article.id);
+                                    }
+                                 }}
+                                 className="text-orange-600 hover:text-orange-800"
+                                 disabled={reuploadMutation.isPending}
+                               >
+                                 {reuploadMutation.isPending ? (
+                                   <Loader2 className="h-4 w-4 animate-spin" />
+                                 ) : (
+                                   <RotateCcw className="h-4 w-4" />
+                                 )}
+                               </Button>
+                             </TooltipTrigger>
+                             <TooltipContent side="bottom">
+                               <p>Re-upload Content</p>
+                             </TooltipContent>
+                           </Tooltip>
+                         </TooltipProvider>
+                      )}
+
                       <Button
                         variant="ghost"
                         size="icon"

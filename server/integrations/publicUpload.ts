@@ -11,6 +11,7 @@ import { storage } from '../storage';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
 import { processZipFile } from '../utils/zipProcessor';
 import { generateUniqueToken, calculateExpirationDate } from '../utils/tokenGenerator';
+import { handleReuploadCompletion } from '../utils/reuploadHandler';
 import type { UploadToken, Article } from '../../shared/schema';
 
 // Extend Request interface to include our custom properties
@@ -515,6 +516,9 @@ export function setupPublicUploadRoutes(app: Express) {
           html: zipResult.html
         };
       }
+
+      // Handle re-upload completion if applicable
+      await handleReuploadCompletion(article);
       
       // Increment token usage
       await storage.incrementUploadTokenUses(uploadToken.id);
@@ -599,6 +603,9 @@ export function setupPublicUploadRoutes(app: Express) {
       if (!updatedArticle) {
         return res.status(500).json({ message: 'Failed to update article with image URL' });
       }
+
+      // Handle re-upload completion if applicable
+      await handleReuploadCompletion(article);
       
       // Increment token usage
       await storage.incrementUploadTokenUses(uploadToken.id);
@@ -690,6 +697,9 @@ export function setupPublicUploadRoutes(app: Express) {
       if (!updatedArticle) {
         return res.status(500).json({ message: 'Failed to update article with Instagram image URL' });
       }
+
+      // Handle re-upload completion if applicable
+      await handleReuploadCompletion(article);
       
       // For Airtable-sourced articles, update the Airtable link field
       if (article.source === 'airtable' && article.externalId) {
@@ -787,6 +797,11 @@ export function setupPublicUploadRoutes(app: Express) {
       
       // Process the ZIP file
       const result = await processZipFile(req.file.path, article.id);
+
+      // Handle re-upload completion if applicable
+      if (result.success) {
+        await handleReuploadCompletion(article);
+      }
       
       // Increment token usage
       await storage.incrementUploadTokenUses(uploadToken.id);

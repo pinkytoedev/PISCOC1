@@ -10,6 +10,7 @@ import multer from 'multer';
 import { storage } from '../storage';
 import { uploadImageToImgBB, UploadedFileInfo } from '../utils/imgbbUploader';
 import { processZipFile } from '../utils/zipProcessor';
+import { handleReuploadCompletion } from '../utils/reuploadHandler';
 
 // Simple in-memory rate limiting (should be replaced with Redis in production)
 const uploadAttempts = new Map<string, { count: number; resetTime: number }>();
@@ -131,8 +132,8 @@ const validateArticleExists = async (req: Request, res: Response, next: Function
       });
     }
     
-    // Don't allow uploads to published articles for security
-    if (article.status === 'published') {
+    // Don't allow uploads to published articles for security, unless re-uploading
+    if (article.status === 'published' && !article.isReuploading) {
       return res.status(400).json({ 
         message: 'Cannot upload to published articles' 
       });
@@ -154,14 +155,14 @@ const validateArticleExists = async (req: Request, res: Response, next: Function
  */
 export function setupTokenFreePublicUploadRoutes(app: Express) {
   
-  // Get uploadable articles (non-published articles)
+  // Get uploadable articles (non-published articles or re-uploading)
   app.get('/api/articles/uploadable', async (req: Request, res: Response) => {
     try {
       const articles = await storage.getArticles();
       
-      // Filter out published articles and only return essential fields
+      // Filter out published articles (unless re-uploading) and only return essential fields
       const uploadableArticles = articles
-        .filter(article => article.status !== 'published')
+        .filter(article => article.status !== 'published' || article.isReuploading)
         .map(article => ({
           id: article.id,
           title: article.title,
@@ -209,6 +210,9 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
           imageUrl: imgbbResult.url,
           imageType: 'url'
         });
+
+        // Handle re-upload completion if applicable
+        await handleReuploadCompletion(article);
 
         // Try to update Airtable if the article has an external ID
         if (article.externalId) {
@@ -298,6 +302,9 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
           instagramImageUrl: imgbbResult.url
         });
 
+        // Handle re-upload completion if applicable
+        await handleReuploadCompletion(article);
+
         // Try to update Airtable if the article has an external ID
         if (article.externalId) {
           try {
@@ -370,6 +377,12 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
 
         // Process the ZIP file
         const result = await processZipFile(req.file.path, article.id);
+
+        // Handle re-upload completion if applicable
+        // Only if processing was successful
+        if (result.success) {
+           await handleReuploadCompletion(article);
+        }
 
         // Log activity
         await storage.createActivityLog({

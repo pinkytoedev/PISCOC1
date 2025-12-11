@@ -236,6 +236,9 @@ async function checkAndPublishDueArticles(): Promise<void> {
             // protects those articles from accidental auto-publish.
             if (a.publishedAt) return false;
 
+            // Prevent auto-publishing if article is in re-upload mode
+            if (a.isReuploading) return false;
+
             const when = parseScheduledDate(a);
             // Rule 1: Scheduled time must be in the past (<= now)
             // Rule 2: Scheduled time must be recent (<= 24 hours ago)

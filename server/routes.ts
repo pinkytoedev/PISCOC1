@@ -4,7 +4,7 @@ import axios from "axios";
 import { unlink } from "fs/promises";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { setupAirtableRoutes, deleteAirtableRecord, pushArticleToAirtable } from "./integrations/airtable";
+import { setupAirtableRoutes, deleteAirtableRecord, pushArticleToAirtable, convertToAirtableFormat } from "./integrations/airtable";
 import { setupArticleReceiveEndpoint } from "./integrations/articleReceive";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
@@ -565,6 +565,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(articles);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch featured articles" });
+    }
+  });
+
+  // Re-upload trigger endpoint
+  app.post("/api/articles/:id/reupload", isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const article = await storage.getArticle(id);
+
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      // Check if article is published or has finished=true to allow re-upload
+      if (article.status !== 'published' && !article.finished) {
+        // We only allow re-upload logic for articles that are considered 'done'
+        return res.status(400).json({ message: "Only published or finished articles can be set to re-upload mode" });
+      }
+
+      // Update local state
+      const updatedArticle = await storage.updateArticle(id, {
+        status: "draft",
+        finished: false,
+        isReuploading: true
+      } as any);
+
+      if (!updatedArticle) {
+        return res.status(500).json({ message: "Failed to update article state" });
+      }
+
+      // Sync to Airtable to uncheck "Finished"
+      if (article.externalId && article.source === 'airtable') {
+        try {
+          const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+          const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+          const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+
+          if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value) {
+            // We need to uncheck Finished in Airtable
+            // We can reuse the convertToAirtableFormat but force Finished to false
+            // However, convertToAirtableFormat uses the article object passed to it.
+            // Since we updated 'updatedArticle' with finished=false, convertToAirtableFormat should respect that.
+
+            const fields = await convertToAirtableFormat(updatedArticle);
+
+            const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}/${article.externalId}`;
+
+            await fetch(url, {
+              method: "PATCH",
+              headers: {
+                "Authorization": `Bearer ${apiKeySetting.value}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ fields: { Finished: false } }), // Explicitly set Finished to false to be safe
+            });
+
+            log(`Synced re-upload status to Airtable for article ${id}`, "reupload");
+          }
+        } catch (err) {
+          log(`Failed to sync re-upload status to Airtable: ${String(err)}`, "reupload");
+          // Non-blocking error, but worth noting
+        }
+      }
+
+      // Log activity
+      await storage.createActivityLog({
+        userId: req.user?.id,
+        action: "update",
+        resourceType: "article",
+        resourceId: id.toString(),
+        details: {
+          action: "start_reupload",
+          previousStatus: article.status
+        }
+      });
+
+      res.json(updatedArticle);
+    } catch (error) {
+      console.error("Error setting re-upload mode:", error);
+      res.status(500).json({ message: "Failed to set re-upload mode" });
     }
   });
 

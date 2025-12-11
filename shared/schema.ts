@@ -61,6 +61,7 @@ export const articles = pgTable("articles", {
   hashtags: text("hashtags"),
   externalId: text("external_id"), // For Airtable ID reference
   source: text("source").default("manual"), // Could be 'airtable', 'instagram', or 'manual'
+  isReuploading: boolean("is_reuploading").default(false), // Flag to prevent auto-publishing during content updates
 });
 
 // Custom schema for article insert/update with publishedAt handling
@@ -224,6 +225,7 @@ export const articleSchema = z.object({
   status: z.string().optional(),
   createdAt: z.date().optional(),
   hashtags: z.string().optional(),
+  isReuploading: z.boolean().optional(),
 });
 
 export const carouselQuoteSchema = z.object({

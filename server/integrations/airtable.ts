@@ -321,7 +321,7 @@ export async function deleteAirtableRecord(
 }
 
 // Helper function to convert an Article to Airtable format
-async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
+export async function convertToAirtableFormat(article: Article): Promise<Partial<AirtableArticleRequest>> {
   // Debug logging to trace the issue
   console.log("Converting article to Airtable format:", {
     id: article.id,
