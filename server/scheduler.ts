@@ -95,7 +95,7 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
 
         if (!article.externalId) {
             const data = JSON.parse(text) as { records?: Array<{ id: string }> };
-            airtableId = data.records && data.records[0]?.id;
+            airtableId = data.records && data.records[0]?.id || null;
             if (!airtableId) {
                 log("Airtable push returned no record id", "scheduler");
                 return article;
