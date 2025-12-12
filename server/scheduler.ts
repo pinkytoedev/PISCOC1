@@ -24,9 +24,6 @@ function parseScheduledDate(article: Article): Date | null {
 
 async function ensureArticleOnAirtable(article: Article): Promise<Article> {
     try {
-        // If already on Airtable, nothing to do
-        if (article.externalId) return article;
-
         // Check Airtable settings
         const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
         const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
@@ -59,39 +56,63 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
         fields.Scheduled = scheduledDate.toISOString();
         fields.Date = article.date || new Date().toISOString();
 
-        const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}`;
-        const body = JSON.stringify({ records: [{ fields }] });
+        let res: Response;
+        let airtableId = article.externalId;
 
-        const res = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKeySetting.value}`,
-                "Content-Type": "application/json",
-            },
-            body,
-        });
+        if (article.externalId) {
+            // Update existing record
+            const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}/${article.externalId}`;
+            const body = JSON.stringify({ fields });
+
+            res = await fetch(url, {
+                method: "PATCH",
+                headers: {
+                    "Authorization": `Bearer ${apiKeySetting.value}`,
+                    "Content-Type": "application/json",
+                },
+                body,
+            });
+        } else {
+            // Create new record
+            const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}`;
+            const body = JSON.stringify({ records: [{ fields }] });
+
+            res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${apiKeySetting.value}`,
+                    "Content-Type": "application/json",
+                },
+                body,
+            });
+        }
 
         const text = await res.text();
         if (!res.ok) {
-            log(`Airtable push failed (${res.status}): ${text}`, "scheduler");
+            log(`Airtable sync failed (${res.status}): ${text}`, "scheduler");
             return article;
         }
 
-        const data = JSON.parse(text) as { records?: Array<{ id: string }> };
-        const airtableId = data.records && data.records[0]?.id;
-        if (!airtableId) {
-            log("Airtable push returned no record id", "scheduler");
+        if (!article.externalId) {
+            const data = JSON.parse(text) as { records?: Array<{ id: string }> };
+            airtableId = data.records && data.records[0]?.id;
+            if (!airtableId) {
+                log("Airtable push returned no record id", "scheduler");
+                return article;
+            }
+
+            const updated = await storage.updateArticle(article.id, {
+                externalId: airtableId,
+                source: "airtable",
+            } as any);
+
+            if (updated) {
+                log(`Article ${article.id} pushed to Airtable with id ${airtableId}`, "scheduler");
+                return updated as Article;
+            }
+        } else {
+            log(`Article ${article.id} updated in Airtable with id ${article.externalId}`, "scheduler");
             return article;
-        }
-
-        const updated = await storage.updateArticle(article.id, {
-            externalId: airtableId,
-            source: "airtable",
-        } as any);
-
-        if (updated) {
-            log(`Article ${article.id} pushed to Airtable with id ${airtableId}`, "scheduler");
-            return updated as Article;
         }
     } catch (err) {
         log(`Error ensuring Airtable push for article ${article.id}: ${String(err)}`, "scheduler");
