@@ -1887,13 +1887,9 @@ export function setupAirtableRoutes(app: Express) {
       };
 
       // Check if article already has an external ID (already in Airtable)
+      // If so, we'll update it instead of skipping
       if (article.externalId) {
-        console.log(`Article ${articleId} already has external ID ${article.externalId}, skipping push`);
-        return res.status(200).json({
-          message: "Article already exists in Airtable",
-          skipped: true,
-          externalId: article.externalId
-        });
+        console.log(`Article ${articleId} already has external ID ${article.externalId}, will update existing record`);
       }
 
       const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
@@ -1919,38 +1915,63 @@ export function setupAirtableRoutes(app: Express) {
       console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
 
       let response;
+      let action = "create";
 
-      // Always create a new record - don't check for existing record
-      console.log("Creating new record in Airtable");
-      console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
+      if (article.externalId) {
+        // Update existing record
+        console.log(`Updating existing record ${article.externalId} in Airtable`);
+        action = "update";
 
-      response = await airtableRequest(
-        apiKey,
-        baseId,
-        tableName,
-        "POST",
-        {
-          records: [
-            {
-              fields
-            }
-          ]
-        }
-      );
+        response = await airtableRequest(
+          apiKey,
+          baseId,
+          tableName,
+          "PATCH",
+          {
+            records: [
+              {
+                id: article.externalId,
+                fields
+              }
+            ]
+          }
+        );
+      } else {
+        // Create a new record
+        console.log("Creating new record in Airtable");
+        console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
+
+        response = await airtableRequest(
+          apiKey,
+          baseId,
+          tableName,
+          "POST",
+          {
+            records: [
+              {
+                fields
+              }
+            ]
+          }
+        );
+      }
 
       // Get the Airtable ID
       const airtableId = response.records[0].id;
 
       // Update the article with the Airtable ID and change its source
-      await storage.updateArticle(articleId, {
-        externalId: airtableId,
-        source: 'airtable'  // Change the source to 'airtable'
-      });
+      // Only necessary if it didn't have one or to confirm it
+      if (!article.externalId || article.source !== 'airtable') {
+        await storage.updateArticle(articleId, {
+          externalId: airtableId,
+          source: 'airtable'
+        });
+      }
 
       // Log the activity
       await storage.createActivityLog({
         userId: req.user?.id,
-        action: "create",
+        action: action,
         resourceType: "article",
         resourceId: article.id.toString(),
         details: {
@@ -1961,7 +1982,7 @@ export function setupAirtableRoutes(app: Express) {
       });
 
       res.json({
-        message: "Article pushed to Airtable successfully",
+        message: action === "update" ? "Article updated in Airtable successfully" : "Article pushed to Airtable successfully",
         response
       });
     } catch (error) {
