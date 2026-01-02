@@ -347,8 +347,11 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
     Body: article.content || "",
     Description: article.description || "",
     Featured: article.featured === "yes",
-    // Always set Finished to true if status is "published" regardless of the finished field value
-    Finished: article.status === "published" ? true : (article.finished === true),
+    // Strictly map Finished checkbox to the published status
+    // If status is "published", Finished is true. Otherwise false.
+    Finished: article.status === "published",
+    // NOTE: The 'Republished' field was causing 422 errors because it doesn't exist in the Airtable schema.
+    // It has been removed from the payload.
     Hashtags: article.hashtags || "",
     message_sent: article.status === "published" // If the article is published, assume it was sent
   };
@@ -367,11 +370,15 @@ async function convertToAirtableFormat(article: Article): Promise<Partial<Airtab
   if (article.Scheduled) {
     // For scheduled publication time, use the Scheduled field
     airtableData.Scheduled = article.Scheduled;
-  } else if (article.publishedAt) {
-    // Fall back to publishedAt if scheduled not available
-    // Make sure it's a complete ISO string with time
+  } else if (article.publishedAt && article.status === 'published') {
+    // Fall back to publishedAt ONLY if the article is currently published
+    // This prevents drafts with past publishedAt dates from being auto-published
     const date = new Date(article.publishedAt);
     airtableData.Scheduled = date.toISOString();
+  } else {
+    // Ensure Scheduled is cleared for drafts if no explicit schedule is set
+    // We explicitly set to null to clear the field in Airtable
+    (airtableData as any).Scheduled = null;
   }
 
   // Add author reference if we found one
@@ -705,6 +712,18 @@ export async function syncArticlesFromAirtable(
         console.log(`No existing article found for external ID ${record.id}, will create new`);
       }
 
+      // Normalize republished flag (handle naming variants / trailing spaces)
+      const republishedFlag = (() => {
+        const rawKeys = Object.keys(fields || {});
+        const candidateKey = rawKeys.find(k => k.toLowerCase().replace(/\s+/g, '') === 'republished' || k.toLowerCase().includes('republish'));
+        return candidateKey ? Boolean((fields as any)[candidateKey]) : false;
+      })();
+
+      // Treat Republished as an explicit draft state, even if Finished is still checked
+      const finishedFlag = !!fields.Finished && !republishedFlag;
+      const scheduledValue = republishedFlag ? "" : (fields.Scheduled || "");
+      const publishedAtValue = finishedFlag && scheduledValue ? new Date(scheduledValue) : null;
+
       const articleData: InsertArticle = {
         title: fields.Name,
         description: fields.Description || "",
@@ -716,18 +735,44 @@ export async function syncArticlesFromAirtable(
         imagePath: null,
         instagramImageUrl: instagramImageUrl, // Store instaPhoto URL separately
         featured: fields.Featured ? "yes" : "no",
-        publishedAt: fields.Scheduled ? new Date(fields.Scheduled) : null,
+        publishedAt: publishedAtValue,
         date: fields.Date || "", // Store the creation timestamp from Airtable
-        Scheduled: fields.Scheduled || "", // Store the publication date from Airtable
-        finished: !!fields.Finished, // Store the finished state directly
+        Scheduled: scheduledValue, // Store the publication date from Airtable
+        finished: finishedFlag, // Store the finished state directly
+        republished: republishedFlag,
         author: authorName,
         photo: photoName,
         photoCredit: null, // Not available in new schema
-        status: fields.Finished ? "published" : "draft",
+        // Explicitly set publishedAt to null if not finished (draft), unless we're handling the unpublish logic separately
+        // But crucially, if status is draft, publishedAt should likely be null or the past scheduled date
+        // However, to ensure consistency, let's keep the logic simple:
+        // Finished=true -> status=published
+        // Finished=false -> status=draft
+        status: finishedFlag ? "published" : "draft",
         hashtags: fields.Hashtags || "",
         externalId: record.id,
         source: "airtable"
       };
+
+      // Force status to "draft" if Finished is false or Republished is checked
+      if (!finishedFlag || republishedFlag) {
+        articleData.status = "draft";
+
+        // If scheduled date is in the past, clear it to prevent auto-publish
+        if (articleData.Scheduled) {
+          const scheduledDate = new Date(articleData.Scheduled);
+          const now = new Date();
+          if (!isNaN(scheduledDate.getTime()) && scheduledDate < now) {
+            console.log(`Unpublishing article ${fields.Name} (ID: ${record.id}): Clearing past scheduled date to prevent auto-republish loop`);
+            (articleData as any).Scheduled = null;
+          }
+        }
+
+        // For republished items, also clear publishedAt to avoid showing as published
+        if (republishedFlag) {
+          articleData.publishedAt = null;
+        }
+      }
 
       if (existingArticle) {
         // Update existing article
@@ -822,8 +867,9 @@ export async function pushArticleToAirtable(articleId: number, userId?: number) 
   // Prepare the data for Airtable using the central converter so link fields are included
   const fields: any = await convertToAirtableFormat(article);
 
-  // Log the converted fields to debug missing MainImageLink
-  console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
+  // Log the converted fields to debug
+  console.log(`Pushing to Airtable (ID: ${articleId}), Status: ${article.status}, Finished: ${fields.Finished}`);
+  console.log("Converted fields payload:", JSON.stringify(fields, null, 2));
 
   let response;
   let action = "create";

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
@@ -46,6 +46,19 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
   const [location] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
+  const [internalMobileOpen, setInternalMobileOpen] = useState(false);
+  const lastLocationRef = useRef(location);
+
+  const isControlled = typeof mobileOpen === "boolean" || typeof onMobileClose === "function";
+  const resolvedMobileOpen = isControlled ? !!mobileOpen : internalMobileOpen;
+  
+  const closeMobileMenu = () => {
+    if (onMobileClose) {
+      onMobileClose();
+    } else {
+      setInternalMobileOpen(false);
+    }
+  };
 
   // Define all navigation items
   const allNavItems: NavSection[] = [
@@ -146,12 +159,38 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
     // Filter out sections with no items
     .filter((section) => section.items.length > 0);
 
+  // Listen for global mobile menu events when the sidebar is uncontrolled
+  useEffect(() => {
+    if (isControlled) return;
+
+    const handleToggle = () => setInternalMobileOpen((prev) => !prev);
+    const handleOpen = () => setInternalMobileOpen(true);
+    const handleClose = () => setInternalMobileOpen(false);
+
+    window.addEventListener("mobile-menu-toggle", handleToggle);
+    window.addEventListener("mobile-menu-open", handleOpen);
+    window.addEventListener("mobile-menu-close", handleClose);
+
+    return () => {
+      window.removeEventListener("mobile-menu-toggle", handleToggle);
+      window.removeEventListener("mobile-menu-open", handleOpen);
+      window.removeEventListener("mobile-menu-close", handleClose);
+    };
+  }, [isControlled]);
+
   // Close mobile menu when route changes
   useEffect(() => {
-    if (mobileOpen && onMobileClose) {
-      onMobileClose();
+    if (!resolvedMobileOpen) {
+      lastLocationRef.current = location;
+      return;
     }
-  }, [location, mobileOpen, onMobileClose]);
+
+    // Only close when the route actually changes after opening
+    if (location !== lastLocationRef.current) {
+      lastLocationRef.current = location;
+      closeMobileMenu();
+    }
+  }, [location, resolvedMobileOpen]);
 
   return (
     <>
@@ -250,17 +289,17 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
       </aside>
 
       {/* Mobile Sidebar - Show based on mobileOpen state */}
-      {mobileOpen && (
+      {resolvedMobileOpen && (
         <div 
           className="md:hidden fixed inset-0 z-50 bg-black bg-opacity-50 touch-auto"
           role="dialog"
           aria-modal="true"
           onClick={(e) => {
             // Close the sidebar when clicking the overlay (outside the sidebar)
-            if (e.target === e.currentTarget && onMobileClose) {
+            if (e.target === e.currentTarget) {
               e.preventDefault(); // Prevent other events from firing
               e.stopPropagation(); // Stop event from bubbling up
-              onMobileClose();
+              closeMobileMenu();
               console.log("Mobile sidebar overlay clicked, closing sidebar");
             }
           }}
@@ -280,7 +319,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (onMobileClose) onMobileClose();
+                  closeMobileMenu();
                 }}
                 className="text-white hover:text-white touch-manipulation p-2"
                 type="button"
@@ -315,8 +354,8 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                                 e.stopPropagation();
                                 
                                 // On mobile, close the sidebar when a link is clicked
-                                if (mobileOpen && onMobileClose) {
-                                  onMobileClose();
+                                if (resolvedMobileOpen) {
+                                  closeMobileMenu();
                                   console.log("Mobile sidebar link clicked, closing sidebar");
                                 }
                               }}

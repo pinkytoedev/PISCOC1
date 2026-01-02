@@ -14,7 +14,6 @@ import { Article } from "@shared/schema";
 
 interface DashboardMetrics {
   totalArticles: number;
-  pendingArticles: number;
   draftArticles: number;
   publishedToday: number;
   articleGrowth: string;

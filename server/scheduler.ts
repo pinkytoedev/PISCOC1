@@ -13,12 +13,7 @@ function parseScheduledDate(article: Article): Date | null {
             if (!isNaN(d.getTime())) return d;
         }
     } catch { }
-    try {
-        if (article.publishedAt) {
-            const d = new Date(article.publishedAt as unknown as string);
-            if (!isNaN(d.getTime())) return d;
-        }
-    } catch { }
+    // Removed fallback to publishedAt to prevent auto-publishing of drafts that were previously published
     return null;
 }
 
@@ -213,17 +208,26 @@ async function checkAndPublishDueArticles(): Promise<void> {
     isRunning = true;
     const startedAt = new Date();
     try {
-        // Get drafts and pending articles to minimize scan size
+        // Get drafts to minimize scan size
         const drafts = await storage.getArticlesByStatus("draft");
-        const pending = await storage.getArticlesByStatus("pending");
-        const candidates = [...drafts, ...pending];
+        const candidates = [...drafts];
 
         if (candidates.length === 0) return;
 
         const now = new Date();
+        // Limit auto-publish to articles scheduled within the last 2 hours
+        // This prevents old drafts from being accidentally republished
+        // while allowing for a small window of system delay catch-up.
+        const cutoffTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+
         const due = candidates.filter(a => {
+        // Skip if the Republished flag is set; these are explicitly held as drafts
+        if (a.republished) return false;
+
             const when = parseScheduledDate(a);
-            return when !== null && when <= now;
+            // Rule 1: Scheduled time must be in the past (<= now)
+            // Rule 2: Scheduled time must be recent (>= cutoffTime)
+            return when !== null && when <= now && when >= cutoffTime;
         });
 
         if (due.length === 0) return;

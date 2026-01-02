@@ -52,6 +52,7 @@ export const articles = pgTable("articles", {
   date: text("date"), // Airtable Date field for creation timestamp (stored as string)
   Scheduled: text("scheduled"), // Airtable Scheduled field for publication scheduling (stored as string)
   finished: boolean("finished").default(false), // Maps to Airtable's Finished checkbox
+  republished: boolean("republished").default(false), // Tracks Airtable "Republished" checkbox to block auto-publish
   author: text("author").notNull(),
   photo: text("photo"),
   photoCredit: text("photo_credit"),
@@ -73,6 +74,8 @@ export const insertArticleSchema = createInsertSchema(articles).omit({
     z.date(),
     z.null()
   ]).optional(),
+  // Make republished optional so callers can omit it and rely on the DB default
+  republished: z.boolean().optional(),
 });
 
 // Carousel quotes table
@@ -214,6 +217,7 @@ export const articleSchema = z.object({
   date: z.string().optional(), // Airtable Date field (creation timestamp)
   Scheduled: z.string().optional(), // Airtable Scheduled field (publication date)
   finished: z.boolean().optional(), // Airtable Finished field
+  republished: z.boolean().optional(), // Airtable Republished checkbox
   author: z.string(),
   photo: z.string(),
   photoCredit: z.string().optional(),

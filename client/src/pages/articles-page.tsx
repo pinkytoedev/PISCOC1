@@ -198,9 +198,6 @@ export default function ArticlesPage() {
                     <DropdownMenuItem onClick={() => handleFilterClick("published")}>
                       Published
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleFilterClick("pending")}>
-                      Pending
-                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleFilterClick("draft")}>
                       Draft
                     </DropdownMenuItem>

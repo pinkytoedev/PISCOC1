@@ -49,6 +49,12 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
     queryKey: ['/api/articles'],
   });
 
+  // Show a distinct badge when an article is marked for republishing
+  const getDisplayStatus = (article: Article) => {
+    if (article.republished) return "republish";
+    return article.status || "draft";
+  };
+
   // Add mutation for updating article status to published
   const updateArticleStatusMutation = useMutation({
     mutationFn: async (article: { id: number, status: string }) => {
@@ -297,9 +303,23 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
 
     // Find articles that are scheduled and their publication date has passed
     const articlesToPublish = articles.filter(article => {
-      // Skip if no scheduled date is set - check Scheduled field first, then fallback to publishedAt
-      const scheduledDateTime = article.Scheduled || article.publishedAt;
+      // Skip if no scheduled date is set - check Scheduled field ONLY
+      // We removed the fallback to publishedAt to prevent re-publishing drafts
+      const scheduledDateTime = article.Scheduled;
       if (!scheduledDateTime) {
+        return false;
+      }
+
+      // Limit auto-publish to articles scheduled within the last 2 hours
+      // This prevents old drafts (e.g., from yesterday) from being accidentally republished
+      // while allowing for a small window of system delay catch-up.
+      const now = new Date();
+      const cutoffTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+      const scheduledDate = new Date(scheduledDateTime);
+      
+      // Rule 1: Scheduled time must be in the past (<= now)
+      // Rule 2: Scheduled time must be recent (>= cutoffTime)
+      if (scheduledDate > now || scheduledDate < cutoffTime) {
         return false;
       }
 
@@ -313,7 +333,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
         return false;
       }
 
-      const scheduledDate = new Date(scheduledDateTime);
+      // Check if the scheduled date has passed
       const shouldPublish = scheduledDate <= now;
 
       // Log potential articles for debugging
@@ -325,7 +345,6 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
         });
       }
 
-      // Check if the scheduled date has passed
       return shouldPublish;
     });
 
@@ -504,7 +523,7 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-1 text-muted-foreground">Status:</div>
                 <div className="col-span-2">
-                  <StatusBadge status={article.status || 'draft'} />
+                  <StatusBadge status={getDisplayStatus(article)} />
                 </div>
               </div>
 
@@ -748,7 +767,34 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-1">
-                      <StatusBadge status={article.status || 'draft'} />
+                      <StatusBadge status={getDisplayStatus(article)} />
+                      {/* Visual indicator for drafted articles that have a past publish date (republishable) */}
+                      {article.status === 'draft' && article.publishedAt && new Date(article.publishedAt) < new Date() && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="h-2 w-2 rounded-full bg-orange-400 ml-1 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Previously published (Republish available)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                      
+                      {/* Republished indicator */}
+                      {article.republished && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="h-2 w-2 rounded-full bg-blue-400 ml-1 cursor-help" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Marked for republish</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       {autoPublishingArticleId === article.id && (
                         <div className="ml-2 flex items-center text-xs text-amber-600">
                           <Loader2 className="h-3 w-3 animate-spin mr-1" />
@@ -1041,7 +1087,18 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                     </p>
                   </div>
                   <div className="flex flex-col items-end">
-                    <StatusBadge status={article.status || 'draft'} />
+                    <div className="flex items-center space-x-1">
+                      <StatusBadge status={getDisplayStatus(article)} />
+                      {/* Visual indicator for drafted articles that have a past publish date (republishable) */}
+                      {article.status === 'draft' && article.publishedAt && new Date(article.publishedAt) < new Date() && (
+                        <div className="h-1.5 w-1.5 rounded-full bg-orange-400" title="Previously published (Republish available)" />
+                      )}
+                      
+                      {/* Republished indicator */}
+                      {article.republished && (
+                        <div className="h-1.5 w-1.5 rounded-full bg-blue-400" title="Marked for republish" />
+                      )}
+                    </div>
                     {autoPublishingArticleId === article.id && (
                       <div className="flex items-center text-xs text-amber-600 mt-1">
                         <Loader2 className="h-3 w-3 animate-spin mr-1" />

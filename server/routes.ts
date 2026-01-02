@@ -331,18 +331,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const validatedData = insertArticleSchema.partial().parse(req.body);
 
-      // Check if this is a status change to "published"
-      const statusChangedToPublished = validatedData.status === 'published';
-
-      // Get the existing article before updating it, if we need to check status
-      let previousArticle = null;
-      if (statusChangedToPublished) {
-        previousArticle = await storage.getArticle(id);
-
-        if (!previousArticle) {
-          return res.status(404).json({ message: "Article not found" });
-        }
+      // Handle "Republished" flag which forces status to draft
+      const republishedFlag = req.body.republished === true || req.body.republished === "true";
+      if (republishedFlag) {
+        validatedData.status = "draft";
+        validatedData.finished = false;
+        validatedData.republished = true;
+        console.log(`Article ${parseInt(req.params.id)}: Republished flag detected, setting status to draft`);
+      } else if (req.body.republished === false || req.body.republished === "false") {
+        validatedData.republished = false;
       }
+
+      // Get the existing article before updating it to check status changes
+      const previousArticle = await storage.getArticle(id);
+
+      if (!previousArticle) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+
+      const statusChangedToPublished = validatedData.status === 'published' && previousArticle.status !== 'published';
 
       // Update the article
       const updatedArticle = await storage.updateArticle(id, validatedData);
@@ -360,13 +367,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: { article: updatedArticle }
       });
 
-      // Trigger article-published webhook if the article is published
+      // Trigger article-published webhook if the article is published OR if it was unpublished
       // This satisfies the requirement: "When an article is updated on the website, it should be sending a POST to a webhook on the website that will trigger a refresh."
-      if (updatedArticle.status === 'published') {
+      // Also handles "setting it to drafts also triggers our webhook so the live website can refresh and remove the article"
+      const wasPublished = previousArticle && previousArticle.status === 'published';
+      const isPublished = updatedArticle.status === 'published';
+      const statusChangedFromPublished = wasPublished && !isPublished;
+
+      // Also trigger if article is already a draft and being updated (e.g. from create/edit modal), 
+      // as it might have been manually set to draft from published state without the backend knowing the transition directly
+      // This covers the case: "setting the article to draft and clicking the Update Article button should also trigger the webhook"
+      
+      const forceWebhook = req.body.forceWebhook === true || req.body.forceWebhook === 'true';
+      console.log(`Webhook Check - ID: ${id}, Status: ${updatedArticle.status}, PrevStatus: ${previousArticle.status}, Force: ${forceWebhook}, ReqBodyForce: ${req.body.forceWebhook}`);
+      
+      const isDraftUpdate = updatedArticle.status === 'draft' && (previousArticle.status === 'published' || forceWebhook);
+
+      if (isPublished || statusChangedFromPublished || isDraftUpdate) {
         try {
+          console.log(`Webhook condition met for article ${id}`);
           // Push to Airtable first to ensure circular safety as requested
           try {
-            log(`Pushing published article ${id} to Airtable for circular safety`, 'airtable');
+            log(`Pushing article ${id} to Airtable for circular safety (status: ${updatedArticle.status})`, 'airtable');
             const pushResult = await pushArticleToAirtable(id, req.user?.id);
             log(`Push result: ${JSON.stringify(pushResult)}`, 'airtable');
           } catch (airtableError) {
@@ -1031,7 +1053,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/metrics", isAuthenticated, async (req, res) => {
     try {
       const allArticles = await storage.getArticles();
-      const pendingArticles = await storage.getArticlesByStatus("pending");
       const draftArticles = await storage.getArticlesByStatus("draft");
 
       // Published today
@@ -1062,7 +1083,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const metrics = {
         totalArticles,
-        pendingArticles: pendingArticles.length,
         draftArticles: draftArticles.length,
         publishedToday: publishedToday.length,
         articleGrowth: `${articleGrowth}%`,

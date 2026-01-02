@@ -21,6 +21,16 @@ export function Header({ title = "Airtable Integration", onMobileMenuToggle }: H
   const { user, logoutMutation } = useAuth();
   const [notifications] = useState<any[]>([]);
   
+  const handleMobileMenuToggle = () => {
+    if (onMobileMenuToggle) {
+      setTimeout(() => {
+        onMobileMenuToggle();
+      }, 10);
+    } else if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("mobile-menu-toggle"));
+    }
+  };
+  
   const handleLogout = () => {
     logoutMutation.mutate();
   };
@@ -35,16 +45,10 @@ export function Header({ title = "Airtable Integration", onMobileMenuToggle }: H
         <div className="flex items-center space-x-3">
           <button 
             onClick={(e) => {
-              // Use a native button instead of Button component
               e.preventDefault();
               e.stopPropagation();
               console.log("Menu button clicked");
-              // Delay handling to avoid any race conditions
-              if (onMobileMenuToggle) {
-                setTimeout(() => {
-                  onMobileMenuToggle();
-                }, 10);
-              }
+              handleMobileMenuToggle();
             }} 
             className="md:hidden mr-2 touch-manipulation p-3 bg-primary hover:bg-primary/80 active:bg-primary/90 text-white rounded-md"
             aria-label="Toggle mobile menu"

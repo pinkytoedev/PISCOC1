@@ -55,6 +55,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     hashtags: "",
     date: "", // Airtable Date field
     finished: false, // Airtable Finished checkbox
+    republished: false,
   };
 
   const [formData, setFormData] = useState<Partial<InsertArticle>>(
@@ -542,15 +543,66 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       submissionData.Scheduled = submissionData.publishedAt.toISOString();
     }
 
+    // Handle unpublishing - clear Scheduled date to prevent auto-republish
+    // We check if status is NOT published, and if so, we nullify the Scheduled field
+    // This breaks the loop where the auto-publisher sees a past scheduled date and re-publishes the draft
+    if (submissionData.status !== "published") {
+      // We explicitly set to null so it clears in backend/Airtable
+      submissionData.Scheduled = null as any;
+      // We keep publishedAt as is, so we retain the history of when it was originally published
+    }
+
     // Set the finished field based on status
-    submissionData.finished = submissionData.status === "published";
+    const wasPublished = isEditing && editArticle?.status === 'published';
+    const isNowPublished = submissionData.status === 'published';
+    
+    // Check if status changed from published to draft (unpublishing)
+    const isUnpublishing = wasPublished && !isNowPublished;
+    
+    // Set finished flag for database
+    submissionData.finished = isNowPublished;
+
+    // Set republished flag if we are unpublishing (moving from published to draft)
+    if (isUnpublishing) {
+        submissionData.republished = true;
+    }
 
     console.log("Submitting article with publishedAt:", submissionData.publishedAt);
     console.log("Airtable date field:", submissionData.date);
     console.log("Finished status:", submissionData.finished);
     console.log("Image URL being submitted:", submissionData.imageUrl);
+    console.log("Unpublishing event:", isUnpublishing);
     console.log("Full submission data:", submissionData);
 
+    // If unpublishing, we may need to trigger the webhook manually if the backend doesn't detect it correctly
+    // The backend route handles this via previousArticle check, but explicit logging helps debugging
+    if (isUnpublishing) {
+      console.log("Article is being unpublished (moved to draft). Webhook should be triggered by backend.");
+      // Add a flag to ensure backend knows to trigger webhook
+      (submissionData as any).forceWebhook = true;
+    }
+
+    createArticleMutation.mutate(submissionData as InsertArticle);
+  };
+
+  const handleRepublish = () => {
+    if (!editArticle?.publishedAt) return;
+    
+    const originalDate = new Date(editArticle.publishedAt);
+    
+    // Create submission data restoring the original publication status and date
+    // When republishing, we set status to published, Finished to true, and Republished to false
+    const submissionData = { 
+        ...formData,
+        status: "published",
+        finished: true,
+        republished: false,
+        publishedAt: originalDate,
+        // Restore the scheduled date to match original publication
+        Scheduled: originalDate.toISOString(), 
+        date: new Date().toISOString()
+    };
+    
     createArticleMutation.mutate(submissionData as InsertArticle);
   };
 
@@ -950,9 +1002,7 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="pending">Pending Review</SelectItem>
                   <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -962,6 +1012,25 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             <Button variant="outline" type="button" onClick={onClose}>
               Cancel
             </Button>
+            
+            {/* Republish Button - only shows for drafted articles that were previously published */}
+            {isEditing && formData.status === 'draft' && editArticle?.publishedAt && (
+                <Button 
+                    type="button" 
+                    variant="secondary"
+                    onClick={handleRepublish}
+                    className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200"
+                    disabled={createArticleMutation.isPending}
+                >
+                    {createArticleMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Republish
+                </Button>
+            )}
+
             <Button type="submit" disabled={createArticleMutation.isPending}>
               {createArticleMutation.isPending ? (
                 <>

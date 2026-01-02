@@ -163,7 +163,6 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="published">Published</SelectItem>
                 </SelectContent>
               </Select>

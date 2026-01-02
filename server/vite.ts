@@ -75,11 +75,41 @@ export function serveStatic(app: Express) {
   const distPath = path.resolve(__dirname, "public");
 
   if (!fs.existsSync(distPath)) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'C',
+        location: 'server/vite.ts:serveStatic',
+        message: 'Missing dist/public directory in production',
+        data: { distPath },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     throw new Error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`,
     );
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId: 'C',
+      location: 'server/vite.ts:serveStatic',
+      message: 'Serving static assets',
+      data: { distPath },
+      timestamp: Date.now()
+    })
+  }).catch(() => {});
+  // #endregion
   app.use(express.static(distPath));
 
   // fall through to index.html if the file doesn't exist

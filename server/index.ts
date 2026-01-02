@@ -51,7 +51,21 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'A',
+        location: 'server/index.ts:error-middleware',
+        message: 'Express error middleware triggered',
+        data: { status, message, name: err?.name, stack: err?.stack?.slice(0, 500) },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
     res.status(status).json({ message });
     throw err;
   });
