@@ -532,6 +532,372 @@ async function convertTeamMemberToAirtableFormat(member: any): Promise<Partial<A
   return airtableData;
 }
 
+// Function to sync articles from Airtable
+export async function syncArticlesFromAirtable(
+  apiKey: string,
+  baseId: string,
+  tableName: string,
+  userId?: number
+) {
+  // Fetch articles from Airtable
+  const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
+
+  console.log(`Airtable sync: Received ${response.records.length} records from Airtable`);
+
+  // Log first few records to see the data structure
+  if (response.records.length > 0) {
+    console.log("Sample Airtable record structure (first record):");
+    console.log(JSON.stringify(response.records[0], null, 2));
+
+    // Log all field names from the first record
+    if (response.records[0].fields) {
+      console.log("Available fields in Airtable records:");
+      console.log(Object.keys(response.records[0].fields));
+    }
+  }
+
+  const syncResults = {
+    created: 0,
+    updated: 0,
+    errors: 0,
+    details: [] as string[]
+  };
+
+  // Process each article
+  for (const record of response.records) {
+    try {
+      const fields = record.fields;
+
+      // Debug log - only log first 3 records to avoid spam
+      if (syncResults.created + syncResults.updated + syncResults.errors < 3) {
+        console.log(`Processing Airtable record ${record.id}, fields:`, JSON.stringify(fields));
+      }
+
+      // Create default values for all required fields
+      const defaultTitle = `Untitled Article (ID: ${record.id})`;
+      const defaultContent = "This article content is not available.";
+      const defaultDescription = "No description provided.";
+      const defaultImageUrl = "https://placehold.co/600x400?text=No+Image";
+      const defaultAuthor = "Unknown Author";
+
+      // Check if fields object is empty or has unexpected structure
+      const fieldCount = Object.keys(fields).length;
+      if (fieldCount === 0) {
+        console.warn(`Record ${record.id} has no fields!`);
+        syncResults.errors++;
+        syncResults.details.push(`Record ${record.id}: No fields found in record`);
+        continue;
+      }
+
+      // Apply defaults for missing fields and log what we're doing
+      if (!fields.Name) {
+        // Check if there might be a lowercase version or different field name
+        const possibleNameFields = ['name', 'title', 'Title', 'NAME'];
+        const foundNameField = possibleNameFields.find(f => (fields as any)[f]);
+        if (foundNameField) {
+          fields.Name = (fields as any)[foundNameField];
+          console.log(`Record ${record.id}: Using '${foundNameField}' field for Name`);
+        } else {
+          fields.Name = defaultTitle;
+          syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
+        }
+      }
+
+      if (!fields.Body) {
+        // Check for alternative field names
+        const possibleBodyFields = ['body', 'content', 'Content', 'BODY'];
+        const foundBodyField = possibleBodyFields.find(f => (fields as any)[f]);
+        if (foundBodyField) {
+          fields.Body = (fields as any)[foundBodyField];
+          console.log(`Record ${record.id}: Using '${foundBodyField}' field for Body`);
+        } else {
+          fields.Body = defaultContent;
+          syncResults.details.push(`Record ${record.id}: Missing Body, using default`);
+        }
+      }
+
+      if (!fields.Description) {
+        // Check for alternative field names
+        const possibleDescFields = ['description', 'desc', 'Desc', 'DESCRIPTION'];
+        const foundDescField = possibleDescFields.find(f => (fields as any)[f]);
+        if (foundDescField) {
+          fields.Description = (fields as any)[foundDescField];
+          console.log(`Record ${record.id}: Using '${foundDescField}' field for Description`);
+        } else {
+          fields.Description = defaultDescription;
+          syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
+        }
+      }
+
+      // Use helper function that correctly prioritizes the link fields over attachment fields
+      // Default image URL to use if no images are found
+      let imageUrl = defaultImageUrl;
+      let instagramImageUrl = "";
+
+      try {
+        // Check for MainImageLink first (preferred) then fallback to MainImage attachment
+        if (fields.MainImageLink && typeof fields.MainImageLink === 'string') {
+          imageUrl = fields.MainImageLink;
+          syncResults.details.push(`Record ${record.id}: Found MainImageLink: ${imageUrl.substring(0, 50)}...`);
+        }
+        // If no MainImageLink, try MainImage attachment
+        else if (fields.MainImage && fields.MainImage.length > 0) {
+          // Extract the URL from the attachment object
+          if (fields.MainImage[0].url) {
+            imageUrl = fields.MainImage[0].url;
+          } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.full) {
+            imageUrl = fields.MainImage[0].thumbnails.full.url;
+          } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.large) {
+            imageUrl = fields.MainImage[0].thumbnails.large.url;
+          }
+
+          syncResults.details.push(`Record ${record.id}: Found MainImage attachment: ${imageUrl.substring(0, 50)}...`);
+        }
+
+        // Check for InstaPhotoLink first (preferred) then fallback to instaPhoto attachment
+        if (fields.InstaPhotoLink && typeof fields.InstaPhotoLink === 'string') {
+          instagramImageUrl = fields.InstaPhotoLink;
+          syncResults.details.push(`Record ${record.id}: Found InstaPhotoLink: ${instagramImageUrl.substring(0, 50)}...`);
+        }
+        // If no InstaPhotoLink, try instaPhoto attachment
+        else if (fields.instaPhoto && fields.instaPhoto.length > 0) {
+          // Extract the URL from the attachment object
+          if (fields.instaPhoto[0].url) {
+            instagramImageUrl = fields.instaPhoto[0].url;
+          } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.full) {
+            instagramImageUrl = fields.instaPhoto[0].thumbnails.full.url;
+          } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.large) {
+            instagramImageUrl = fields.instaPhoto[0].thumbnails.large.url;
+          }
+
+          syncResults.details.push(`Record ${record.id}: Found instaPhoto attachment: ${instagramImageUrl.substring(0, 50)}...`);
+        }
+
+        // Use instaPhoto/InstaPhotoLink as fallback if no main image
+        if (imageUrl === defaultImageUrl && instagramImageUrl !== "") {
+          imageUrl = instagramImageUrl;
+          syncResults.details.push(`Record ${record.id}: Using Instagram image as main image fallback`);
+        }
+      } catch (error) {
+        console.error(`Error processing images for record ${record.id}:`, error);
+        syncResults.details.push(`Record ${record.id}: Error processing images, using defaults`);
+      }
+
+      // Get the author name as a string (first one if it's an array)
+      let authorName = defaultAuthor;
+      if (fields["Name (from Author)"] && fields["Name (from Author)"].length > 0) {
+        authorName = fields["Name (from Author)"][0];
+      }
+
+      // Get the photo name as a string (first one if it's an array)
+      // Default to "none" for empty values to work with the Select component
+      let photoName = "none";
+      if (fields["Name (from Photo)"] && fields["Name (from Photo)"].length > 0) {
+        photoName = fields["Name (from Photo)"][0];
+      }
+
+      // Check if article already exists
+      const existingArticle = await storage.getArticleByExternalId(record.id);
+
+      if (existingArticle) {
+        console.log(`Found existing article with external ID ${record.id}: ${existingArticle.title}`);
+      } else {
+        console.log(`No existing article found for external ID ${record.id}, will create new`);
+      }
+
+      const articleData: InsertArticle = {
+        title: fields.Name,
+        description: fields.Description || "",
+        excerpt: null, // Removed as requested
+        content: fields.Body,
+        contentFormat: "html", // Most Airtable content is rich text
+        imageUrl: imageUrl,
+        imageType: "url",
+        imagePath: null,
+        instagramImageUrl: instagramImageUrl, // Store instaPhoto URL separately
+        featured: fields.Featured ? "yes" : "no",
+        publishedAt: fields.Scheduled ? new Date(fields.Scheduled) : null,
+        date: fields.Date || "", // Store the creation timestamp from Airtable
+        Scheduled: fields.Scheduled || "", // Store the publication date from Airtable
+        finished: !!fields.Finished, // Store the finished state directly
+        author: authorName,
+        photo: photoName,
+        photoCredit: null, // Not available in new schema
+        status: fields.Finished ? "published" : "draft",
+        hashtags: fields.Hashtags || "",
+        externalId: record.id,
+        source: "airtable"
+      };
+
+      if (existingArticle) {
+        // Update existing article
+        await storage.updateArticle(existingArticle.id, articleData);
+        syncResults.updated++;
+        syncResults.details.push(`Updated article: ${fields.Name}`);
+      } else {
+        // Create new article
+        await storage.createArticle(articleData);
+        syncResults.created++;
+        syncResults.details.push(`Created article: ${fields.Name}`);
+      }
+    } catch (error) {
+      console.error("Error processing Airtable record:", error);
+      syncResults.errors++;
+      syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
+    }
+  }
+
+  // Log the activity
+  await storage.createActivityLog({
+    userId: userId,
+    action: "sync",
+    resourceType: "articles",
+    details: {
+      source: "airtable",
+      results: syncResults
+    }
+  });
+
+  // Log summary of what was synced
+  console.log("\n=== Airtable Sync Summary ===");
+  console.log(`Total records from Airtable: ${response.records.length}`);
+  console.log(`Created: ${syncResults.created}`);
+  console.log(`Updated: ${syncResults.updated}`);
+  console.log(`Errors: ${syncResults.errors}`);
+
+  // Show sample of synced data
+  if (syncResults.details.length > 0) {
+    console.log("\nFirst 5 sync actions:");
+    syncResults.details.slice(0, 5).forEach(detail => console.log(`  - ${detail}`));
+  }
+  console.log("==============================\n");
+
+  return {
+    message: `Articles synced from Airtable (${response.records.length} total records processed)`,
+    results: syncResults
+  };
+}
+
+// Function to push an article to Airtable
+export async function pushArticleToAirtable(articleId: number, userId?: number) {
+  const article = await storage.getArticle(articleId);
+
+  if (!article) {
+    throw new Error("Article not found");
+  }
+
+  // Debug log the article data
+  console.log("Article retrieved from database for push:", {
+    id: article.id,
+    title: article.title,
+    imageUrl: article.imageUrl,
+    imageType: article.imageType,
+    instagramImageUrl: article.instagramImageUrl,
+    status: article.status,
+    source: article.source
+  });
+
+  // Check if article already has an external ID (already in Airtable)
+  // If so, we'll update it instead of skipping
+  if (article.externalId) {
+    console.log(`Article ${articleId} already has external ID ${article.externalId}, will update existing record`);
+  }
+
+  const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+  const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+  const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+
+  if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+    throw new Error("Airtable settings are not fully configured");
+  }
+
+  if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+    throw new Error("Some Airtable settings are disabled");
+  }
+
+  const apiKey = apiKeySetting.value;
+  const baseId = baseIdSetting.value;
+  const tableName = tableNameSetting.value;
+
+  // Prepare the data for Airtable using the central converter so link fields are included
+  const fields: any = await convertToAirtableFormat(article);
+
+  // Log the converted fields to debug missing MainImageLink
+  console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
+
+  let response;
+  let action = "create";
+
+  if (article.externalId) {
+    // Update existing record
+    console.log(`Updating existing record ${article.externalId} in Airtable`);
+    action = "update";
+
+    response = await airtableRequest(
+      apiKey,
+      baseId,
+      tableName,
+      "PATCH",
+      {
+        records: [
+          {
+            id: article.externalId,
+            fields
+          }
+        ]
+      }
+    );
+  } else {
+    // Create a new record
+    console.log("Creating new record in Airtable");
+    console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
+
+    response = await airtableRequest(
+      apiKey,
+      baseId,
+      tableName,
+      "POST",
+      {
+        records: [
+          {
+            fields
+          }
+        ]
+      }
+    );
+  }
+
+  // Get the Airtable ID
+  const airtableId = response.records[0].id;
+
+  // Update the article with the Airtable ID and change its source
+  // Only necessary if it didn't have one or to confirm it
+  if (!article.externalId || article.source !== 'airtable') {
+    await storage.updateArticle(articleId, {
+      externalId: airtableId,
+      source: 'airtable'
+    });
+  }
+
+  // Log the activity
+  await storage.createActivityLog({
+    userId: userId,
+    action: action,
+    resourceType: "article",
+    resourceId: article.id.toString(),
+    details: {
+      service: "airtable",
+      article: article.title,
+      airtableId
+    }
+  });
+
+  return {
+    message: action === "update" ? "Article updated in Airtable successfully" : "Article pushed to Airtable successfully",
+    response
+  };
+}
+
 export function setupAirtableRoutes(app: Express) {
   // Debug endpoint to examine Airtable schema
   app.get("/api/airtable/debug-schema/:tableId", async (req, res) => {
@@ -784,254 +1150,50 @@ export function setupAirtableRoutes(app: Express) {
         return res.status(400).json({ message: "Some Airtable settings are disabled" });
       }
 
-      const apiKey = apiKeySetting.value;
-      const baseId = baseIdSetting.value;
-      const tableName = tableNameSetting.value;
+      const result = await syncArticlesFromAirtable(
+        apiKeySetting.value,
+        baseIdSetting.value,
+        tableNameSetting.value,
+        req.user?.id
+      );
 
-      // Fetch articles from Airtable
-      const response = await airtableRequest(apiKey, baseId, tableName) as AirtableResponse<AirtableArticle>;
-
-      console.log(`Airtable sync: Received ${response.records.length} records from Airtable`);
-
-      // Log first few records to see the data structure
-      if (response.records.length > 0) {
-        console.log("Sample Airtable record structure (first record):");
-        console.log(JSON.stringify(response.records[0], null, 2));
-
-        // Log all field names from the first record
-        if (response.records[0].fields) {
-          console.log("Available fields in Airtable records:");
-          console.log(Object.keys(response.records[0].fields));
-        }
-      }
-
-      const syncResults = {
-        created: 0,
-        updated: 0,
-        errors: 0,
-        details: [] as string[]
-      };
-
-      // Process each article
-      for (const record of response.records) {
-        try {
-          const fields = record.fields;
-
-          // Debug log - only log first 3 records to avoid spam
-          if (syncResults.created + syncResults.updated + syncResults.errors < 3) {
-            console.log(`Processing Airtable record ${record.id}, fields:`, JSON.stringify(fields));
-          }
-
-          // Create default values for all required fields
-          const defaultTitle = `Untitled Article (ID: ${record.id})`;
-          const defaultContent = "This article content is not available.";
-          const defaultDescription = "No description provided.";
-          const defaultImageUrl = "https://placehold.co/600x400?text=No+Image";
-          const defaultAuthor = "Unknown Author";
-
-          // Check if fields object is empty or has unexpected structure
-          const fieldCount = Object.keys(fields).length;
-          if (fieldCount === 0) {
-            console.warn(`Record ${record.id} has no fields!`);
-            syncResults.errors++;
-            syncResults.details.push(`Record ${record.id}: No fields found in record`);
-            continue;
-          }
-
-          // Apply defaults for missing fields and log what we're doing
-          if (!fields.Name) {
-            // Check if there might be a lowercase version or different field name
-            const possibleNameFields = ['name', 'title', 'Title', 'NAME'];
-            const foundNameField = possibleNameFields.find(f => (fields as any)[f]);
-            if (foundNameField) {
-              fields.Name = (fields as any)[foundNameField];
-              console.log(`Record ${record.id}: Using '${foundNameField}' field for Name`);
-            } else {
-              fields.Name = defaultTitle;
-              syncResults.details.push(`Record ${record.id}: Missing Name, using default`);
-            }
-          }
-
-          if (!fields.Body) {
-            // Check for alternative field names
-            const possibleBodyFields = ['body', 'content', 'Content', 'BODY'];
-            const foundBodyField = possibleBodyFields.find(f => (fields as any)[f]);
-            if (foundBodyField) {
-              fields.Body = (fields as any)[foundBodyField];
-              console.log(`Record ${record.id}: Using '${foundBodyField}' field for Body`);
-            } else {
-              fields.Body = defaultContent;
-              syncResults.details.push(`Record ${record.id}: Missing Body, using default`);
-            }
-          }
-
-          if (!fields.Description) {
-            // Check for alternative field names
-            const possibleDescFields = ['description', 'desc', 'Desc', 'DESCRIPTION'];
-            const foundDescField = possibleDescFields.find(f => (fields as any)[f]);
-            if (foundDescField) {
-              fields.Description = (fields as any)[foundDescField];
-              console.log(`Record ${record.id}: Using '${foundDescField}' field for Description`);
-            } else {
-              fields.Description = defaultDescription;
-              syncResults.details.push(`Record ${record.id}: Missing Description, using default`);
-            }
-          }
-
-          // Use helper function that correctly prioritizes the link fields over attachment fields
-          // Default image URL to use if no images are found
-          let imageUrl = defaultImageUrl;
-          let instagramImageUrl = "";
-
-          try {
-            // Check for MainImageLink first (preferred) then fallback to MainImage attachment
-            if (fields.MainImageLink && typeof fields.MainImageLink === 'string') {
-              imageUrl = fields.MainImageLink;
-              syncResults.details.push(`Record ${record.id}: Found MainImageLink: ${imageUrl.substring(0, 50)}...`);
-            }
-            // If no MainImageLink, try MainImage attachment
-            else if (fields.MainImage && fields.MainImage.length > 0) {
-              console.log(`Record ${record.id}: MainImage attachment structure:`, JSON.stringify(fields.MainImage[0], null, 2));
-
-              // Extract the URL from the attachment object
-              if (fields.MainImage[0].url) {
-                imageUrl = fields.MainImage[0].url;
-              } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.full) {
-                imageUrl = fields.MainImage[0].thumbnails.full.url;
-              } else if (fields.MainImage[0].thumbnails && fields.MainImage[0].thumbnails.large) {
-                imageUrl = fields.MainImage[0].thumbnails.large.url;
-              }
-
-              syncResults.details.push(`Record ${record.id}: Found MainImage attachment: ${imageUrl.substring(0, 50)}...`);
-            }
-
-            // Check for InstaPhotoLink first (preferred) then fallback to instaPhoto attachment
-            if (fields.InstaPhotoLink && typeof fields.InstaPhotoLink === 'string') {
-              instagramImageUrl = fields.InstaPhotoLink;
-              syncResults.details.push(`Record ${record.id}: Found InstaPhotoLink: ${instagramImageUrl.substring(0, 50)}...`);
-            }
-            // If no InstaPhotoLink, try instaPhoto attachment
-            else if (fields.instaPhoto && fields.instaPhoto.length > 0) {
-              console.log(`Record ${record.id}: instaPhoto attachment structure:`, JSON.stringify(fields.instaPhoto[0], null, 2));
-
-              // Extract the URL from the attachment object
-              if (fields.instaPhoto[0].url) {
-                instagramImageUrl = fields.instaPhoto[0].url;
-              } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.full) {
-                instagramImageUrl = fields.instaPhoto[0].thumbnails.full.url;
-              } else if (fields.instaPhoto[0].thumbnails && fields.instaPhoto[0].thumbnails.large) {
-                instagramImageUrl = fields.instaPhoto[0].thumbnails.large.url;
-              }
-
-              syncResults.details.push(`Record ${record.id}: Found instaPhoto attachment: ${instagramImageUrl.substring(0, 50)}...`);
-            }
-
-            // Use instaPhoto/InstaPhotoLink as fallback if no main image
-            if (imageUrl === defaultImageUrl && instagramImageUrl !== "") {
-              imageUrl = instagramImageUrl;
-              syncResults.details.push(`Record ${record.id}: Using Instagram image as main image fallback`);
-            }
-          } catch (error) {
-            console.error(`Error processing images for record ${record.id}:`, error);
-            syncResults.details.push(`Record ${record.id}: Error processing images, using defaults`);
-          }
-
-          // Get the author name as a string (first one if it's an array)
-          let authorName = defaultAuthor;
-          if (fields["Name (from Author)"] && fields["Name (from Author)"].length > 0) {
-            authorName = fields["Name (from Author)"][0];
-          }
-
-          // Get the photo name as a string (first one if it's an array)
-          // Default to "none" for empty values to work with the Select component
-          let photoName = "none";
-          if (fields["Name (from Photo)"] && fields["Name (from Photo)"].length > 0) {
-            photoName = fields["Name (from Photo)"][0];
-          }
-
-          // Check if article already exists
-          const existingArticle = await storage.getArticleByExternalId(record.id);
-
-          if (existingArticle) {
-            console.log(`Found existing article with external ID ${record.id}: ${existingArticle.title}`);
-          } else {
-            console.log(`No existing article found for external ID ${record.id}, will create new`);
-          }
-
-          const articleData: InsertArticle = {
-            title: fields.Name,
-            description: fields.Description || "",
-            excerpt: null, // Removed as requested
-            content: fields.Body,
-            contentFormat: "html", // Most Airtable content is rich text
-            imageUrl: imageUrl,
-            imageType: "url",
-            imagePath: null,
-            instagramImageUrl: instagramImageUrl, // Store instaPhoto URL separately
-            featured: fields.Featured ? "yes" : "no",
-            publishedAt: fields.Scheduled ? new Date(fields.Scheduled) : null,
-            date: fields.Date || "", // Store the creation timestamp from Airtable
-            Scheduled: fields.Scheduled || "", // Store the publication date from Airtable
-            finished: !!fields.Finished, // Store the finished state directly
-            author: authorName,
-            photo: photoName,
-            photoCredit: null, // Not available in new schema
-            status: fields.Finished ? "published" : "draft",
-            hashtags: fields.Hashtags || "",
-            externalId: record.id,
-            source: "airtable"
-          };
-
-          if (existingArticle) {
-            // Update existing article
-            await storage.updateArticle(existingArticle.id, articleData);
-            syncResults.updated++;
-            syncResults.details.push(`Updated article: ${fields.Name}`);
-          } else {
-            // Create new article
-            await storage.createArticle(articleData);
-            syncResults.created++;
-            syncResults.details.push(`Created article: ${fields.Name}`);
-          }
-        } catch (error) {
-          console.error("Error processing Airtable record:", error);
-          syncResults.errors++;
-          syncResults.details.push(`Error processing record ${record.id}: ${String(error)}`);
-        }
-      }
-
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: "sync",
-        resourceType: "articles",
-        details: {
-          source: "airtable",
-          results: syncResults
-        }
-      });
-
-      // Log summary of what was synced
-      console.log("\n=== Airtable Sync Summary ===");
-      console.log(`Total records from Airtable: ${response.records.length}`);
-      console.log(`Created: ${syncResults.created}`);
-      console.log(`Updated: ${syncResults.updated}`);
-      console.log(`Errors: ${syncResults.errors}`);
-
-      // Show sample of synced data
-      if (syncResults.details.length > 0) {
-        console.log("\nFirst 5 sync actions:");
-        syncResults.details.slice(0, 5).forEach(detail => console.log(`  - ${detail}`));
-      }
-      console.log("==============================\n");
-
-      res.json({
-        message: `Articles synced from Airtable (${response.records.length} total records processed)`,
-        results: syncResults
-      });
+      res.json(result);
     } catch (error) {
       console.error("Airtable sync error:", error);
       res.status(500).json({ message: "Failed to sync articles from Airtable" });
+    }
+  });
+
+  // Webhook to trigger article sync from external CMS
+  app.post("/api/webhooks/article-published", async (req, res) => {
+    try {
+      console.log("Received article-published webhook");
+
+      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+
+      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+        console.warn("Airtable not configured, skipping sync triggered by webhook");
+        return res.status(500).json({ message: "Airtable settings are not fully configured" });
+      }
+
+      if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+        console.warn("Airtable integration disabled, skipping sync triggered by webhook");
+        return res.status(500).json({ message: "Airtable integration disabled" });
+      }
+
+      // Run sync
+      const result = await syncArticlesFromAirtable(
+        apiKeySetting.value,
+        baseIdSetting.value,
+        tableNameSetting.value
+      );
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error("Webhook sync error:", error);
+      res.status(500).json({ message: "Failed to sync articles via webhook" });
     }
   });
 
@@ -1853,138 +2015,15 @@ export function setupAirtableRoutes(app: Express) {
 
   // Push an article to Airtable
   app.post("/api/airtable/push/article/:id", async (req, res) => {
-    // Store article info for error logging
-    let articleId: number | undefined;
-    let articleDetails: { externalId?: string, title?: string } = {};
-
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      articleId = parseInt(req.params.id);
-      const article = await storage.getArticle(articleId);
+      const articleId = parseInt(req.params.id);
+      const result = await pushArticleToAirtable(articleId, req.user?.id);
 
-      if (!article) {
-        return res.status(404).json({ message: "Article not found" });
-      }
-
-      // Debug log the article data
-      console.log("Article retrieved from database for push:", {
-        id: article.id,
-        title: article.title,
-        imageUrl: article.imageUrl,
-        imageType: article.imageType,
-        instagramImageUrl: article.instagramImageUrl,
-        status: article.status,
-        source: article.source
-      });
-
-      // Save article details for error handling
-      articleDetails = {
-        externalId: article.externalId || undefined,
-        title: article.title
-      };
-
-      // Check if article already has an external ID (already in Airtable)
-      // If so, we'll update it instead of skipping
-      if (article.externalId) {
-        console.log(`Article ${articleId} already has external ID ${article.externalId}, will update existing record`);
-      }
-
-      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
-      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ message: "Airtable settings are not fully configured" });
-      }
-
-      if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
-        return res.status(400).json({ message: "Some Airtable settings are disabled" });
-      }
-
-      const apiKey = apiKeySetting.value;
-      const baseId = baseIdSetting.value;
-      const tableName = tableNameSetting.value;
-
-      // Prepare the data for Airtable using the central converter so link fields are included
-      const fields: any = await convertToAirtableFormat(article);
-
-      // Log the converted fields to debug missing MainImageLink
-      console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
-
-      let response;
-      let action = "create";
-
-      if (article.externalId) {
-        // Update existing record
-        console.log(`Updating existing record ${article.externalId} in Airtable`);
-        action = "update";
-
-        response = await airtableRequest(
-          apiKey,
-          baseId,
-          tableName,
-          "PATCH",
-          {
-            records: [
-              {
-                id: article.externalId,
-                fields
-              }
-            ]
-          }
-        );
-      } else {
-        // Create a new record
-        console.log("Creating new record in Airtable");
-        console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
-
-        response = await airtableRequest(
-          apiKey,
-          baseId,
-          tableName,
-          "POST",
-          {
-            records: [
-              {
-                fields
-              }
-            ]
-          }
-        );
-      }
-
-      // Get the Airtable ID
-      const airtableId = response.records[0].id;
-
-      // Update the article with the Airtable ID and change its source
-      // Only necessary if it didn't have one or to confirm it
-      if (!article.externalId || article.source !== 'airtable') {
-        await storage.updateArticle(articleId, {
-          externalId: airtableId,
-          source: 'airtable'
-        });
-      }
-
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: action,
-        resourceType: "article",
-        resourceId: article.id.toString(),
-        details: {
-          service: "airtable",
-          article: article.title,
-          airtableId
-        }
-      });
-
-      res.json({
-        message: action === "update" ? "Article updated in Airtable successfully" : "Article pushed to Airtable successfully",
-        response
-      });
+      res.json(result);
     } catch (error) {
       console.error("Airtable push error:", error);
 
@@ -1995,23 +2034,12 @@ export function setupAirtableRoutes(app: Express) {
         const errorText = error.message;
         console.log("Detailed Airtable push error:", errorText);
 
-        if (errorText.includes("403")) {
-          errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
-          statusCode = 403;
-        } else if (errorText.includes("404")) {
-          errorMessage = "Table not found in Airtable. Please check your table name.";
+        if (errorText.includes("Article not found")) {
           statusCode = 404;
-        } else if (errorText.includes("422")) {
-          errorMessage = "Invalid data format for Airtable. Please check the field mappings.";
-          statusCode = 422;
-        } else if (errorText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-          errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
-          statusCode = 403;
-        }
-
-        // Log article details that were captured earlier
-        if (articleId !== undefined && articleDetails) {
-          console.log(`Article push failed for ID ${articleId}, title: "${articleDetails.title}", externalId: ${articleDetails.externalId || 'none'}`);
+          errorMessage = "Article not found";
+        } else if (errorText.includes("Airtable settings")) {
+          statusCode = 400;
+          errorMessage = errorText;
         }
       }
 
