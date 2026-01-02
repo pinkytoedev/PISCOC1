@@ -367,9 +367,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Push to Airtable first to ensure circular safety as requested
           try {
             log(`Pushing published article ${id} to Airtable for circular safety`, 'airtable');
-            await pushArticleToAirtable(id, req.user?.id);
+            const pushResult = await pushArticleToAirtable(id, req.user?.id);
+            log(`Push result: ${JSON.stringify(pushResult)}`, 'airtable');
           } catch (airtableError) {
             log(`Failed to push article to Airtable during update: ${airtableError}`, 'airtable');
+            if (airtableError instanceof Error) {
+                log(`Airtable error details: ${airtableError.message}\n${airtableError.stack}`, 'airtable');
+            }
             // Continue with webhook trigger even if push fails
           }
 
@@ -380,14 +384,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const webhookUrl = `${protocol}://${domain}/api/webhooks/article-published`;
           
           log(`Triggering article-published webhook at ${webhookUrl}`, 'webhook');
+          log(`Webhook payload: ${JSON.stringify({ 
+            articleId: id,
+            status: updatedArticle.status,
+            source: 'cms' 
+          })}`, 'webhook');
           
           // Fire and forget - don't await response to avoid blocking
           axios.post(webhookUrl, { 
             articleId: id,
             status: updatedArticle.status,
             source: 'cms' 
+          }).then(response => {
+            log(`Webhook triggered successfully: ${response.status}`, 'webhook');
           }).catch(err => {
             log(`Failed to trigger article-published webhook: ${err.message}`, 'webhook');
+            if (err.response) {
+                 log(`Webhook error response: ${err.response.status} ${JSON.stringify(err.response.data)}`, 'webhook');
+            }
           });
         } catch (error) {
           log(`Error setting up webhook trigger: ${error}`, 'webhook');
