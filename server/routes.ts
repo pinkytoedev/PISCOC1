@@ -4,7 +4,7 @@ import axios from "axios";
 import { unlink } from "fs/promises";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { setupAirtableRoutes, deleteAirtableRecord } from "./integrations/airtable";
+import { setupAirtableRoutes, deleteAirtableRecord, pushArticleToAirtable } from "./integrations/airtable";
 import { setupArticleReceiveEndpoint } from "./integrations/articleReceive";
 import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
@@ -364,6 +364,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // This satisfies the requirement: "When an article is updated on the website, it should be sending a POST to a webhook on the website that will trigger a refresh."
       if (updatedArticle.status === 'published') {
         try {
+          // Push to Airtable first to ensure circular safety as requested
+          try {
+            log(`Pushing published article ${id} to Airtable for circular safety`, 'airtable');
+            await pushArticleToAirtable(id, req.user?.id);
+          } catch (airtableError) {
+            log(`Failed to push article to Airtable during update: ${airtableError}`, 'airtable');
+            // Continue with webhook trigger even if push fails
+          }
+
           const protocol = req.protocol;
           const host = req.get('host');
           // Use the domain from env if available, else request host

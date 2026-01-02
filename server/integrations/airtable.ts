@@ -778,6 +778,126 @@ export async function syncArticlesFromAirtable(
   };
 }
 
+// Function to push an article to Airtable
+export async function pushArticleToAirtable(articleId: number, userId?: number) {
+  const article = await storage.getArticle(articleId);
+
+  if (!article) {
+    throw new Error("Article not found");
+  }
+
+  // Debug log the article data
+  console.log("Article retrieved from database for push:", {
+    id: article.id,
+    title: article.title,
+    imageUrl: article.imageUrl,
+    imageType: article.imageType,
+    instagramImageUrl: article.instagramImageUrl,
+    status: article.status,
+    source: article.source
+  });
+
+  // Check if article already has an external ID (already in Airtable)
+  // If so, we'll update it instead of skipping
+  if (article.externalId) {
+    console.log(`Article ${articleId} already has external ID ${article.externalId}, will update existing record`);
+  }
+
+  const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
+  const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
+  const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
+
+  if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
+    throw new Error("Airtable settings are not fully configured");
+  }
+
+  if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
+    throw new Error("Some Airtable settings are disabled");
+  }
+
+  const apiKey = apiKeySetting.value;
+  const baseId = baseIdSetting.value;
+  const tableName = tableNameSetting.value;
+
+  // Prepare the data for Airtable using the central converter so link fields are included
+  const fields: any = await convertToAirtableFormat(article);
+
+  // Log the converted fields to debug missing MainImageLink
+  console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
+
+  let response;
+  let action = "create";
+
+  if (article.externalId) {
+    // Update existing record
+    console.log(`Updating existing record ${article.externalId} in Airtable`);
+    action = "update";
+
+    response = await airtableRequest(
+      apiKey,
+      baseId,
+      tableName,
+      "PATCH",
+      {
+        records: [
+          {
+            id: article.externalId,
+            fields
+          }
+        ]
+      }
+    );
+  } else {
+    // Create a new record
+    console.log("Creating new record in Airtable");
+    console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
+
+    response = await airtableRequest(
+      apiKey,
+      baseId,
+      tableName,
+      "POST",
+      {
+        records: [
+          {
+            fields
+          }
+        ]
+      }
+    );
+  }
+
+  // Get the Airtable ID
+  const airtableId = response.records[0].id;
+
+  // Update the article with the Airtable ID and change its source
+  // Only necessary if it didn't have one or to confirm it
+  if (!article.externalId || article.source !== 'airtable') {
+    await storage.updateArticle(articleId, {
+      externalId: airtableId,
+      source: 'airtable'
+    });
+  }
+
+  // Log the activity
+  await storage.createActivityLog({
+    userId: userId,
+    action: action,
+    resourceType: "article",
+    resourceId: article.id.toString(),
+    details: {
+      service: "airtable",
+      article: article.title,
+      airtableId
+    }
+  });
+
+  return {
+    message: action === "update" ? "Article updated in Airtable successfully" : "Article pushed to Airtable successfully",
+    response
+  };
+}
+
 export function setupAirtableRoutes(app: Express) {
   // Debug endpoint to examine Airtable schema
   app.get("/api/airtable/debug-schema/:tableId", async (req, res) => {
@@ -1895,138 +2015,15 @@ export function setupAirtableRoutes(app: Express) {
 
   // Push an article to Airtable
   app.post("/api/airtable/push/article/:id", async (req, res) => {
-    // Store article info for error logging
-    let articleId: number | undefined;
-    let articleDetails: { externalId?: string, title?: string } = {};
-
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      articleId = parseInt(req.params.id);
-      const article = await storage.getArticle(articleId);
+      const articleId = parseInt(req.params.id);
+      const result = await pushArticleToAirtable(articleId, req.user?.id);
 
-      if (!article) {
-        return res.status(404).json({ message: "Article not found" });
-      }
-
-      // Debug log the article data
-      console.log("Article retrieved from database for push:", {
-        id: article.id,
-        title: article.title,
-        imageUrl: article.imageUrl,
-        imageType: article.imageType,
-        instagramImageUrl: article.instagramImageUrl,
-        status: article.status,
-        source: article.source
-      });
-
-      // Save article details for error handling
-      articleDetails = {
-        externalId: article.externalId || undefined,
-        title: article.title
-      };
-
-      // Check if article already has an external ID (already in Airtable)
-      // If so, we'll update it instead of skipping
-      if (article.externalId) {
-        console.log(`Article ${articleId} already has external ID ${article.externalId}, will update existing record`);
-      }
-
-      const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-      const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-      const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
-      if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-        return res.status(400).json({ message: "Airtable settings are not fully configured" });
-      }
-
-      if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
-        return res.status(400).json({ message: "Some Airtable settings are disabled" });
-      }
-
-      const apiKey = apiKeySetting.value;
-      const baseId = baseIdSetting.value;
-      const tableName = tableNameSetting.value;
-
-      // Prepare the data for Airtable using the central converter so link fields are included
-      const fields: any = await convertToAirtableFormat(article);
-
-      // Log the converted fields to debug missing MainImageLink
-      console.log("Converted fields from convertToAirtableFormat:", JSON.stringify(fields, null, 2));
-
-      let response;
-      let action = "create";
-
-      if (article.externalId) {
-        // Update existing record
-        console.log(`Updating existing record ${article.externalId} in Airtable`);
-        action = "update";
-
-        response = await airtableRequest(
-          apiKey,
-          baseId,
-          tableName,
-          "PATCH",
-          {
-            records: [
-              {
-                id: article.externalId,
-                fields
-              }
-            ]
-          }
-        );
-      } else {
-        // Create a new record
-        console.log("Creating new record in Airtable");
-        console.log("Final payload being sent to Airtable:", JSON.stringify(fields, null, 2));
-
-        response = await airtableRequest(
-          apiKey,
-          baseId,
-          tableName,
-          "POST",
-          {
-            records: [
-              {
-                fields
-              }
-            ]
-          }
-        );
-      }
-
-      // Get the Airtable ID
-      const airtableId = response.records[0].id;
-
-      // Update the article with the Airtable ID and change its source
-      // Only necessary if it didn't have one or to confirm it
-      if (!article.externalId || article.source !== 'airtable') {
-        await storage.updateArticle(articleId, {
-          externalId: airtableId,
-          source: 'airtable'
-        });
-      }
-
-      // Log the activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: action,
-        resourceType: "article",
-        resourceId: article.id.toString(),
-        details: {
-          service: "airtable",
-          article: article.title,
-          airtableId
-        }
-      });
-
-      res.json({
-        message: action === "update" ? "Article updated in Airtable successfully" : "Article pushed to Airtable successfully",
-        response
-      });
+      res.json(result);
     } catch (error) {
       console.error("Airtable push error:", error);
 
@@ -2037,23 +2034,12 @@ export function setupAirtableRoutes(app: Express) {
         const errorText = error.message;
         console.log("Detailed Airtable push error:", errorText);
 
-        if (errorText.includes("403")) {
-          errorMessage = "Authentication failed with Airtable. Please check your API key and permissions.";
-          statusCode = 403;
-        } else if (errorText.includes("404")) {
-          errorMessage = "Table not found in Airtable. Please check your table name.";
+        if (errorText.includes("Article not found")) {
           statusCode = 404;
-        } else if (errorText.includes("422")) {
-          errorMessage = "Invalid data format for Airtable. Please check the field mappings.";
-          statusCode = 422;
-        } else if (errorText.includes("INVALID_PERMISSIONS_OR_MODEL_NOT_FOUND")) {
-          errorMessage = "Invalid permissions or model not found in Airtable. Please check your API key permissions and that the table name is correct.";
-          statusCode = 403;
-        }
-
-        // Log article details that were captured earlier
-        if (articleId !== undefined && articleDetails) {
-          console.log(`Article push failed for ID ${articleId}, title: "${articleDetails.title}", externalId: ${articleDetails.externalId || 'none'}`);
+          errorMessage = "Article not found";
+        } else if (errorText.includes("Airtable settings")) {
+          statusCode = 400;
+          errorMessage = errorText;
         }
       }
 
