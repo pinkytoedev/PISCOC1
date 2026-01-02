@@ -380,8 +380,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const protocol = req.protocol;
           const host = req.get('host');
           // Use the domain from env if available, else request host
-          const domain = process.env.RAILWAY_PUBLIC_DOMAIN || host;
-          const webhookUrl = `${protocol}://${domain}/api/webhooks/article-published`;
+          // Prioritize PRODUCTION_WEBHOOK_URL if set, otherwise construct from domain
+          const productionWebhookUrl = process.env.PRODUCTION_WEBHOOK_URL;
+          let webhookUrl;
+          
+          if (productionWebhookUrl) {
+            webhookUrl = productionWebhookUrl;
+          } else {
+            const domain = process.env.RAILWAY_PUBLIC_DOMAIN || host;
+            webhookUrl = `${protocol}://${domain}/api/webhooks/article-published`;
+          }
           
           log(`Triggering article-published webhook at ${webhookUrl}`, 'webhook');
           log(`Webhook payload: ${JSON.stringify({ 
