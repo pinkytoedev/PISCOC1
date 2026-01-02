@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import axios from "axios";
 import { unlink } from "fs/promises";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
@@ -358,6 +359,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resourceId: id.toString(),
         details: { article: updatedArticle }
       });
+
+      // Trigger article-published webhook if the article is published
+      // This satisfies the requirement: "When an article is updated on the website, it should be sending a POST to a webhook on the website that will trigger a refresh."
+      if (updatedArticle.status === 'published') {
+        try {
+          const protocol = req.protocol;
+          const host = req.get('host');
+          // Use the domain from env if available, else request host
+          const domain = process.env.RAILWAY_PUBLIC_DOMAIN || host;
+          const webhookUrl = `${protocol}://${domain}/api/webhooks/article-published`;
+          
+          log(`Triggering article-published webhook at ${webhookUrl}`, 'webhook');
+          
+          // Fire and forget - don't await response to avoid blocking
+          axios.post(webhookUrl, { 
+            articleId: id,
+            status: updatedArticle.status,
+            source: 'cms' 
+          }).catch(err => {
+            log(`Failed to trigger article-published webhook: ${err.message}`, 'webhook');
+          });
+        } catch (error) {
+          log(`Error setting up webhook trigger: ${error}`, 'webhook');
+        }
+      }
 
       // If status was changed to "published" from a different status, trigger Instagram post
       if (statusChangedToPublished &&
