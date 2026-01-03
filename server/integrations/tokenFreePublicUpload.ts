@@ -395,7 +395,9 @@ export function setupTokenFreePublicUploadRoutes(app: Express) {
           article: {
             id: article.id,
             title: article.title
-          }
+          },
+          // Include the processed HTML so the client can populate the form immediately
+          html: result?.html
         });
 
       } catch (error) {

@@ -511,7 +511,8 @@ export function setupPublicUploadRoutes(app: Express) {
         result = {
           success: true,
           message: 'HTML ZIP file processed successfully',
-          details: zipResult.message
+          details: zipResult.message,
+          html: zipResult.html
         };
       }
       

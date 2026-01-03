@@ -54,7 +54,7 @@ function getPathVariations(originalPath: string): string[] {
  * @param articleId ID of the article to update with HTML content
  * @returns Result of the operation
  */
-export async function processZipFile(filePath: string, articleId: number): Promise<{ success: boolean; message: string }> {
+export async function processZipFile(filePath: string, articleId: number): Promise<{ success: boolean; message: string; html?: string }> {
   const tempDir = path.join(process.cwd(), 'temp', `article-${articleId}-${Date.now()}`);
 
   try {
@@ -197,7 +197,9 @@ export async function processZipFile(filePath: string, articleId: number): Promi
     }
 
     const updatedArticle = await storage.updateArticle(articleId, {
-      content: finalHtmlContent
+      content: finalHtmlContent,
+      // Ensure CMS knows this is HTML content
+      contentFormat: 'html'
     });
 
     if (!updatedArticle) {
@@ -216,7 +218,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
           // Prepare Airtable update
           const updatePayload = {
             fields: {
-              content: finalHtmlContent
+              // Airtable field for the HTML body (matches public-upload behavior)
+              Body: finalHtmlContent
             }
           };
 
@@ -258,7 +261,8 @@ export async function processZipFile(filePath: string, articleId: number): Promi
 
     return {
       success: true,
-      message: `HTML content extracted and set as article content. ${Object.keys(imageMapping).length} images processed and uploaded to ImgBB.`
+      message: `HTML content extracted and set as article content. ${Object.keys(imageMapping).length} images processed and uploaded to ImgBB.`,
+      html: finalHtmlContent
     };
 
   } catch (error) {

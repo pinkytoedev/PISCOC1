@@ -9,9 +9,14 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { InsertArticle, TeamMember } from "@shared/schema";
-import { Loader2, AlertCircle, RefreshCw, Upload, Image, Camera } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCw, Upload, Image, Camera, FileArchive } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
+
+type PublicUploadState = {
+  status: "idle" | "uploading" | "success" | "error";
+  message?: string;
+};
 
 interface CreateArticleModalProps {
   isOpen: boolean;
@@ -27,10 +32,16 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
   // Refs for file inputs
   const mainImageFileInputRef = useRef<HTMLInputElement>(null);
   const instagramImageFileInputRef = useRef<HTMLInputElement>(null);
+  const publicMainImageFileInputRef = useRef<HTMLInputElement>(null);
+  const publicHtmlZipFileInputRef = useRef<HTMLInputElement>(null);
 
   // State for tracking uploads
   const [mainImageUploading, setMainImageUploading] = useState(false);
   const [instagramImageUploading, setInstagramImageUploading] = useState(false);
+  const [publicUploadStatus, setPublicUploadStatus] = useState<Record<"image" | "html-zip", PublicUploadState>>({
+    image: { status: "idle" },
+    "html-zip": { status: "idle" },
+  });
 
   // ImgBB integration status
   const [imgbbEnabled, setImgBBEnabled] = useState(false);
@@ -135,6 +146,13 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       }
 
       setFormData(formDataToUse);
+    }
+
+    if (isOpen) {
+      setPublicUploadStatus({
+        image: { status: "idle" },
+        "html-zip": { status: "idle" },
+      });
     }
   }, [isOpen, editArticle]);
 
@@ -497,6 +515,101 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
     }
   };
 
+  const handlePublicUpload = async (type: "image" | "html-zip", file: File) => {
+    if (!editArticle?.id) {
+      toast({
+        title: "Save the article first",
+        description: "Uploads require an existing article ID.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setPublicUploadStatus((prev) => ({
+      ...prev,
+      [type]: { status: "uploading", message: "Uploading..." },
+    }));
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("articleId", editArticle.id.toString());
+
+    try {
+      const response = await fetch(`/api/public-upload/${type}`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const responseText = await response.text();
+      let responseData: any = null;
+
+      if (responseText) {
+        try {
+          responseData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.warn("Unable to parse public upload response", parseError);
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(responseData?.message || response.statusText || "Upload failed");
+      }
+
+    if (type === "image" && responseData?.imageUrl) {
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: responseData.imageUrl,
+      }));
+    }
+
+    if (type === "html-zip" && responseData?.html) {
+      setFormData((prev) => ({
+        ...prev,
+        content: responseData.html,
+        contentFormat: "html",
+      }));
+    }
+
+      setPublicUploadStatus((prev) => ({
+        ...prev,
+        [type]: { status: "success", message: responseData?.message || "Upload completed successfully." },
+      }));
+
+      toast({
+        title: type === "image" ? "Main image uploaded" : "HTML ZIP uploaded",
+        description: responseData?.message || "The file was uploaded successfully.",
+      });
+    } catch (error: any) {
+      setPublicUploadStatus((prev) => ({
+        ...prev,
+        [type]: { status: "error", message: error.message || "Upload failed" },
+      }));
+
+      toast({
+        title: "Upload failed",
+        description: error.message || "There was an error uploading the file.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePublicMainImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handlePublicUpload("image", file);
+    }
+    // Allow re-selecting the same file
+    event.target.value = "";
+  };
+
+  const handlePublicHtmlZipFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handlePublicUpload("html-zip", file);
+    }
+    event.target.value = "";
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -670,6 +783,100 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
             )}
           </div>
         )}
+
+        <div className="mb-4 p-4 border border-pink-200 bg-pink-50 rounded-md">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-pink-800">Upload assets</p>
+              <p className="text-xs text-pink-700">
+                Trigger the same actions as the /public-upload page directly from here.
+              </p>
+            </div>
+            {!isEditing && (
+              <span className="text-xs text-pink-700">
+                Save the article before uploading
+              </span>
+            )}
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!isEditing || publicUploadStatus["image"].status === "uploading"}
+              onClick={() => publicMainImageFileInputRef.current?.click()}
+              className="justify-center"
+            >
+              {publicUploadStatus["image"].status === "uploading" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading main image...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Main Image
+                </>
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!isEditing || publicUploadStatus["html-zip"].status === "uploading"}
+              onClick={() => publicHtmlZipFileInputRef.current?.click()}
+              className="justify-center"
+            >
+              {publicUploadStatus["html-zip"].status === "uploading" ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading HTML ZIP...
+                </>
+              ) : (
+                <>
+                  <FileArchive className="mr-2 h-4 w-4" />
+                  Upload HTML ZIP
+                </>
+              )}
+            </Button>
+          </div>
+
+          <input
+            type="file"
+            className="hidden"
+            ref={publicMainImageFileInputRef}
+            accept="image/*"
+            onChange={handlePublicMainImageFileChange}
+          />
+          <input
+            type="file"
+            className="hidden"
+            ref={publicHtmlZipFileInputRef}
+            accept=".zip,application/zip"
+            onChange={handlePublicHtmlZipFileChange}
+          />
+
+          <div className="mt-2 space-y-1">
+            {(["image", "html-zip"] as const).map((type) => {
+              const state = publicUploadStatus[type];
+              if (state.status === "idle") return null;
+
+              const label = type === "image" ? "Main image" : "HTML ZIP";
+              const color =
+                state.status === "error"
+                  ? "text-red-600"
+                  : state.status === "success"
+                  ? "text-green-700"
+                  : "text-gray-700";
+
+              return (
+                <p key={type} className={`text-xs ${color}`}>
+                  {label}: {state.message}
+                </p>
+              );
+            })}
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
