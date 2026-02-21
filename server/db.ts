@@ -6,48 +6,28 @@ import pg from 'pg';
 const connectionString = env.DATABASE_URL;
 
 if (!connectionString) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'B',
-            location: 'server/db.ts:connection-check',
-            message: 'DATABASE_URL missing at startup',
-            data: {},
-            timestamp: Date.now()
-        })
-    }).catch(() => {});
-    // #endregion
     throw new Error("DATABASE_URL environment variable is required");
 }
 
-// Configure connection pool with serverless-friendly settings
+// Configure connection pool with Railway-friendly settings
 export const pgPool = new pg.Pool({
     connectionString,
-    // Serverless-friendly connection pool settings
-    max: 1, // Minimize connections in serverless
-    idleTimeoutMillis: 30000,
+    max: 5,
+    idleTimeoutMillis: 20000,
     connectionTimeoutMillis: 5000,
+    allowExitOnIdle: true,
     ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
-// #region agent log
-fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'B',
-        location: 'server/db.ts:pool-init',
-        message: 'Postgres pool initialized',
-        data: { ssl: env.NODE_ENV === "production" },
-        timestamp: Date.now()
-    })
-}).catch(() => {});
+// #region agent log — H1: Pool error handler (CRITICAL: prevents crash on idle connection reset)
+pgPool.on('error', (err: Error) => {
+    console.error(`[db] Pool background error (non-fatal): ${err.message}`);
+    fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/db.ts:pool-error-handler',message:'Pool idle client error caught',data:{error:err.message,code:(err as any).code},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+});
+// #endregion
+
+// #region agent log — H2/H3: Log pool creation settings
+fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/db.ts:pool-init',message:'Pool initialized',data:{max:5,idleTimeout:20000,ssl:env.NODE_ENV==="production"},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
 // #endregion
 
 export const db = drizzle(pgPool);

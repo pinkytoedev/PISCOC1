@@ -12,6 +12,18 @@ export { app };
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// #region agent log — H4: Process-level safety nets to prevent crash on unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error(`[process] Uncaught exception (kept alive): ${err.message}`, err.stack);
+  fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:uncaughtException',message:'Uncaught exception',data:{error:err.message,stack:err.stack?.slice(0,500)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error(`[process] Unhandled rejection (kept alive):`, reason);
+  fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:unhandledRejection',message:'Unhandled rejection',data:{reason:String(reason)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+});
+// #endregion
+
 // Set up enhanced static file serving with proper headers
 setupStaticServing(app);
 
