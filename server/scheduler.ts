@@ -215,18 +215,22 @@ async function checkAndPublishDueArticles(): Promise<void> {
         if (candidates.length === 0) return;
 
         const now = new Date();
-        // Limit auto-publish to articles scheduled within the last 2 hours
-        // This prevents old drafts from being accidentally republished
-        // while allowing for a small window of system delay catch-up.
-        const cutoffTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        // Limit auto-publish to articles scheduled within the last 24 hours
+        // to catch up after downtime while avoiding re-publishing old drafts.
+        const cutoffTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         const due = candidates.filter(a => {
-        // Skip if the Republished flag is set; these are explicitly held as drafts
-        if (a.republished) return false;
+            // Skip if the Republished flag is set; these are explicitly held as drafts
+            if (a.republished) return false;
+
+            // Skip if the article was previously published (publishedAt is set).
+            // Once an article has been published, only explicit user action should republish it —
+            // the scheduler should not auto-republish after a draft revert.
+            if (a.publishedAt) return false;
 
             const when = parseScheduledDate(a);
             // Rule 1: Scheduled time must be in the past (<= now)
-            // Rule 2: Scheduled time must be recent (>= cutoffTime)
+            // Rule 2: Scheduled time must be recent (<= 24 hours ago)
             return when !== null && when <= now && when >= cutoffTime;
         });
 
@@ -238,6 +242,9 @@ async function checkAndPublishDueArticles(): Promise<void> {
                 log(`Auto-publish candidate ${article.id}: ${article.title}`, "scheduler");
                 const ensured = await ensureArticleOnAirtable(article);
                 await publishArticle(ensured);
+                // Push Finished=true back to Airtable now that the article is published.
+                // Without this, the next Airtable sync would see Finished=false and revert to draft.
+                await ensureArticleOnAirtable({ ...ensured, status: "published", finished: true });
             } catch (err) {
                 log(`Error auto-publishing article ${article.id}: ${String(err)}`, "scheduler");
             }

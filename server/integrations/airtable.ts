@@ -758,17 +758,8 @@ export async function syncArticlesFromAirtable(
       if (!finishedFlag || republishedFlag) {
         articleData.status = "draft";
 
-        // If scheduled date is in the past, clear it to prevent auto-publish
-        if (articleData.Scheduled) {
-          const scheduledDate = new Date(articleData.Scheduled);
-          const now = new Date();
-          if (!isNaN(scheduledDate.getTime()) && scheduledDate < now) {
-            console.log(`Unpublishing article ${fields.Name} (ID: ${record.id}): Clearing past scheduled date to prevent auto-republish loop`);
-            (articleData as any).Scheduled = null;
-          }
-        }
-
-        // For republished items, also clear publishedAt to avoid showing as published
+        // For republished items, clear publishedAt to avoid showing as published
+        // Do NOT clear Scheduled for regular drafts — the auto-publisher needs it to publish on time
         if (republishedFlag) {
           articleData.publishedAt = null;
         }
