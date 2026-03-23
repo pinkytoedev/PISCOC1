@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { log } from "./vite";
 import { postArticleToInstagram } from "./integrations/instagram";
+import { markRecentlyPublished } from "./publishState";
 import type { Article } from "@shared/schema";
 
 let isRunning = false;
@@ -103,10 +104,12 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
 
             if (updated) {
                 log(`Article ${article.id} pushed to Airtable with id ${airtableId}`, "scheduler");
+                if (fields.Finished) markRecentlyPublished(airtableId);
                 return updated as Article;
             }
         } else {
             log(`Article ${article.id} updated in Airtable with id ${article.externalId}`, "scheduler");
+            if (fields.Finished) markRecentlyPublished(article.externalId);
             return article;
         }
     } catch (err) {
@@ -215,18 +218,27 @@ async function checkAndPublishDueArticles(): Promise<void> {
         if (candidates.length === 0) return;
 
         const now = new Date();
-        // Limit auto-publish to articles scheduled within the last 2 hours
-        // This prevents old drafts from being accidentally republished
-        // while allowing for a small window of system delay catch-up.
-        const cutoffTime = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+        // Limit auto-publish to articles scheduled within the last 24 hours
+        // to catch up after downtime while avoiding re-publishing old drafts.
+        const cutoffTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         const due = candidates.filter(a => {
-        // Skip if the Republished flag is set; these are explicitly held as drafts
-        if (a.republished) return false;
+            // Skip if the Republished flag is set; these are explicitly held as drafts
+            if (a.republished) return false;
+
+            // Skip if the article was previously published (publishedAt is set).
+            // This guards locally-edited articles: if a published article is reverted
+            // to draft via the UI, publishedAt remains set and the scheduler leaves it alone.
+            // Note: this guard does NOT apply to Airtable-synced drafts — syncArticlesFromAirtable
+            // sets publishedAt to null for all non-finished records (publishedAtValue is null when
+            // finishedFlag is false), so a previously-published article that re-enters via sync
+            // will have publishedAt === null here. The republished flag is the mechanism that
+            // protects those articles from accidental auto-publish.
+            if (a.publishedAt) return false;
 
             const when = parseScheduledDate(a);
             // Rule 1: Scheduled time must be in the past (<= now)
-            // Rule 2: Scheduled time must be recent (>= cutoffTime)
+            // Rule 2: Scheduled time must be recent (<= 24 hours ago)
             return when !== null && when <= now && when >= cutoffTime;
         });
 
@@ -238,6 +250,9 @@ async function checkAndPublishDueArticles(): Promise<void> {
                 log(`Auto-publish candidate ${article.id}: ${article.title}`, "scheduler");
                 const ensured = await ensureArticleOnAirtable(article);
                 await publishArticle(ensured);
+                // Push Finished=true back to Airtable now that the article is published.
+                // Without this, the next Airtable sync would see Finished=false and revert to draft.
+                await ensureArticleOnAirtable({ ...ensured, status: "published", finished: true });
             } catch (err) {
                 log(`Error auto-publishing article ${article.id}: ${String(err)}`, "scheduler");
             }

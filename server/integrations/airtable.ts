@@ -1,5 +1,6 @@
 import { Express, Request, Response } from "express";
 import { storage } from "../storage";
+import { isRecentlyPublished } from "../publishState";
 import { Article, InsertArticle, InsertTeamMember, InsertCarouselQuote } from "@shared/schema";
 import { upload } from "../utils/fileUpload";
 import {
@@ -754,23 +755,20 @@ export async function syncArticlesFromAirtable(
         source: "airtable"
       };
 
-      // Force status to "draft" if Finished is false or Republished is checked
+      // Force status to "draft" if Finished is false or Republished is checked.
+      // Skip the revert if the scheduler just published this record and hasn't finished
+      // writing Finished=true back to Airtable yet (publish/sync race window).
       if (!finishedFlag || republishedFlag) {
-        articleData.status = "draft";
+        if (isRecentlyPublished(record.id)) {
+          console.log(`Skipping draft-revert for ${fields.Name} (ID: ${record.id}): recently published, Airtable write still in flight`);
+        } else {
+          articleData.status = "draft";
 
-        // If scheduled date is in the past, clear it to prevent auto-publish
-        if (articleData.Scheduled) {
-          const scheduledDate = new Date(articleData.Scheduled);
-          const now = new Date();
-          if (!isNaN(scheduledDate.getTime()) && scheduledDate < now) {
-            console.log(`Unpublishing article ${fields.Name} (ID: ${record.id}): Clearing past scheduled date to prevent auto-republish loop`);
-            (articleData as any).Scheduled = null;
+          // For republished items, clear publishedAt to avoid showing as published
+          // Do NOT clear Scheduled for regular drafts — the auto-publisher needs it to publish on time
+          if (republishedFlag) {
+            articleData.publishedAt = null;
           }
-        }
-
-        // For republished items, also clear publishedAt to avoid showing as published
-        if (republishedFlag) {
-          articleData.publishedAt = null;
         }
       }
 
