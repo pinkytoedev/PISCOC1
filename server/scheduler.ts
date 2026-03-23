@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { log } from "./vite";
 import { postArticleToInstagram } from "./integrations/instagram";
+import { markRecentlyPublished } from "./publishState";
 import type { Article } from "@shared/schema";
 
 let isRunning = false;
@@ -103,10 +104,12 @@ async function ensureArticleOnAirtable(article: Article): Promise<Article> {
 
             if (updated) {
                 log(`Article ${article.id} pushed to Airtable with id ${airtableId}`, "scheduler");
+                if (fields.Finished) markRecentlyPublished(airtableId);
                 return updated as Article;
             }
         } else {
             log(`Article ${article.id} updated in Airtable with id ${article.externalId}`, "scheduler");
+            if (fields.Finished) markRecentlyPublished(article.externalId);
             return article;
         }
     } catch (err) {
@@ -224,8 +227,13 @@ async function checkAndPublishDueArticles(): Promise<void> {
             if (a.republished) return false;
 
             // Skip if the article was previously published (publishedAt is set).
-            // Once an article has been published, only explicit user action should republish it —
-            // the scheduler should not auto-republish after a draft revert.
+            // This guards locally-edited articles: if a published article is reverted
+            // to draft via the UI, publishedAt remains set and the scheduler leaves it alone.
+            // Note: this guard does NOT apply to Airtable-synced drafts — syncArticlesFromAirtable
+            // sets publishedAt to null for all non-finished records (publishedAtValue is null when
+            // finishedFlag is false), so a previously-published article that re-enters via sync
+            // will have publishedAt === null here. The republished flag is the mechanism that
+            // protects those articles from accidental auto-publish.
             if (a.publishedAt) return false;
 
             const when = parseScheduledDate(a);
