@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAirtableSync } from "@/hooks/use-airtable-sync";
 import { CarouselQuote, InsertCarouselQuote } from "@shared/schema";
 import { Plus, Edit, Trash2, Loader2, Quote, CloudUpload, RefreshCw, Upload, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,51 +78,10 @@ export default function CarouselQuotesPage() {
     },
   });
 
-  // New mutation to update quotes directly in Airtable
-  // Pull from Airtable (sync quotes from Airtable to our application)
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/airtable/sync/carousel-quotes");
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
-      const results = data?.results || { created: 0, updated: 0 };
-      toast({
-        title: "Quotes pulled from Airtable",
-        description: `Successfully synced quotes: ${results.created} created, ${results.updated} updated`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error pulling from Airtable",
-        description: error.message || "Failed to sync quotes from Airtable. Please check your connection settings.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Push all quotes to Airtable (batch update)
-  const pushMutation = useMutation({
-    mutationFn: async () => {
-      // We'll create an endpoint for this
-      const res = await apiRequest("POST", "/api/airtable/push/carousel-quotes");
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
-      toast({
-        title: "Quotes pushed to Airtable",
-        description: `Successfully pushed ${data.updated || 0} quotes to Airtable.`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error pushing to Airtable",
-        description: error.message || "Failed to push quotes to Airtable. Please check your connection settings.",
-        variant: "destructive",
-      });
-    },
+  const { syncMutation, pushMutation } = useAirtableSync({
+    resource: "carousel-quotes",
+    queryKey: "/api/carousel-quotes",
+    label: "quotes",
   });
 
   // Update a single quote in Airtable

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
@@ -6,7 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { StatusCard } from "@/components/dashboard/status-card";
 import { ArticleTable } from "@/components/dashboard/article-table";
 import { Button } from "@/components/ui/button";
-import { Newspaper, Clock, CheckCircle, ChevronRight, Upload, Loader2 } from "lucide-react";
+import { Newspaper, Clock, CheckCircle, ChevronRight, Loader2 } from "lucide-react";
 import { SiAirtable } from "react-icons/si";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -24,28 +24,12 @@ export default function Dashboard() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [pushingArticleId, setPushingArticleId] = useState<number | null>(null);
   
-  // Add a useEffect to log when mobileMenuOpen changes
-  useEffect(() => {
-    console.log(`MobileMenuOpen state changed to: ${mobileMenuOpen}`);
-  }, [mobileMenuOpen]);
-  
-  // Function to toggle the mobile menu state - simplified to always open
-  const toggleMobileMenu = () => {
-    // Instead of toggling, explicitly set to true (to open)
-    // This avoids potential race conditions with state updates
-    console.log(`Opening mobile menu: ${mobileMenuOpen} -> true`);
-    
-    // Force it to be true (open the menu) - this simplifies debugging
-    setMobileMenuOpen(true);
-  };
+  // The header button only ever opens the menu; the sidebar owns closing it.
+  const toggleMobileMenu = () => setMobileMenuOpen(true);
 
-  // Function to close the mobile menu
+  // Deferred so the click that closes the menu cannot immediately reopen it.
   const closeMobileMenu = () => {
-    console.log(`Closing mobile menu`);
-    // Using setTimeout to avoid race conditions
-    setTimeout(() => {
-      setMobileMenuOpen(false);
-    }, 50); // Slight delay for better reliability
+    setTimeout(() => setMobileMenuOpen(false), 50);
   };
   
   // Add mutation for pushing non-Airtable articles to Airtable

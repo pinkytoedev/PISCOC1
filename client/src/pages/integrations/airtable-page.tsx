@@ -10,8 +10,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { IntegrationSetting } from "@shared/schema";
 import { SiAirtable } from "react-icons/si";
+import {
+  editableValue,
+  isConfigured as settingIsConfigured,
+  isRedacted,
+  type MaybeRedactedSetting,
+} from "./redacted-setting";
 import {
   CheckCircle,
   AlertCircle,
@@ -25,6 +30,12 @@ import {
   Quote
 } from "lucide-react";
 
+const tableFields = [
+  { key: 'articles_table', label: 'Articles Table', placeholder: 'e.g. Articles or tblArticles123' },
+  { key: 'team_members_table', label: 'Team Members Table', placeholder: 'e.g. Team Members or tblTeam123' },
+  { key: 'quotes_table', label: 'Carousel Quotes Table', placeholder: 'e.g. Quotes or tblQuotes123' },
+] as const;
+
 export default function AirtablePage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("settings");
@@ -35,8 +46,11 @@ export default function AirtablePage() {
     base?: { id: string; name: string; permissionLevel: string };
     error?: string;
   } | null>(null);
+  // Edits are held here until saved. Binding the inputs straight to the query
+  // data used to fire a write on every keystroke, storing partial keys.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
-  const { data: settings, isLoading } = useQuery<IntegrationSetting[]>({
+  const { data: settings, isLoading } = useQuery<MaybeRedactedSetting[]>({
     queryKey: ['/api/airtable/settings'],
   });
 
@@ -83,7 +97,12 @@ export default function AirtablePage() {
       const res = await apiRequest("POST", "/api/airtable/settings", { key, value, enabled });
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, { key }) => {
+      // Drop the draft so the field falls back to what the server now reports.
+      setDrafts(prev => {
+        const { [key]: _saved, ...rest } = prev;
+        return rest;
+      });
       queryClient.invalidateQueries({ queryKey: ['/api/airtable/settings'] });
       toast({
         title: "Settings updated",
@@ -104,22 +123,14 @@ export default function AirtablePage() {
       const res = await apiRequest("POST", `/api/airtable/sync/${type}`);
       return await res.json();
     },
-        onSuccess: (data) => {
+    onSuccess: (data) => {
       const results = data?.results || { created: 0, updated: 0, errors: 0, details: [] };
       const message = data?.message || "Sync completed";
       toast({
         title: message,
         description: `${results.created} created, ${results.updated} updated, ${results.errors} errors.`,
+        variant: results.errors > 0 ? "destructive" : undefined,
       });
-      
-      if (results.errors > 0) {
-        console.error("Sync errors:", results.details);
-      }
-      
-      // Log details for debugging
-      if (results.details && results.details.length > 0) {
-        console.log("Sync details:", results.details);
-      }
     },
     onError: (error) => {
       toast({
@@ -151,23 +162,36 @@ export default function AirtablePage() {
     },
   });
 
-  const getSettingValue = (key: string): string => {
-    const setting = settings?.find(s => s.key === key);
-    return setting?.value || "";
+  const getSetting = (key: string): MaybeRedactedSetting | undefined =>
+    settings?.find(s => s.key === key);
+
+  /** What the input shows: the pending edit, else the value we may safely echo. */
+  const getDraft = (key: string): string =>
+    drafts[key] ?? editableValue(getSetting(key));
+
+  const getSettingEnabled = (key: string): boolean => getSetting(key)?.enabled ?? true;
+
+  const handleDraftChange = (key: string, value: string) => {
+    setDrafts(prev => ({ ...prev, [key]: value }));
   };
 
-  const getSettingEnabled = (key: string): boolean => {
-    const setting = settings?.find(s => s.key === key);
-    return setting?.enabled ?? true;
+  const handleSave = (key: string) => {
+    const value = getDraft(key);
+    if (!value) return;
+    updateSettingMutation.mutate({ key, value, enabled: getSettingEnabled(key) });
   };
 
-  const handleSettingChange = (key: string, value: string) => {
-    updateSettingMutation.mutate({ key, value });
-  };
+  /**
+   * The save endpoint requires a value, so flipping `enabled` means resending
+   * one. For a masked secret we do not have the real value — resending what the
+   * server gave us would overwrite the credential with bullet characters.
+   */
+  const canToggleEnabled = (key: string): boolean =>
+    !isRedacted(getSetting(key)) || Boolean(drafts[key]);
 
   const handleToggleEnabled = (key: string, enabled: boolean) => {
-    const value = getSettingValue(key);
-    updateSettingMutation.mutate({ key, value, enabled });
+    if (!canToggleEnabled(key)) return;
+    updateSettingMutation.mutate({ key, value: getDraft(key), enabled });
   };
 
   const handleSync = (type: string) => {
@@ -175,8 +199,8 @@ export default function AirtablePage() {
   };
 
   // Check if core settings are configured
-  const hasApiKey = !!getSettingValue('api_key');
-  const hasBaseId = !!getSettingValue('base_id');
+  const hasApiKey = settingIsConfigured(getSetting('api_key'));
+  const hasBaseId = settingIsConfigured(getSetting('base_id'));
   const hasBasicConfig = hasApiKey && hasBaseId;
 
   // Determine connection status based on test results and config
@@ -273,14 +297,27 @@ export default function AirtablePage() {
                             <Input
                               id="api_key"
                               type="password"
-                              placeholder="Your Airtable API key"
-                              value={getSettingValue('api_key')}
-                              onChange={(e) => handleSettingChange('api_key', e.target.value)}
+                              placeholder={
+                                settingIsConfigured(getSetting('api_key'))
+                                  ? `Saved (${getSetting('api_key')?.value}) — type to replace`
+                                  : "Your Airtable API key"
+                              }
+                              value={getDraft('api_key')}
+                              onChange={(e) => handleDraftChange('api_key', e.target.value)}
+                              aria-describedby="api_key_help"
                               className="flex-1"
                             />
+                            <Button
+                              onClick={() => handleSave('api_key')}
+                              disabled={!drafts.api_key || updateSettingMutation.isPending}
+                            >
+                              Save
+                            </Button>
                             <div className="flex items-center space-x-2">
                               <Switch
                                 checked={getSettingEnabled('api_key')}
+                                disabled={!canToggleEnabled('api_key')}
+                                aria-label="Enable Airtable API key"
                                 onCheckedChange={(checked) => handleToggleEnabled('api_key', checked)}
                               />
                               <span className="text-sm text-gray-500">
@@ -289,8 +326,10 @@ export default function AirtablePage() {
                             </div>
                           </div>
                           <div className="flex justify-between items-center">
-                            <p className="text-xs text-gray-500">
-                              You can find your API key in your Airtable account settings.
+                            <p id="api_key_help" className="text-xs text-gray-500">
+                              {settingIsConfigured(getSetting('api_key'))
+                                ? "A key is stored. Only its last four characters are shown; enter a new key to replace it."
+                                : "You can find your API key in your Airtable account settings."}
                             </p>
                             <Button
                               size="sm"
@@ -321,13 +360,21 @@ export default function AirtablePage() {
                               id="base_id"
                               type="text"
                               placeholder="Your Airtable base ID"
-                              value={getSettingValue('base_id')}
-                              onChange={(e) => handleSettingChange('base_id', e.target.value)}
+                              value={getDraft('base_id')}
+                              onChange={(e) => handleDraftChange('base_id', e.target.value)}
                               className="flex-1"
                             />
+                            <Button
+                              onClick={() => handleSave('base_id')}
+                              disabled={!drafts.base_id || updateSettingMutation.isPending}
+                            >
+                              Save
+                            </Button>
                             <div className="flex items-center space-x-2">
                               <Switch
                                 checked={getSettingEnabled('base_id')}
+                                disabled={!canToggleEnabled('base_id')}
+                                aria-label="Enable Airtable base ID"
                                 onCheckedChange={(checked) => handleToggleEnabled('base_id', checked)}
                               />
                               <span className="text-sm text-gray-500">
@@ -336,7 +383,7 @@ export default function AirtablePage() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-500">
-                            The Base ID can be found in the URL of your Airtable base: airtable.com/{getSettingValue('base_id') ? 'tbl...' : '[base_id]/tbl...'}
+                            The Base ID can be found in the URL of your Airtable base: airtable.com/{hasBaseId ? 'tbl...' : '[base_id]/tbl...'}
                           </p>
                         </div>
                       </CardContent>
@@ -407,74 +454,37 @@ export default function AirtablePage() {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="articles_table">Articles Table</Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="articles_table"
-                              type="text"
-                              placeholder="e.g. Articles or tblArticles123"
-                              value={getSettingValue('articles_table')}
-                              onChange={(e) => handleSettingChange('articles_table', e.target.value)}
-                              className="flex-1"
-                            />
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={getSettingEnabled('articles_table')}
-                                onCheckedChange={(checked) => handleToggleEnabled('articles_table', checked)}
+                        {tableFields.map(({ key, label, placeholder }) => (
+                          <div className="grid gap-2" key={key}>
+                            <Label htmlFor={key}>{label}</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                id={key}
+                                type="text"
+                                placeholder={placeholder}
+                                value={getDraft(key)}
+                                onChange={(e) => handleDraftChange(key, e.target.value)}
+                                className="flex-1"
                               />
-                              <span className="text-sm text-gray-500">
-                                {getSettingEnabled('articles_table') ? 'Enabled' : 'Disabled'}
-                              </span>
+                              <Button
+                                onClick={() => handleSave(key)}
+                                disabled={!drafts[key] || updateSettingMutation.isPending}
+                              >
+                                Save
+                              </Button>
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={getSettingEnabled(key)}
+                                  aria-label={`Enable ${label}`}
+                                  onCheckedChange={(checked) => handleToggleEnabled(key, checked)}
+                                />
+                                <span className="text-sm text-gray-500">
+                                  {getSettingEnabled(key) ? 'Enabled' : 'Disabled'}
+                                </span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="team_members_table">Team Members Table</Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="team_members_table"
-                              type="text"
-                              placeholder="e.g. Team Members or tblTeam123"
-                              value={getSettingValue('team_members_table')}
-                              onChange={(e) => handleSettingChange('team_members_table', e.target.value)}
-                              className="flex-1"
-                            />
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={getSettingEnabled('team_members_table')}
-                                onCheckedChange={(checked) => handleToggleEnabled('team_members_table', checked)}
-                              />
-                              <span className="text-sm text-gray-500">
-                                {getSettingEnabled('team_members_table') ? 'Enabled' : 'Disabled'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label htmlFor="quotes_table">Carousel Quotes Table</Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="quotes_table"
-                              type="text"
-                              placeholder="e.g. Quotes or tblQuotes123"
-                              value={getSettingValue('quotes_table')}
-                              onChange={(e) => handleSettingChange('quotes_table', e.target.value)}
-                              className="flex-1"
-                            />
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={getSettingEnabled('quotes_table')}
-                                onCheckedChange={(checked) => handleToggleEnabled('quotes_table', checked)}
-                              />
-                              <span className="text-sm text-gray-500">
-                                {getSettingEnabled('quotes_table') ? 'Enabled' : 'Disabled'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                        ))}
                       </CardContent>
                     </Card>
                   </TabsContent>
@@ -528,7 +538,7 @@ export default function AirtablePage() {
                                 disabled={
                                   syncMutation.isPending ||
                                   !getSettingEnabled('articles_table') ||
-                                  !getSettingValue('articles_table')
+                                  !getSetting('articles_table')?.value
                                 }
                               >
                                 {syncMutation.isPending && syncMutation.variables === 'articles' ? (
@@ -563,7 +573,7 @@ export default function AirtablePage() {
                                 disabled={
                                   syncMutation.isPending ||
                                   !getSettingEnabled('team_members_table') ||
-                                  !getSettingValue('team_members_table')
+                                  !getSetting('team_members_table')?.value
                                 }
                               >
                                 {syncMutation.isPending && syncMutation.variables === 'team-members' ? (
@@ -598,7 +608,7 @@ export default function AirtablePage() {
                                 disabled={
                                   syncMutation.isPending ||
                                   !getSettingEnabled('quotes_table') ||
-                                  !getSettingValue('quotes_table')
+                                  !getSetting('quotes_table')?.value
                                 }
                               >
                                 {syncMutation.isPending && syncMutation.variables === 'carousel-quotes' ? (

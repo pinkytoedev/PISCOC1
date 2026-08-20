@@ -6,9 +6,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import DebugEnv from '@/components/DebugEnv';
+import { withCsrf } from '@/lib/queryClient';
 import {
   CheckCircle2,
   XCircle,
@@ -91,9 +90,8 @@ export default function InstagramPage() {
       const data = await response.json();
 
       setWebhookEvents(data);
-    } catch (err) {
-      console.error('Error fetching webhook events:', err);
-      // Don't set error here, as it would display on the main page
+    } catch {
+      // Swallowed: a webhook log failure should not take over the page
     } finally {
       setIsLoadingEvents(false);
     }
@@ -115,8 +113,7 @@ export default function InstagramPage() {
 
       setWebhooks(subscriptions);
       setWebhookFields(fields);
-    } catch (err) {
-      console.error('Error fetching webhook data:', err);
+    } catch {
       setError('Failed to load webhook data. Please try again later.');
     } finally {
       setIsLoadingWebhooks(false);
@@ -125,34 +122,24 @@ export default function InstagramPage() {
 
   // Handle Facebook login
   const handleLogin = () => {
-    console.log('Login requested, SDK initialized:', isInitialized);
-
     // Clear any previous errors
     setError(null);
 
     // Additional safety check for SDK initialization
     if (!isInitialized) {
-      const errorMsg = 'Facebook SDK is still initializing. Please wait a moment and try again.';
-      console.warn(errorMsg);
-      setError(errorMsg);
+      setError('Facebook SDK is still initializing. Please wait a moment and try again.');
       return;
     }
 
     // Additional check for window.FB availability
     if (typeof window !== 'undefined' && (!window.FB || typeof window.FB.login !== 'function')) {
-      const errorMsg = 'Facebook SDK is not properly loaded. Please refresh the page and try again.';
-      console.error(errorMsg);
-      setError(errorMsg);
+      setError('Facebook SDK is not properly loaded. Please refresh the page and try again.');
       return;
     }
 
     login(
-      () => {
-        console.log('Login successful');
-        setError(null);
-      },
+      () => setError(null),
       (error) => {
-        console.error('Login failed:', error);
         setError(typeof error === 'string' ? error : 'Facebook login failed. Please try again.');
       }
     );
@@ -160,15 +147,10 @@ export default function InstagramPage() {
 
   // Handle Facebook logout
   const handleLogout = () => {
-    console.log('Logout requested, SDK initialized:', isInitialized);
-
     // Clear any previous errors
     setError(null);
 
-    logout(() => {
-      console.log('Logout successful');
-      setError(null);
-    });
+    logout(() => setError(null));
   };
 
   // Create a new webhook subscription
@@ -179,19 +161,14 @@ export default function InstagramPage() {
     }
 
     try {
-      // Log domain information for debugging
-      console.log('Current hostname:', window.location.hostname);
-      console.log('Current origin:', window.location.origin);
-
       // For production or testing environments, we need a publicly accessible URL
       // This domain needs to be registered in your Facebook App settings
-      const baseUrl = window.location.origin;
-      console.log('Using base URL for callback:', baseUrl);
-      const callbackUrl = `${baseUrl}/api/instagram/webhooks/callback`;
+      const callbackUrl = `${window.location.origin}/api/instagram/webhooks/callback`;
 
       const response = await fetch('/api/instagram/webhooks/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withCsrf('POST', { 'Content-Type': 'application/json' }),
+        credentials: 'include',
         body: JSON.stringify({
           fields: webhookFields[fieldGroup],
           callbackUrl
@@ -202,7 +179,7 @@ export default function InstagramPage() {
       let responseData;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch {
         // If we can't parse JSON, use text
         const text = await response.text();
         responseData = { message: text || response.statusText };
@@ -223,7 +200,6 @@ export default function InstagramPage() {
       setError(null);
       fetchWebhookData();
     } catch (err) {
-      console.error('Error creating webhook subscription:', err);
       setError(err instanceof Error ? err.message : 'Failed to create webhook subscription.');
     }
   };
@@ -232,14 +208,16 @@ export default function InstagramPage() {
   const deleteWebhookSubscription = async (subscriptionId: string) => {
     try {
       const response = await fetch(`/api/instagram/webhooks/subscriptions/${subscriptionId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: withCsrf('DELETE'),
+        credentials: 'include'
       });
 
       // Try to get JSON response even for error cases
       let responseData;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch {
         // If we can't parse JSON, use text
         const text = await response.text();
         responseData = { message: text || response.statusText };
@@ -257,7 +235,6 @@ export default function InstagramPage() {
       setError(null);
       fetchWebhookData();
     } catch (err) {
-      console.error('Error deleting webhook subscription:', err);
       setError(err instanceof Error ? err.message : 'Failed to delete webhook subscription.');
     }
   };
@@ -267,9 +244,8 @@ export default function InstagramPage() {
     try {
       const response = await fetch('/api/instagram/auth/token', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: withCsrf('POST', { 'Content-Type': 'application/json' }),
+        credentials: 'include',
         body: JSON.stringify({
           accessToken: token,
           userId: user?.id,
@@ -277,10 +253,11 @@ export default function InstagramPage() {
       });
 
       if (!response.ok) {
-        console.error('Failed to store access token:', await response.text());
+        const payload = await response.json().catch(() => null);
+        setError(payload?.message || 'Connected to Facebook, but the session could not be saved.');
       }
     } catch (err) {
-      console.error('Error storing access token:', err);
+      setError(err instanceof Error ? err.message : 'Could not save the Facebook session.');
     }
   };
 
@@ -296,7 +273,7 @@ export default function InstagramPage() {
       let responseData;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch {
         // If we can't parse JSON, use text
         const text = await response.text();
         responseData = { message: text || response.statusText };
@@ -318,7 +295,6 @@ export default function InstagramPage() {
 
       setInstagramAccount(responseData);
     } catch (err) {
-      console.error('Error fetching Instagram account:', err);
       setError(err instanceof Error ? err.message : 'Failed to get Instagram account information.');
     } finally {
       setIsLoadingAccount(false);
@@ -337,7 +313,7 @@ export default function InstagramPage() {
       let responseData;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch {
         // If we can't parse JSON, use text
         const text = await response.text();
         responseData = { message: text || response.statusText };
@@ -358,7 +334,6 @@ export default function InstagramPage() {
 
       setInstagramPosts(responseData);
     } catch (err) {
-      console.error('Error fetching Instagram posts:', err);
       setError(err instanceof Error ? err.message : 'Failed to get Instagram posts.');
     } finally {
       setIsLoadingPosts(false);
@@ -378,9 +353,8 @@ export default function InstagramPage() {
     try {
       const response = await fetch('/api/instagram/media', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: withCsrf('POST', { 'Content-Type': 'application/json' }),
+        credentials: 'include',
         body: JSON.stringify({
           imageUrl: postImageUrl,
           caption: postCaption,
@@ -391,7 +365,7 @@ export default function InstagramPage() {
       let responseData;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch {
         // If we can't parse JSON, use text
         const text = await response.text();
         responseData = { message: text || response.statusText };
@@ -415,7 +389,6 @@ export default function InstagramPage() {
       fetchInstagramPosts(); // Refresh the posts list
 
     } catch (err) {
-      console.error('Error creating Instagram post:', err);
       setError(err instanceof Error ? err.message : 'Failed to create Instagram post.');
     } finally {
       setIsCreatingPost(false);
@@ -435,7 +408,7 @@ export default function InstagramPage() {
       let responseData;
       try {
         responseData = await response.json();
-      } catch (parseError) {
+      } catch {
         // If we can't parse JSON, use text
         const text = await response.text();
         responseData = { message: text || response.statusText, success: false };
@@ -452,7 +425,6 @@ export default function InstagramPage() {
       // Success!
       setWebhookTestResult(responseData);
     } catch (err) {
-      console.error('Error testing webhook connection:', err);
       setError(err instanceof Error ? err.message : 'Failed to test webhook connection.');
     } finally {
       setIsTestingWebhook(false);
@@ -992,8 +964,6 @@ export default function InstagramPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-6">
-                      {/* Debug Environment Variables */}
-                      <DebugEnv />
                       {webhookTestResult && (
                         <div className={`rounded-lg border p-4 ${webhookTestResult.success ? 'border-green-500' : 'border-red-500'}`}>
                           <h3 className="font-medium flex items-center mb-4">

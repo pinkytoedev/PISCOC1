@@ -211,16 +211,6 @@ export default function KeysPage() {
   const requiredKeysCount = apiKeys.filter(key => key.required).length;
   const configuredKeysCount = apiKeys.filter(key => key.configured).length;
 
-  // Debug logging
-  console.log('Integration API data:', integrations);
-  console.log('API Keys mapping:', apiKeys.map(key => ({
-    name: key.name,
-    configured: key.configured,
-    lookingFor: key.name === "ImgBB API" ? "imgbb" : key.name.toLowerCase()
-  })));
-  console.log('Configured count:', configuredKeysCount);
-  console.log('Total count:', apiKeys.length);
-
   return (
     <div className="flex min-h-screen w-full bg-muted/40">
       <Sidebar />
@@ -255,23 +245,16 @@ export default function KeysPage() {
                       Overview of your integration configuration
                     </CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => refetch()}
-                      disabled={isLoading}
-                      className="flex items-center gap-2"
-                    >
-                      <Code2 className="h-4 w-4" />
-                      {isLoading ? "Checking..." : "Refresh"}
-                    </Button>
-                    {/* Debug info */}
-                    <div className="text-xs text-muted-foreground flex flex-col">
-                      <div>API: {integrations?.filter(i => i.configured).length || 0}/{integrations?.length || 0}</div>
-                      <div>UI: {configuredKeysCount}/{apiKeys.length}</div>
-                    </div>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetch()}
+                    disabled={isLoading}
+                    className="flex items-center gap-2"
+                  >
+                    <Code2 className="h-4 w-4" />
+                    {isLoading ? "Checking..." : "Refresh"}
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>

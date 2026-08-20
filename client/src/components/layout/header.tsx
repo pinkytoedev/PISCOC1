@@ -47,9 +47,8 @@ export function Header({ title = "Airtable Integration", onMobileMenuToggle }: H
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              console.log("Menu button clicked");
               handleMobileMenuToggle();
-            }} 
+            }}
             className="md:hidden mr-2 touch-manipulation p-3 bg-primary hover:bg-primary/80 active:bg-primary/90 text-white rounded-md"
             aria-label="Toggle mobile menu"
             type="button"

@@ -23,7 +23,6 @@ import InstagramPage from "@/pages/integrations/instagram-page";
 
 import ImgBBPage from "@/pages/integrations/imgbb-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
-import TestPage from "@/pages/test-page";
 import ContributorUploadPage from "@/pages/contributor-upload";
 import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
@@ -59,7 +58,6 @@ function Router() {
         }}
       </Route>
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
-      <Route path="/test" component={TestPage} />
 
       {/* Contributor routes - authorized by the link, not by a session */}
       <Route path="/upload/:token" component={ContributorUploadPage} />
@@ -81,7 +79,6 @@ function App() {
     if (envAppId) {
       setFacebookAppId(envAppId);
       setIsLoading(false);
-      console.log('Facebook App ID loaded from environment:', envAppId);
     } else {
       // Fallback to server API
       fetch('/api/config/facebook')
@@ -90,13 +87,11 @@ function App() {
           if (data.status === 'success' && data.appId) {
             setFacebookAppId(data.appId);
           } else {
-            console.warn('Facebook integration not configured');
             // Use hardcoded fallback for development
             setFacebookAppId('1776254399859599');
           }
         })
-        .catch(error => {
-          console.error('Failed to fetch Facebook config:', error);
+        .catch(() => {
           // Use hardcoded fallback for development
           setFacebookAppId('1776254399859599');
         })

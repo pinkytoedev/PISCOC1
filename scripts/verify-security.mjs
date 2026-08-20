@@ -4,9 +4,9 @@
  *   npm run dev                 # in one shell
  *   npm run verify:security     # in another
  *
- * Expects BASE to be reachable and an admin account to exist with the
- * credentials below. Exits non-zero if any check fails, so it can gate a
- * deploy. Covers the specific defects this suite was written for:
+ * Seeds its own admin account, so it needs only a reachable server and
+ * DATABASE_URL. Exits non-zero if any check fails, so it can gate a deploy.
+ * Covers the specific defects this suite was written for:
  *
  *   - contributor-supplied HTML is sanitized before storage
  *   - a re-upload session survives its first asset (the multi-asset bug)
@@ -17,7 +17,12 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import crypto from 'crypto';
+import { promisify } from 'util';
 import { execSync } from 'child_process';
+import pg from 'pg';
+
+const scryptAsync = promisify(crypto.scrypt);
 
 const BASE = 'http://localhost:3999';
 let cookies = {};
@@ -61,6 +66,19 @@ function check(name, pass, detail = '') {
 }
 
 // --- setup -----------------------------------------------------------------
+
+// Seed the account these checks sign in with. Idempotent, so the suite can be
+// run repeatedly and against a freshly migrated database.
+const salt = crypto.randomBytes(16).toString('hex');
+const derived = await scryptAsync('verify-password-123', salt, 64);
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+await pool.query(
+  `INSERT INTO users (username, password, is_admin) VALUES ($1, $2, true)
+   ON CONFLICT (username) DO UPDATE SET password = EXCLUDED.password, is_admin = true`,
+  ['verifier', `${derived.toString('hex')}.${salt}`],
+);
+await pool.end();
+
 await call('GET', '/api/health');
 const login = await call('POST', '/api/login', {
   body: { username: 'verifier', password: 'verify-password-123' },

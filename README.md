@@ -133,31 +133,65 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 ## 🏗️ Project Structure
 
 ```
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Page components
-│   │   ├── hooks/          # Custom React hooks
-│   │   └── lib/            # Utility functions
-├── server/                 # Express backend
-│   ├── integrations/       # External service integrations
-│   ├── middleware/         # Express middleware
-│   ├── routes.ts           # API routes
-│   └── index.ts            # Server entry point
-├── shared/                 # Shared types and schemas
-└── dist/                   # Built application
+├── client/
+│   └── src/
+│       ├── components/
+│       │   ├── articles/   # Article table rows, cards, form fields, upload panels
+│       │   ├── dashboard/  # Composed dashboard containers
+│       │   ├── modals/     # Create / edit / view dialogs
+│       │   └── ui/         # shadcn primitives (vendored; edit with care)
+│       ├── hooks/          # Data-fetching and mutation hooks
+│       ├── pages/          # Routed pages
+│       └── lib/            # queryClient (CSRF-aware fetch helpers), utils
+├── server/
+│   ├── lib/                # Infrastructure: env, logger, errors, sanitizer,
+│   │                       # redaction, Airtable REST client. No Express, no domain.
+│   ├── middleware/         # auth, csrf, rateLimit, upload, webhookAuth
+│   ├── services/           # Domain logic, no Express:
+│   │                       #   settings   cached integration credentials
+│   │                       #   activity   audit log
+│   │                       #   articles   publication side effects
+│   │                       #   reupload   re-upload sessions
+│   │                       #   uploadTokens contributor links
+│   │                       #   siteRefresh  cache invalidation
+│   │                       #   images/    hosting + SSRF-guarded fetching
+│   ├── integrations/       # Third-party: airtable/, instagram/, imgbb,
+│   │                       # contributorUpload, directUpload, teamPublicUpload
+│   ├── routes/             # Thin Express routers, one per resource;
+│   │                       # index.ts is mount order and nothing else
+│   ├── storage.ts          # Database access
+│   └── index.ts            # Entry point
+├── shared/schema.ts        # Drizzle tables + Zod schemas, used by both sides
+├── migrations/             # Hand-applied SQL, in order
+└── scripts/                # Verification and inspection tooling
 ```
+
+Layering runs one way: `routes → services → lib`. Route handlers parse and
+respond; services own the domain rules; `lib` knows nothing about either.
 
 ## 🔧 Available Scripts
 
-- `npm run dev` - Start development server (HTTP). When using Railway env vars locally, run `railway run npm run dev`.
-- `npm run dev:https` - Start development server with HTTPS (required for Facebook Login)
-- `npm run setup:https` - Generate HTTPS certificates for local development
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run check` - Run TypeScript type checking
-- `npm run db:push` - Push database schema changes
--`npm run test:setup` - Check if you are ready to start dev session
+**Development**
+- `npm run dev` — development server (HTTP). With Railway env vars: `railway run npm run dev`.
+- `npm run dev:https` — HTTPS, required for Facebook Login
+- `npm run setup:https` — generate local certificates
+- `npm run check` — TypeScript type checking
+- `npm run db:push` — push schema changes
+
+**Build and run**
+- `npm run build` / `npm run start`
+
+**Verification** — each exits non-zero on failure, so they can gate a deploy
+- `npm run verify:guards` — asserts no route is unauthenticated unless it is on
+  an allowlist with a stated reason. Reads the live Express stack, so it cannot
+  be fooled by how the source looks.
+- `npm run verify:uploads` — file-type verification and image normalization.
+  No server or database needed.
+- `npm run verify:security` — HTML sanitization, re-upload sessions, upload-link
+  scoping and revocation, secret redaction, error shapes. Needs a running server.
+- `npm run verify:routes` — reachability and auth for every migrated route.
+  Needs a running server.
+- `npm run routes` — print all routes with their guards.
 
 
 ### 🔒 HTTPS Setup for Facebook Integration
@@ -182,9 +216,36 @@ Facebook requires HTTPS for OAuth login. To enable this in development:
 
 > **Note**: The WebSocket warnings in the console when using HTTPS are harmless and don't affect Facebook functionality. For regular development, use HTTP. Use HTTPS only when testing Facebook Login specifically.
 
-## 🔐 Authentication
+## 🔐 Authentication and security
 
-The application uses session-based authentication. Default administrator credentials are pulled securely from Airtable during first setup instead of being hard-coded in the repository.
+Session-based authentication, with four levels of access. `npm run verify:guards`
+prints the breakdown and fails if the unauthenticated surface grows.
+
+**Two environment variables gate real protections:**
+
+- `SESSION_SECRET` — **required in production; the server refuses to boot without
+  it.** Generate with `openssl rand -hex 32`.
+- `WEBHOOK_SECRET` — protects `POST /api/webhooks/article-published`, which
+  triggers a full Airtable sync. Unset leaves it open to anyone.
+
+**CSRF.** Session cookies use `SameSite=None` in production, so every
+state-changing request must echo the `csrf_token` cookie back in an
+`x-csrf-token` header. Use `apiRequest()` / `apiUpload()` from
+`client/src/lib/queryClient.ts` and this is handled; a raw `fetch` will get a 403.
+
+**Contributor uploads.** People outside the CMS submit content through a
+generated link — no account. The link is a random secret stored only as a hash,
+scoped to one article and one set of asset types. All uploaded HTML is sanitized
+before storage, and every file's real format is checked from its leading bytes.
+See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md).
+
+**Secrets** in `integration_settings` are never returned in full; the API sends a
+masked preview and a `configured` flag.
+
+### First administrator
+
+Default administrator credentials are pulled from Airtable during first setup
+instead of being hard-coded in the repository.
 
 1. Create an Airtable table (defaults to `AdminCredentials`) with a record that includes username and password fields (defaults to `Username` and `Password`).
 2. Configure environment variables so `scripts/createAdmin.js` can fetch the record:
@@ -201,7 +262,21 @@ Optionally set `VITE_DEFAULT_ADMIN_USERNAME` (to match the Airtable username) so
 See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed API endpoint documentation.
 
 ## 🔧 Database
-Uses Postgres through Railway.
+
+Postgres, through Railway in production.
+
+Migrations in `migrations/` are applied **by hand, in order** — the Drizzle
+journal only tracks `0000`, so `drizzle-kit migrate` will not apply the rest.
+Every file is written to be idempotent, so re-running one is safe:
+
+```bash
+for f in migrations/*.sql; do psql -d "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$f"; done
+```
+
+`npm run db:push` diffs `shared/schema.ts` against the database and is the usual
+path during development. Note that `0004` deletes any pre-existing upload tokens:
+they were stored in plaintext and cannot be converted to hashes without leaving
+the original secrets usable. Outstanding contributor links must be reissued.
 
 ## 🚀 Development
 

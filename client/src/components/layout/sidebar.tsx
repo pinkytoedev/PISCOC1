@@ -300,7 +300,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
               e.preventDefault(); // Prevent other events from firing
               e.stopPropagation(); // Stop event from bubbling up
               closeMobileMenu();
-              console.log("Mobile sidebar overlay clicked, closing sidebar");
             }
           }}
         >
@@ -356,7 +355,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                                 // On mobile, close the sidebar when a link is clicked
                                 if (resolvedMobileOpen) {
                                   closeMobileMenu();
-                                  console.log("Mobile sidebar link clicked, closing sidebar");
                                 }
                               }}
                             >
