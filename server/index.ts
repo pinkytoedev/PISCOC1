@@ -59,12 +59,17 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
-  const server = await registerRoutes(app);
-
-  // Central error handler. Every route reports failures by throwing, so this is
-  // the only place that decides status codes and response shape.
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+/**
+ * Central error handler.
+ *
+ * Every route reports failures by throwing, so this is the only place that
+ * decides status codes and response shape. Express identifies an error handler
+ * by its four-parameter signature and only reaches it via `next(err)` from
+ * middleware registered *before* it — so it is mounted last, after the routes,
+ * the API 404 and the static handlers.
+ */
+function errorHandler() {
+  return (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
     if (res.headersSent) return;
 
     if (err instanceof HttpError) {
@@ -106,6 +111,21 @@ app.use((req, res, next) => {
 
     // Internal details stay in the logs; the client gets a generic message.
     res.status(500).json({ message: "Internal server error" });
+  };
+}
+
+(async () => {
+  const server = await registerRoutes(app);
+
+  // Unmatched API paths must 404 as JSON.
+  //
+  // Both the Vite dev middleware and the production static handler end in a
+  // catch-all that returns index.html with a 200. Without this, a typo'd or
+  // removed endpoint answers "200 text/html" and the caller sees a JSON parse
+  // error instead of a clear 404 — which is exactly how a deleted route can
+  // look like it still exists.
+  app.use("/api", (_req, _res, next) => {
+    next(HttpError.notFound("Unknown API endpoint"));
   });
 
   if (env.isDevelopment) {
@@ -113,6 +133,9 @@ app.use((req, res, next) => {
   } else {
     serveStatic(app);
   }
+
+  // Last, so it can catch errors raised by everything above.
+  app.use(errorHandler());
 
   const listening = await startServer(server);
 
