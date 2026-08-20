@@ -122,13 +122,16 @@ export function systemRouter(): Router {
     }),
   );
 
-  router.get('/migration-progress', (_req, res) => {
+  router.get('/migration-progress', isAuthenticated, (_req, res) => {
     noStore(res);
     res.json(getMigrationProgress());
   });
 
+  // Reports which integrations are reachable and configured — useful to an
+  // operator, and a free reconnaissance map to anyone else.
   router.get(
     '/status',
+    isAuthenticated,
     asyncHandler(async (_req, res) => {
       noStore(res);
       res.json(await getAllApiStatuses());
@@ -137,6 +140,7 @@ export function systemRouter(): Router {
 
   router.get(
     '/integration-status',
+    isAuthenticated,
     asyncHandler(async (_req, res) => {
       const { statuses } = await getAllApiStatuses();
 

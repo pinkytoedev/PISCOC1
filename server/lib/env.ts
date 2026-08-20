@@ -94,6 +94,17 @@ export const env = {
    * sync, so an open endpoint is a free way to burn the API quota.
    */
   webhookSecret: process.env.WEBHOOK_SECRET,
+
+  /**
+   * Registers the Airtable diagnostic routes.
+   *
+   * They write to real Airtable records to prove the integration can write at
+   * all, which is genuinely useful when a deployment is misconfigured — and
+   * exactly why they should not be mounted by default in production. On in
+   * development, opt-in elsewhere.
+   */
+  enableDiagnosticRoutes:
+    process.env.ENABLE_DIAGNOSTIC_ROUTES === 'true' || process.env.NODE_ENV !== 'production',
 } as const;
 
 if (problems.length > 0) {

@@ -14,8 +14,10 @@
 import type { Express } from 'express';
 import { createServer, type Server } from 'http';
 
+import { env } from '../lib/env';
+import { createLogger } from '../lib/logger';
+
 import { setupAuth } from '../auth';
-import { setupArticleReceiveEndpoint } from '../integrations/articleReceive';
 import { setupAirtableRoutes } from '../integrations/airtable';
 import { setupInstagramRoutes } from '../integrations/instagramRoutes';
 import { setupImgBBRoutes } from '../integrations/imgbb';
@@ -31,6 +33,8 @@ import { adminRequestsRouter } from './adminRequests';
 import { imageAssetsRouter } from './imageAssets';
 import { integrationSettingsRouter } from './integrationSettings';
 import { publicSystemRouter, systemRouter } from './system';
+
+const log = createLogger('routes');
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health and the public pages answer before authentication is wired, so a
@@ -55,11 +59,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api', systemRouter());
 
   // Third-party integrations register their own route trees.
-  setupArticleReceiveEndpoint(app);
   setupAirtableRoutes(app);
   setupInstagramRoutes(app);
   setupImgBBRoutes(app);
-  registerAirtableTestRoutes(app);
+
+  // Diagnostics write to real Airtable records, so they are not mounted in
+  // production unless explicitly enabled.
+  if (env.enableDiagnosticRoutes) {
+    registerAirtableTestRoutes(app);
+  } else {
+    log.info('Diagnostic routes disabled (set ENABLE_DIAGNOSTIC_ROUTES=true to mount them)');
+  }
 
   return createServer(app);
 }

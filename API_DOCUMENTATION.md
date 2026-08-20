@@ -1,287 +1,280 @@
 # API Documentation
 
-This document lists all available API endpoints implemented by the server.
+Generated against the running server's router stack. To regenerate the route
+inventory:
 
-## Table of Contents
+```bash
+npm run routes          # every route with its auth guard
+npm run verify:guards   # asserts the public surface matches the allowlist
+```
 
-- [Health & Config](#health--config)
-- [Authentication & Users](#authentication--users)
-- [Team Members](#team-members)
-- [Articles](#articles)
-- [Carousel Quotes](#carousel-quotes)
-- [Admin Requests](#admin-requests)
-- [Image Assets](#image-assets)
-- [Uploads](#uploads)
-  - [Direct Upload (authenticated)](#direct-upload-authenticated)
-  - [Public Upload (token-based)](#public-upload-token-based)
-- [Airtable Integration](#airtable-integration)
-- [ImgBB Integration](#imgbb-integration)
-- [Instagram Integration](#instagram-integration)
-- [GitHub Integration](#github-integration)
-- [Integration Settings (generic)](#integration-settings-generic)
-- [Activity Logs](#activity-logs)
-- [Metrics](#metrics)
-- [Migration Progress](#migration-progress)
-- [API Status](#api-status)
+## Conventions
 
-## Health & Config
+### Authentication
 
-- GET `/api/health`
-  - Returns server health info and environment flags
-- GET `/api/config/facebook`
-  - Returns Facebook configuration status or 503 if not configured
+Session cookie, established by `POST /api/login`. Four levels of access appear
+in this document:
 
-## Authentication & Users
+| Guard | Meaning |
+|---|---|
+| **public** | No credentials. The complete list is in `scripts/verify-route-guards.mjs`, each with a reason. |
+| **auth** | Any signed-in user. |
+| **admin** | Signed-in user with `isAdmin`. Everything that reads or writes integration credentials. |
+| **token** | A contributor upload link. The secret in the URL is the whole credential; no session involved. |
+| **webhook** | Shared secret in `x-webhook-secret`, set via `WEBHOOK_SECRET`. |
 
-- POST `/api/login`
-  - Body:
-    ```json
-    {
-      "username": "string",
-      "password": "string"
-    }
-    ```
-  - Creates a session (cookie-based)
-- POST `/api/logout`
-  - Ends current session
-- GET `/api/user`
-  - Auth required: Yes
-  - Returns the authenticated user
-- POST `/api/register`
-  - Auth required: Yes (admin only)
-  - Body:
-    ```json
-    {
-      "username": "string",
-      "password": "string",
-      "isAdmin": false
-    }
-    ```
-- GET `/api/users`
-  - Auth required: Yes (admin only)
-- PUT `/api/users/:id`
-  - Auth required: Yes (admin only)
-- DELETE `/api/users/:id`
-  - Auth required: Yes (admin only)
+### CSRF
 
-## Team Members
+Session cookies are issued with `SameSite=None` in production so the CMS can be
+embedded cross-origin, which means the browser attaches them to cross-site
+requests. **Every state-changing request therefore needs a CSRF token.**
 
-- GET `/api/team-members`
-- GET `/api/team-members/:id`
-- POST `/api/team-members`
-  - Auth required: Yes
-- PUT `/api/team-members/:id`
-  - Auth required: Yes
-- DELETE `/api/team-members/:id`
-  - Auth required: Yes
+The server sets a readable `csrf_token` cookie; echo it back in the
+`x-csrf-token` header on any `POST`, `PUT`, `PATCH` or `DELETE`:
 
-## Articles
+```js
+fetch('/api/articles/1', {
+  method: 'PUT',
+  headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+  credentials: 'include',
+  body: JSON.stringify({ title: 'New title' }),
+});
+```
 
-- GET `/api/articles`
-- GET `/api/articles/:id`
-- POST `/api/articles`
-  - Auth required: Yes
-  - Body: `InsertArticle` shape (see `shared/schema.ts`); `publishedAt` can be ISO string or Date
-- PUT `/api/articles/:id`
-  - Auth required: Yes
-  - Special behavior: when status changes to `published`, server may attempt an Instagram post
-- DELETE `/api/articles/:id`
-  - Auth required: Yes
-  - If article has Airtable `externalId`, it is deleted there first when configured
-- GET `/api/articles/status/:status`
-- GET `/api/articles/featured`
+The client helpers `apiRequest()` and `apiUpload()` in
+`client/src/lib/queryClient.ts` do this for you. A request without the header
+gets `403 Missing CSRF token`.
 
-## Carousel Quotes
+Exempt: contributor upload routes (authorized by their token) and inbound
+webhooks (authorized by signature or shared secret).
 
-- GET `/api/carousel-quotes`
-- GET `/api/carousel-quotes/:id`
-- POST `/api/carousel-quotes`
-  - Auth required: Yes
-- PUT `/api/carousel-quotes/:id`
-  - Auth required: Yes
-- DELETE `/api/carousel-quotes/:id`
-  - Auth required: Yes
-- GET `/api/carousel-quotes/by-carousel/:carousel`
+### Errors
 
-## Admin Requests
+Every error is JSON:
 
-- GET `/api/admin-requests`
-  - Optional query params: `status`, `category`, `urgency`
-- GET `/api/admin-requests/:id`
-- POST `/api/admin-requests`
-  - Auth required: Yes
-  - Body:
-    ```json
-    {
-      "title": "string",
-      "description": "string",
-      "category": "Pinkytoe|PISCOC|Misc",
-      "urgency": "low|medium|high|critical"
-    }
-    ```
-- PATCH `/api/admin-requests/:id`
-  - Auth required: Yes
-  - Body: any subset of the above plus `status`
-- DELETE `/api/admin-requests/:id`
-  - Auth required: Yes
+```json
+{ "message": "Article not found" }
+```
 
-## Image Assets
+Validation failures add the offending fields:
 
-- GET `/api/image-assets`
-- GET `/api/image-assets/:id`
-- POST `/api/image-assets`
-  - Auth required: Yes
-- DELETE `/api/image-assets/:id`
-  - Auth required: Yes
+```json
+{
+  "message": "Validation error",
+  "errors": [{ "path": "title", "message": "Required" }]
+}
+```
 
-## Uploads
+| Status | Meaning |
+|---|---|
+| 400 | Malformed input, failed validation, unusable upload |
+| 401 | Not signed in, or an invalid/expired upload link |
+| 403 | Signed in but not permitted; missing or bad CSRF token |
+| 404 | No such record, or no such endpoint |
+| 409 | Conflicts with current state (duplicate username, session already open) |
+| 413 | File exceeds the configured limit |
+| 429 | Rate limited |
+| 500 | Server fault. Details are logged, never returned. |
 
-### Direct Upload (authenticated)
+An unknown path under `/api` returns `404 {"message":"Unknown API endpoint"}`
+rather than the SPA's HTML.
 
-All endpoints require an authenticated session. Use `multipart/form-data` body.
+---
 
-- POST `/api/direct-upload/image`
-  - Form fields:
-    - `file`: image file (<= 10MB)
-    - `articleId`: number
-  - Stores image via ImgBB and updates article `imageUrl`
-- POST `/api/direct-upload/instagram-image`
-  - Form fields:
-    - `file`: image file (<= 10MB)
-    - `articleId`: number
-  - Updates article `instagramImageUrl`
-- POST `/api/direct-upload/html-zip`
-  - Form fields:
-    - `file`: zip file (<= 50MB)
-    - `articleId`: number
-  - Processes HTML ZIP content for the article
+## Contributor uploads
 
-### Public Upload (token-free)
+The way someone outside the CMS submits content. No account, no password.
 
-New simplified endpoints (no authentication required):
-- GET `/api/articles/uploadable` - Get list of non-published articles available for upload
-- POST `/api/public-upload/image` (form-data: `file`, `articleId`)
-- POST `/api/public-upload/instagram-image` (form-data: `file`, `articleId`)  
-- POST `/api/public-upload/html-zip` (form-data: `file`, `articleId`)
+An editor generates a link; the contributor opens it and uploads. The link is a
+random 256-bit secret, stored only as a SHA-256 hash, scoped to one article and
+an explicit set of asset types, and usable for the whole submission until it
+expires (14 days by default, `UPLOAD_TOKEN_TTL_DAYS`).
 
-Rate limiting: 10 requests per 15 minutes per IP address.
+```
+POST /api/upload-links                          (auth)   -> { token, url, expiresAt, uploadTypes }
+GET  /api/upload-links/:articleId               (auth)   -> link metadata, never the secret
+DELETE /api/upload-links/:id                    (auth)   revoke
 
-### Public Upload (token-based) - DEPRECATED
+GET  /api/public-upload/:token                  (token)  what this link allows
+POST /api/public-upload/:token/image            (token)  multipart, field "file"
+POST /api/public-upload/:token/instagram-image  (token)  multipart, field "file"
+POST /api/public-upload/:token/html-zip         (token)  multipart, field "file"
+POST /api/public-upload/:token/complete         (token)  finish a re-upload session
+```
 
-> **⚠️ Deprecated**: The token-based upload system is deprecated. Use the token-free endpoints above instead. Token endpoints are kept for Discord bot compatibility only.
+The secret is returned exactly once, at creation. `GET /api/upload-links/:articleId`
+lists metadata only.
 
-Management (auth required):
-- POST `/api/public-upload/generate-token`
-  - Body:
-    ```json
-    {
-      "articleId": 123,
-      "uploadType": "image|instagram-image|html-zip",
-      "expirationDays": 7,
-      "maxUses": 1,
-      "name": "optional",
-      "notes": "optional"
-    }
-    ```
-- GET `/api/public-upload/tokens/:articleId`
-- DELETE `/api/public-upload/tokens/:id`
+### Uploaded files
 
-Public endpoints (no auth; require valid token):
-- POST `/api/public-upload/image/:token` (form-data: `file`)
-- POST `/api/public-upload/instagram-image/:token` (form-data: `file`)
-- POST `/api/public-upload/html-zip/:token` (form-data: `file`)
-- GET `/api/public-upload/info/:token`
+Images: JPEG, PNG, GIF, WebP, HEIC/HEIF, AVIF. 10 MB default. HEIC and AVIF are
+transcoded to JPEG, since neither the image host nor every browser handles them.
 
-## Airtable Integration
+Archives: ZIP containing HTML plus its images. 50 MB default, expanding to at
+most 200 MB across at most 500 entries and 60 images. Images are re-hosted and
+the HTML rewritten to point at them.
 
-- GET `/api/airtable/test-connection` (auth)
-- GET `/api/airtable/settings` (auth)
-- POST `/api/airtable/settings` (auth)
-- POST `/api/airtable/update-api-key` (auth)
-- POST `/api/airtable/sync/articles` (auth)
-- POST `/api/airtable/sync/team-members` (auth)
-- POST `/api/airtable/update/article/:id` (auth)
-- POST `/api/airtable/update-quote/:id` (auth)
-- POST `/api/airtable/sync/carousel-quotes` (auth)
-- POST `/api/airtable/push/carousel-quotes` (auth)
-- POST `/api/airtable/push/article/:id` (auth)
-- POST `/api/airtable/upload-image/:articleId/:fieldName` (auth)
-  - Form-data: `image` file; `fieldName` one of `MainImage|instaPhoto|MainImageLink|InstaPhotoLink`
-- POST `/api/airtable/upload-image-url/:articleId/:fieldName` (auth)
-  - Body:
-    ```json
-    {
-      "imageUrl": "https://...",
-      "filename": "name.ext"
-    }
-    ```
+**All HTML is sanitized before storage.** Scripts, iframes, event handlers and
+`javascript:` URLs are removed. The response reports `sanitized: true` when
+anything was stripped.
 
-Dev/test utilities (intended for development):
-- GET `/api/airtable/direct-test`
-- POST `/api/airtable/test-link/:articleId` (auth)
-- POST `/api/airtable/test-migration/:articleId` (auth)
-- POST `/api/airtable/migrate-to-link-fields/:articleId` (auth)
-- POST `/api/airtable/test-batch-migration` (auth)
+Every upload's real format is verified from its leading bytes, not its declared
+content type or extension.
 
-## ImgBB Integration
+---
 
-- GET `/api/imgbb/settings` (auth)
-- POST `/api/imgbb/settings/:key` (auth)
-- POST `/api/imgbb/upload-to-airtable/:articleId/:fieldName` (auth)
-  - Form-data: `image` file
-- POST `/api/imgbb/upload-url-to-airtable/:articleId/:fieldName` (auth)
-  - Body: `{ "imageUrl": "https://..." }`
+## Re-upload sessions
 
-## Instagram Integration
+Replacing the content of an article that is already live, without serving a
+half-updated version.
 
-Webhooks:
-- GET `/api/instagram/webhooks/callback` (verification)
-- POST `/api/instagram/webhooks/callback` (events)
-- POST `/api/instagram/webhooks/subscribe`
-- GET `/api/instagram/webhooks/subscriptions`
-- DELETE `/api/instagram/webhooks/subscriptions/:id`
-- GET `/api/instagram/webhooks/field-groups`
-- GET `/api/instagram/webhooks/test`
-- GET `/api/instagram/webhooks/logs`
+```
+POST /api/articles/:id/reupload           (auth)  open a session, returns an upload link
+POST /api/articles/:id/reupload/complete  (auth)  republish
+POST /api/articles/:id/reupload/cancel    (auth)  restore the previous state
+POST /api/public-upload/:token/complete   (token) contributor finishes their own session
+```
 
-Auth/config:
-- POST `/api/instagram/auth/token`
-  - Body: `{ "accessToken": "string", "userId": "string" }`
+Opening a session returns the article to draft, sets `isReuploading`, tells the
+live site to drop it, and issues one link covering every asset type. The
+auto-publisher skips articles in this state.
 
-Graph helpers:
-- GET `/api/instagram/account`
-- GET `/api/instagram/media` (optional `?limit=`)
-- GET `/api/instagram/media/:id`
-- POST `/api/instagram/media`
-  - Body: `{ "imageUrl": "https://...", "caption": "string" }`
+Assets can then be replaced in any order and any number of times. **Nothing is
+published until the session is completed explicitly** — completion republishes,
+syncs Airtable and refreshes the site cache.
 
-## GitHub Integration
+---
 
-- GET `/api/github/settings` (auth)
-- POST `/api/github/settings/:key` (auth)
-- GET `/api/github/repository` (auth)
+## Endpoints
 
-## Integration Settings (generic)
+### System
 
-- GET `/api/integration-settings/:service` (auth)
-- GET `/api/integration-settings/:service/:key` (auth)
-- POST `/api/integration-settings` (auth)
-- PUT `/api/integration-settings/:id` (auth)
-- DELETE `/api/integration-settings/:id` (auth)
+| | Endpoint | Access |
+|---|---|---|
+| GET | `/api/health` | public |
+| GET | `/api/config/facebook` | public |
+| GET | `/privacy` | public |
+| GET | `/auth/facebook/callback` | public |
+| GET | `/api/metrics` | auth |
+| GET | `/api/status` | auth |
+| GET | `/api/integration-status` | auth |
+| GET | `/api/migration-progress` | auth |
+| GET | `/api/activity-logs` | auth |
 
-## Activity Logs
+### Authentication and users
 
-- GET `/api/activity-logs` (auth)
+| | Endpoint | Access |
+|---|---|---|
+| POST | `/api/login` | public |
+| POST | `/api/logout` | public |
+| GET | `/api/user` | auth |
+| GET | `/api/users` | admin |
+| POST | `/api/register` | admin |
+| PUT | `/api/users/:id` | admin |
+| DELETE | `/api/users/:id` | admin |
 
-## Metrics
+User objects never include the password hash. `POST /api/login` is rate limited
+to 10 failed attempts per 15 minutes per IP.
 
-- GET `/api/metrics` (auth)
+### Articles
 
-## Migration Progress
+| | Endpoint | Access |
+|---|---|---|
+| GET | `/api/articles` | auth |
+| GET | `/api/articles/featured` | auth |
+| GET | `/api/articles/status/:status` | auth |
+| GET | `/api/articles/:id` | auth |
+| POST | `/api/articles` | auth |
+| PUT | `/api/articles/:id` | auth |
+| DELETE | `/api/articles/:id` | auth |
+| POST | `/api/articles/:id/assets/:assetType` | auth |
 
-- GET `/api/migration-progress`
+`:assetType` is `image`, `instagram-image` or `html-zip` — the authenticated
+equivalent of the contributor upload routes, for editors working in the
+dashboard.
 
-## API Status
+Publishing an article (via `PUT`, the scheduler, or completing a re-upload)
+pushes to Airtable, refreshes the live site, and posts to Instagram on the
+transition to published. A successful Instagram post is reported back as
+`_instagram` on the article.
 
-- GET `/api/status`
-- GET `/api/integration-status` (auth)
+### Team members, quotes, requests, assets
+
+| | Endpoint | Access |
+|---|---|---|
+| GET/POST | `/api/team-members` | auth |
+| GET/PUT/DELETE | `/api/team-members/:id` | auth |
+| POST | `/api/team-members/upload-image` | auth |
+| GET/POST | `/api/carousel-quotes` | auth |
+| GET/PUT/DELETE | `/api/carousel-quotes/:id` | auth |
+| GET | `/api/carousel-quotes/by-carousel/:carousel` | auth |
+| GET/POST | `/api/admin-requests` | auth |
+| GET/PATCH/DELETE | `/api/admin-requests/:id` | auth |
+| GET/POST | `/api/image-assets` | auth |
+| GET/DELETE | `/api/image-assets/:id` | auth |
+
+`GET /api/admin-requests` accepts one of `?status=`, `?category=` or `?urgency=`.
+
+### Integration settings
+
+| | Endpoint | Access |
+|---|---|---|
+| GET | `/api/integration-settings/:service` | admin |
+| GET | `/api/integration-settings/:service/:key` | admin |
+| POST | `/api/integration-settings` | admin |
+| PUT | `/api/integration-settings/:id` | admin |
+| DELETE | `/api/integration-settings/:id` | admin |
+
+**Secret values are always redacted**, returned as `••••1234` alongside
+`configured: true` and `redacted: true`. Never write a masked value back.
+
+### Public team profile updates
+
+Gated at runtime by the `team_upload_enabled` setting; all four return 403 when
+it is off.
+
+| | Endpoint | Access |
+|---|---|---|
+| GET | `/api/public/team-upload-status` | public |
+| GET | `/api/public/team-roles` | public |
+| GET | `/api/public/team-members-list` | public |
+| POST | `/api/public/team-member-update` | public |
+| POST | `/api/public/team-upload-status` | admin (toggles the gate) |
+
+### Airtable, ImgBB, Instagram, GitHub
+
+39 integration endpoints under `/api/airtable/*`, `/api/imgbb/*`,
+`/api/instagram/*` and `/api/github/*`. All require authentication; anything
+touching credentials requires admin. Run `npm run routes` for the current list.
+
+Two are not session-authenticated:
+
+- `GET|POST /api/instagram/webhooks/callback` — Meta calls these. The GET is the
+  hub verification challenge; the POST is verified against the raw request body
+  using `FACEBOOK_APP_SECRET`.
+- `POST /api/webhooks/article-published` — triggers a full Airtable sync.
+  Requires `x-webhook-secret` when `WEBHOOK_SECRET` is set. **Set it in
+  production**, or anyone can force repeated syncs and exhaust the Airtable
+  quota.
+
+### Diagnostics
+
+`/api/airtable/direct-test`, `/api/airtable/test-link/:articleId` and friends
+write to real Airtable records to verify the integration can write at all. They
+are admin-only, and **not mounted in production** unless
+`ENABLE_DIAGNOSTIC_ROUTES=true`.
+
+---
+
+## Rate limits
+
+| Scope | Limit |
+|---|---|
+| `POST /api/login` | 10 failed attempts / 15 min |
+| Contributor uploads | 40 / 15 min, keyed by token where present |
+| Upload link metadata | 120 / 15 min |
+| Public reads | 300 / 15 min |
+
+Counters are per-instance. Running more than one replica needs a shared store
+(`rate-limit-redis`); the limiter definitions in
+`server/middleware/rateLimit.ts` are the only place that would change.
