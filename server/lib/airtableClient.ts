@@ -7,8 +7,10 @@
  * failures were reported inconsistently. Everything now goes through here.
  */
 
-import { storage } from '../storage';
-import { log } from '../vite';
+import { getAirtableSettings } from '../services/settings';
+import { createLogger } from './logger';
+
+const log = createLogger('airtable:client');
 
 export interface AirtableConfig {
   apiKey: string;
@@ -30,20 +32,13 @@ export class AirtableNotConfiguredError extends Error {
  * integration as "skip the sync" instead of "fail the request".
  */
 export async function getAirtableConfig(): Promise<AirtableConfig | null> {
-  const [apiKey, baseId, articlesTable] = await Promise.all([
-    storage.getIntegrationSettingByKey('airtable', 'api_key'),
-    storage.getIntegrationSettingByKey('airtable', 'base_id'),
-    storage.getIntegrationSettingByKey('airtable', 'articles_table'),
-  ]);
-
-  if (!apiKey?.value || !baseId?.value || !articlesTable?.value) {
-    return null;
-  }
+  const settings = await getAirtableSettings();
+  if (!settings) return null;
 
   return {
-    apiKey: apiKey.value,
-    baseId: baseId.value,
-    articlesTable: articlesTable.value,
+    apiKey: settings.apiKey,
+    baseId: settings.baseId,
+    articlesTable: settings.articlesTable,
   };
 }
 
@@ -136,13 +131,13 @@ export async function tryUpdateRecord(
   try {
     const config = await getAirtableConfig();
     if (!config) {
-      log(`Airtable not configured; skipping ${context}`, 'airtable');
+      log.warn('Airtable not configured; skipping update', { context });
       return false;
     }
     await updateRecord(config, recordId, fields);
     return true;
   } catch (error) {
-    log(`Failed ${context}: ${error instanceof Error ? error.message : String(error)}`, 'airtable');
+    log.error('Airtable update failed', { context, error });
     return false;
   }
 }
