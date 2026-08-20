@@ -10,6 +10,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { storage } from '../storage';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
+import { isAdmin } from '../middleware/auth';
 
 // Simple in-memory rate limiting
 const uploadAttempts = new Map<string, { count: number; resetTime: number }>();
@@ -137,7 +138,7 @@ export function setupTeamPublicUploadRoutes(app: Express) {
     });
 
     // Toggle public upload status (Admin only)
-    app.post('/api/public/team-upload-status', isAuthenticated, async (req, res) => {
+    app.post('/api/public/team-upload-status', isAdmin, async (req, res) => {
         try {
             const { enabled } = req.body;
             let setting = await storage.getIntegrationSettingByKey(SERVICE_NAME, SETTING_KEY);

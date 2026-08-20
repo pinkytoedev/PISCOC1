@@ -6,6 +6,8 @@ import { Request, Response, Express } from "express";
 import axios from "axios";
 import { storage } from "../storage";
 import { log } from "../vite";
+import { redactIntegrationSetting } from '../lib/redact';
+import { isAdmin } from '../middleware/auth';
 
 // GitHub API base URL
 const GITHUB_API_BASE = "https://api.github.com";
@@ -22,7 +24,7 @@ export function setupGithubRoutes(app: Express) {
       }
       
       const settings = await storage.getIntegrationSettings('github');
-      res.json(settings);
+      res.json(settings.map(redactIntegrationSetting));
     } catch (error) {
       console.error('Error fetching GitHub settings:', error);
       res.status(500).json({ 
@@ -33,7 +35,7 @@ export function setupGithubRoutes(app: Express) {
   });
   
   // Update GitHub integration setting
-  app.post('/api/github/settings/:key', async (req: Request, res: Response) => {
+  app.post('/api/github/settings/:key', isAdmin, async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: 'Unauthorized' });

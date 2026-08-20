@@ -10,8 +10,7 @@ import { setupInstagramRoutes } from "./integrations/instagramRoutes";
 import { postArticleToInstagram } from "./integrations/instagram";
 import { setupImgBBRoutes } from "./integrations/imgbb";
 import { setupDirectUploadRoutes } from "./integrations/directUpload";
-import { setupPublicUploadRoutes } from "./integrations/publicUpload";
-import { setupTokenFreePublicUploadRoutes } from "./integrations/tokenFreePublicUpload";
+import { setupContributorUploadRoutes } from "./integrations/contributorUpload";
 import { setupTeamPublicUploadRoutes } from "./integrations/teamPublicUpload";
 import { registerAirtableTestRoutes } from "./integrations/airtableTest";
 import { getMigrationProgress } from "./utils/migrationProgress";
@@ -22,14 +21,17 @@ import { upload as teamMemberImageUpload } from "./utils/fileUpload";
 import { uploadImageToImgBB } from "./utils/imgbbUploader";
 import { insertTeamMemberSchema, insertArticleSchema, insertCarouselQuoteSchema, insertImageAssetSchema, insertIntegrationSettingSchema, insertActivityLogSchema, insertAdminRequestSchema } from "@shared/schema";
 import { ZodError } from "zod";
-
-// Middleware for validating if user is authenticated
-const isAuthenticated = (req: Request, res: Response, next: Function) => {
-  if (req.isAuthenticated()) {
-    return next();
-  }
-  res.status(401).json({ message: "Unauthorized" });
-};
+import { isAdmin, isAuthenticated } from "./middleware/auth";
+import { asyncHandler, HttpError, parseId } from "./lib/httpError";
+import { publicApiRateLimit } from "./middleware/rateLimit";
+import { notifyArticleChanged } from "./services/siteRefresh";
+import {
+  cancelReuploadSession,
+  completeReuploadSession,
+  startReuploadSession,
+} from "./services/reupload";
+import { revokeArticleTokens } from "./services/uploadTokens";
+import { redactIntegrationSetting } from "./lib/redact";
 
 // Helper function to handle validation errors
 const handleZodError = (error: ZodError) => {
@@ -41,6 +43,29 @@ const handleZodError = (error: ZodError) => {
     }))
   };
 };
+
+
+/**
+ * Sends an error response from a legacy try/catch handler.
+ *
+ * Express 4 does not forward rejections from async handlers, so these routes
+ * catch locally. Without this, an intentional HttpError (a 400 from `parseId`,
+ * a 404 from a missing row) was flattened into a 500 by the catch block that
+ * was only meant to cover unexpected failures.
+ */
+function sendError(res: Response, error: unknown, fallbackMessage: string) {
+  if (error instanceof HttpError) {
+    return res.status(error.status).json({
+      message: error.message,
+      ...(error.details ? { details: error.details } : {}),
+    });
+  }
+  if (error instanceof ZodError) {
+    return res.status(400).json(handleZodError(error));
+  }
+  console.error(`[routes] ${fallbackMessage}:`, error);
+  return res.status(500).json({ message: fallbackMessage });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint
@@ -60,11 +85,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set up direct upload routes
   setupDirectUploadRoutes(app);
 
-  // Set up public upload routes
-  setupPublicUploadRoutes(app);
-
-  // Set up new token-free public upload routes
-  setupTokenFreePublicUploadRoutes(app);
+  // Contributor upload links and editor asset uploads
+  setupContributorUploadRoutes(app);
 
   // Set up team public upload routes
   setupTeamPublicUploadRoutes(app);
@@ -77,18 +99,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Config routes are defined later with the actual App ID
 
   // Team member routes
-  app.get("/api/team-members", async (req, res) => {
+  app.get("/api/team-members", isAuthenticated, async (req, res) => {
     try {
       const teamMembers = await storage.getTeamMembers();
       res.json(teamMembers);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch team members" });
+      sendError(res, error, "Failed to fetch team members");
     }
   });
 
-  app.get("/api/team-members/:id", async (req, res) => {
+  app.get("/api/team-members/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const teamMember = await storage.getTeamMember(id);
 
       if (!teamMember) {
@@ -97,7 +119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(teamMember);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch team member" });
+      sendError(res, error, "Failed to fetch team member");
     }
   });
 
@@ -126,7 +148,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/team-members/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const validatedData = insertTeamMemberSchema.partial().parse(req.body);
 
       const updatedTeamMember = await storage.updateTeamMember(id, validatedData);
@@ -155,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/team-members/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const success = await storage.deleteTeamMember(id);
 
       if (!success) {
@@ -173,7 +195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete team member" });
+      sendError(res, error, "Failed to delete team member");
     }
   });
 
@@ -250,18 +272,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Article routes
-  app.get("/api/articles", async (req, res) => {
+  app.get("/api/articles", isAuthenticated, async (req, res) => {
     try {
       const articles = await storage.getArticles();
       res.json(articles);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch articles" });
+      sendError(res, error, "Failed to fetch articles");
     }
   });
 
-  app.get("/api/articles/:id", async (req, res) => {
+  app.get("/api/articles/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const article = await storage.getArticle(id);
 
       if (!article) {
@@ -270,7 +292,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(article);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch article" });
+      sendError(res, error, "Failed to fetch article");
     }
   });
 
@@ -317,7 +339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/articles/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const validatedData = insertArticleSchema.partial().parse(req.body);
 
       // Handle "Republished" flag which forces status to draft
@@ -326,7 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validatedData.status = "draft";
         validatedData.finished = false;
         validatedData.republished = true;
-        console.log(`Article ${parseInt(req.params.id)}: Republished flag detected, setting status to draft`);
+        console.log(`Article ${id}: Republished flag detected, setting status to draft`);
       } else if (req.body.republished === false || req.body.republished === "false") {
         validatedData.republished = false;
       }
@@ -479,7 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/articles/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
 
       // Fetch article to check if it has an externalId to remove from Airtable
       const article = await storage.getArticle(id);
@@ -545,122 +567,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting article:", error);
-      res.status(500).json({ message: "Failed to delete article" });
+      sendError(res, error, "Failed to delete article");
     }
   });
 
-  app.get("/api/articles/status/:status", async (req, res) => {
+  app.get("/api/articles/status/:status", isAuthenticated, async (req, res) => {
     try {
       const status = req.params.status;
       const articles = await storage.getArticlesByStatus(status);
       res.json(articles);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch articles by status" });
+      sendError(res, error, "Failed to fetch articles by status");
     }
   });
 
-  app.get("/api/articles/featured", async (req, res) => {
+  app.get("/api/articles/featured", isAuthenticated, async (req, res) => {
     try {
       const articles = await storage.getFeaturedArticles();
       res.json(articles);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch featured articles" });
+      sendError(res, error, "Failed to fetch featured articles");
     }
   });
 
-  // Re-upload trigger endpoint
-  app.post("/api/articles/:id/reupload", isAuthenticated, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const article = await storage.getArticle(id);
+  // ---------------------------------------------------------------------
+  // Re-upload sessions
+  //
+  // Reopening a published article, replacing any number of assets through one
+  // contributor link, then republishing as a single explicit step. The session
+  // logic lives in services/reupload.ts; these are thin transport wrappers.
+  // ---------------------------------------------------------------------
 
-      if (!article) {
-        return res.status(404).json({ message: "Article not found" });
-      }
-
-      // Check if article is published or has finished=true to allow re-upload
-      if (article.status !== 'published' && !article.finished) {
-        // We only allow re-upload logic for articles that are considered 'done'
-        return res.status(400).json({ message: "Only published or finished articles can be set to re-upload mode" });
-      }
-
-      // Update local state
-      const updatedArticle = await storage.updateArticle(id, {
-        status: "draft",
-        finished: false,
-        isReuploading: true
-      } as any);
-
-      if (!updatedArticle) {
-        return res.status(500).json({ message: "Failed to update article state" });
-      }
-
-      // Sync to Airtable to uncheck "Finished"
-      if (article.externalId && article.source === 'airtable') {
-        try {
-          const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-          const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-          const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
-          if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value) {
-            // We need to uncheck Finished in Airtable
-            // We can reuse the convertToAirtableFormat but force Finished to false
-            // However, convertToAirtableFormat uses the article object passed to it.
-            // Since we updated 'updatedArticle' with finished=false, convertToAirtableFormat should respect that.
-
-            const fields = await convertToAirtableFormat(updatedArticle);
-
-            const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}/${article.externalId}`;
-
-            await fetch(url, {
-              method: "PATCH",
-              headers: {
-                "Authorization": `Bearer ${apiKeySetting.value}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ fields: { Finished: false } }), // Explicitly set Finished to false to be safe
-            });
-
-            log(`Synced re-upload status to Airtable for article ${id}`, "reupload");
-          }
-        } catch (err) {
-          log(`Failed to sync re-upload status to Airtable: ${String(err)}`, "reupload");
-          // Non-blocking error, but worth noting
-        }
-      }
-
-      // Log activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: "update",
-        resourceType: "article",
-        resourceId: id.toString(),
-        details: {
-          action: "start_reupload",
-          previousStatus: article.status
-        }
+  app.post(
+    "/api/articles/:id/reupload",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const session = await startReuploadSession(parseId(req.params.id), req.user?.id);
+      res.status(201).json({
+        article: session.article,
+        // Shown once so the editor can copy it straight to the contributor.
+        uploadUrl: session.upload?.url,
+        expiresAt: session.upload?.expiresAt,
       });
+    }),
+  );
 
-      res.json(updatedArticle);
-    } catch (error) {
-      console.error("Error setting re-upload mode:", error);
-      res.status(500).json({ message: "Failed to set re-upload mode" });
-    }
-  });
+  app.post(
+    "/api/articles/:id/reupload/complete",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const article = await completeReuploadSession(parseId(req.params.id), {
+        userId: req.user?.id,
+        via: "dashboard",
+      });
+      res.json(article);
+    }),
+  );
+
+  app.post(
+    "/api/articles/:id/reupload/cancel",
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const article = await cancelReuploadSession(parseId(req.params.id), req.user?.id);
+      res.json(article);
+    }),
+  );
+
 
   // Carousel quote routes
-  app.get("/api/carousel-quotes", async (req, res) => {
+  app.get("/api/carousel-quotes", isAuthenticated, async (req, res) => {
     try {
       const quotes = await storage.getCarouselQuotes();
       res.json(quotes);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch carousel quotes" });
+      sendError(res, error, "Failed to fetch carousel quotes");
     }
   });
 
-  app.get("/api/carousel-quotes/:id", async (req, res) => {
+  app.get("/api/carousel-quotes/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const quote = await storage.getCarouselQuote(id);
 
       if (!quote) {
@@ -669,7 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(quote);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch carousel quote" });
+      sendError(res, error, "Failed to fetch carousel quote");
     }
   });
 
@@ -698,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/carousel-quotes/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const validatedData = insertCarouselQuoteSchema.partial().parse(req.body);
 
       const updatedQuote = await storage.updateCarouselQuote(id, validatedData);
@@ -727,7 +713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/carousel-quotes/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const success = await storage.deleteCarouselQuote(id);
 
       if (!success) {
@@ -745,22 +731,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete carousel quote" });
+      sendError(res, error, "Failed to delete carousel quote");
     }
   });
 
-  app.get("/api/carousel-quotes/by-carousel/:carousel", async (req, res) => {
+  app.get("/api/carousel-quotes/by-carousel/:carousel", isAuthenticated, async (req, res) => {
     try {
       const carousel = req.params.carousel;
       const quotes = await storage.getQuotesByCarousel(carousel);
       res.json(quotes);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch quotes by carousel" });
+      sendError(res, error, "Failed to fetch quotes by carousel");
     }
   });
 
   // Admin requests routes
-  app.get("/api/admin-requests", async (req, res) => {
+  app.get("/api/admin-requests", isAuthenticated, async (req, res) => {
     try {
       // Check if we need to filter by status, category or urgency
       const { status, category, urgency } = req.query;
@@ -780,13 +766,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(requests);
     } catch (error) {
       console.error("Error fetching admin requests", error);
-      res.status(500).json({ message: "Failed to fetch admin requests" });
+      sendError(res, error, "Failed to fetch admin requests");
     }
   });
 
-  app.get("/api/admin-requests/:id", async (req, res) => {
+  app.get("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
 
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
@@ -846,7 +832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
 
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
@@ -892,7 +878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/admin-requests/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
 
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid ID format" });
@@ -932,18 +918,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Image asset routes
-  app.get("/api/image-assets", async (req, res) => {
+  app.get("/api/image-assets", isAuthenticated, async (req, res) => {
     try {
       const assets = await storage.getImageAssets();
       res.json(assets);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch image assets" });
+      sendError(res, error, "Failed to fetch image assets");
     }
   });
 
-  app.get("/api/image-assets/:id", async (req, res) => {
+  app.get("/api/image-assets/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const asset = await storage.getImageAsset(id);
 
       if (!asset) {
@@ -952,7 +938,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(asset);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch image asset" });
+      sendError(res, error, "Failed to fetch image asset");
     }
   });
 
@@ -981,7 +967,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/image-assets/:id", isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const success = await storage.deleteImageAsset(id);
 
       if (!success) {
@@ -999,22 +985,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete image asset" });
+      sendError(res, error, "Failed to delete image asset");
     }
   });
 
   // Integration settings routes
-  app.get("/api/integration-settings/:service", isAuthenticated, async (req, res) => {
+  app.get("/api/integration-settings/:service", isAdmin, async (req, res) => {
     try {
       const service = req.params.service;
       const settings = await storage.getIntegrationSettings(service);
-      res.json(settings);
+      res.json(settings.map(redactIntegrationSetting));
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch integration settings" });
+      sendError(res, error, "Failed to fetch integration settings");
     }
   });
 
-  app.get("/api/integration-settings/:service/:key", isAuthenticated, async (req, res) => {
+  app.get("/api/integration-settings/:service/:key", isAdmin, async (req, res) => {
     try {
       const service = req.params.service;
       const key = req.params.key;
@@ -1024,13 +1010,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Integration setting not found" });
       }
 
-      res.json(setting);
+      res.json(redactIntegrationSetting(setting));
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch integration setting" });
+      sendError(res, error, "Failed to fetch integration setting");
     }
   });
 
-  app.post("/api/integration-settings", isAuthenticated, async (req, res) => {
+  app.post("/api/integration-settings", isAdmin, async (req, res) => {
     try {
       const validatedData = insertIntegrationSettingSchema.parse(req.body);
       const newSetting = await storage.createIntegrationSetting(validatedData);
@@ -1053,9 +1039,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/integration-settings/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/integration-settings/:id", isAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const validatedData = insertIntegrationSettingSchema.partial().parse(req.body);
 
       const updatedSetting = await storage.updateIntegrationSetting(id, validatedData);
@@ -1082,9 +1068,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/integration-settings/:id", isAuthenticated, async (req, res) => {
+  app.delete("/api/integration-settings/:id", isAdmin, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
       const success = await storage.deleteIntegrationSetting(id);
 
       if (!success) {
@@ -1102,7 +1088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(204).send();
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete integration setting" });
+      sendError(res, error, "Failed to delete integration setting");
     }
   });
 
@@ -1112,7 +1098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logs = await storage.getActivityLogs();
       res.json(logs);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch activity logs" });
+      sendError(res, error, "Failed to fetch activity logs");
     }
   });
 
@@ -1160,12 +1146,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(metrics);
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch metrics" });
+      sendError(res, error, "Failed to fetch metrics");
     }
   });
 
   // Endpoint to get just migration progress
-  app.get("/api/migration-progress", (req, res) => {
+  app.get("/api/migration-progress", isAuthenticated, (req, res) => {
     try {
       // Add cache control headers to prevent caching
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -1184,7 +1170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API Status endpoint
-  app.get('/api/status', async (req, res) => {
+  app.get('/api/status', isAuthenticated, async (req, res) => {
     try {
       // Add cache control headers to prevent caching
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

@@ -18,6 +18,7 @@ import {
   createInstagramMediaContainer,
   publishInstagramMedia
 } from './instagramClient';
+import { isAdmin, isAuthenticated } from '../middleware/auth';
 
 /**
  * Setup routes for Instagram webhooks and API integration
@@ -38,7 +39,7 @@ export function setupInstagramRoutes(app: Express) {
   });
 
   // API route to subscribe to Instagram webhooks
-  app.post('/api/instagram/webhooks/subscribe', async (req: Request, res: Response) => {
+  app.post('/api/instagram/webhooks/subscribe', isAdmin, async (req: Request, res: Response) => {
     try {
       const { fields, callbackUrl, verifyToken } = req.body;
       
@@ -77,7 +78,7 @@ export function setupInstagramRoutes(app: Express) {
   });
 
   // API route to get active webhook subscriptions
-  app.get('/api/instagram/webhooks/subscriptions', async (req: Request, res: Response) => {
+  app.get('/api/instagram/webhooks/subscriptions', isAuthenticated, async (req: Request, res: Response) => {
     try {
       const subscriptions = await getWebhookSubscriptions();
       res.status(200).json(subscriptions);
@@ -91,7 +92,7 @@ export function setupInstagramRoutes(app: Express) {
   });
 
   // API route to unsubscribe from a webhook
-  app.delete('/api/instagram/webhooks/subscriptions/:id', async (req: Request, res: Response) => {
+  app.delete('/api/instagram/webhooks/subscriptions/:id', isAdmin, async (req: Request, res: Response) => {
     try {
       const subscriptionId = req.params.id;
       const result = await unsubscribeFromWebhook(subscriptionId);
@@ -106,12 +107,12 @@ export function setupInstagramRoutes(app: Express) {
   });
 
   // API route to get webhook field groups (for UI)
-  app.get('/api/instagram/webhooks/field-groups', (req: Request, res: Response) => {
+  app.get('/api/instagram/webhooks/field-groups', isAuthenticated, (req: Request, res: Response) => {
     res.status(200).json(WEBHOOK_FIELD_GROUPS);
   });
   
   // API route to test webhook connection
-  app.get('/api/instagram/webhooks/test', async (req: Request, res: Response) => {
+  app.get('/api/instagram/webhooks/test', isAuthenticated, async (req: Request, res: Response) => {
     try {
       const result = await testWebhookConnection();
       res.status(200).json(result);
@@ -125,7 +126,7 @@ export function setupInstagramRoutes(app: Express) {
   });
 
   // Log instagram webhook activity
-  app.get('/api/instagram/webhooks/logs', async (req: Request, res: Response) => {
+  app.get('/api/instagram/webhooks/logs', isAuthenticated, async (req: Request, res: Response) => {
     try {
       const logs = await storage.getActivityLogs();
       // Filter logs to only include Instagram webhook logs
@@ -141,7 +142,7 @@ export function setupInstagramRoutes(app: Express) {
   });
   
   // Store Facebook access token from the frontend
-  app.post('/api/instagram/auth/token', async (req: Request, res: Response) => {
+  app.post('/api/instagram/auth/token', isAdmin, async (req: Request, res: Response) => {
     try {
       const { accessToken, userId } = req.body;
       
@@ -201,7 +202,7 @@ export function setupInstagramRoutes(app: Express) {
   });
 
   // API route to get Instagram account ID
-  app.get('/api/instagram/account', async (req: Request, res: Response) => {
+  app.get('/api/instagram/account', isAuthenticated, async (req: Request, res: Response) => {
     try {
       // Check if we have an access token
       const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
@@ -238,7 +239,7 @@ export function setupInstagramRoutes(app: Express) {
   });
   
   // API route to get Instagram media posts
-  app.get('/api/instagram/media', async (req: Request, res: Response) => {
+  app.get('/api/instagram/media', isAuthenticated, async (req: Request, res: Response) => {
     try {
       // Check if we have an access token
       const tokenSetting = await storage.getIntegrationSettingByKey("facebook", "access_token");
@@ -266,7 +267,7 @@ export function setupInstagramRoutes(app: Express) {
   });
   
   // API route to get a specific Instagram media post
-  app.get('/api/instagram/media/:id', async (req: Request, res: Response) => {
+  app.get('/api/instagram/media/:id', isAuthenticated, async (req: Request, res: Response) => {
     try {
       const mediaId = req.params.id;
       
@@ -302,7 +303,7 @@ export function setupInstagramRoutes(app: Express) {
   });
   
   // API route to create a new Instagram post
-  app.post('/api/instagram/media', async (req: Request, res: Response) => {
+  app.post('/api/instagram/media', isAuthenticated, async (req: Request, res: Response) => {
     try {
       const { imageUrl, caption } = req.body;
       

@@ -2,13 +2,14 @@ import { Express, Request, Response } from 'express';
 import { storage } from '../storage';
 import { uploadLinkToAirtableTestField, migrateArticleImagesToLinks } from '../utils/airtableTestField';
 import { uploadImageUrlAsLinkField } from '../utils/imageUploader';
+import { isAdmin } from '../middleware/auth';
 
 /**
  * Register the Airtable test routes
  */
 export function registerAirtableTestRoutes(app: Express): void {
   // Direct test endpoint that doesn't require authentication (for development only)
-  app.get('/api/airtable/direct-test', async (req: Request, res: Response) => {
+  app.get('/api/airtable/direct-test', isAdmin, async (req: Request, res: Response) => {
     try {
       // Get all articles
       const articles = await storage.getArticles();

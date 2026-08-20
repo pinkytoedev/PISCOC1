@@ -1,284 +1,322 @@
 /**
- * ZIP File Processor
- * Extracts HTML content from ZIP files for articles
+ * Extracts an article body from an uploaded ZIP archive.
+ *
+ * The archive comes from a contributor, so it is treated as hostile input:
+ * every limit below exists to stop one upload from exhausting disk, memory,
+ * the ImgBB quota or the event loop, and the extracted HTML is sanitized
+ * before it is ever stored.
  */
 
-import * as fs from 'fs';
+import * as fs from 'fs/promises';
 import * as path from 'path';
-import { storage } from '../storage';
 import extract from 'extract-zip';
-import { uploadImageToImgBB, UploadedFileInfo, ImgBBUploadResponse } from './imgbbUploader';
+import { storage } from '../storage';
+import { log } from '../vite';
+import { env } from '../lib/env';
+import { sanitizeArticleHtml } from '../lib/sanitizeHtml';
+import { getAirtableConfig, updateRecord } from '../lib/airtableClient';
+import { uploadImageToImgBB, UploadedFileInfo } from './imgbbUploader';
 import { InsertImageAsset } from '../../shared/schema';
 
-// No external unzip binary required; we use extract-zip
+const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
 
-/**
- * Get MIME type from file extension
- */
-function getMimeTypeFromExtension(extension: string): string {
-  const ext = extension.toLowerCase();
-  const mimeMap: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.bmp': 'image/bmp'
-  };
+/** Depth guard for the recursive walk — real archives are nowhere near this. */
+const MAX_DIRECTORY_DEPTH = 10;
 
-  return mimeMap[ext] || 'application/octet-stream';
+const MIME_BY_EXTENSION: Record<string, string> = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+};
+
+function mimeTypeFor(extension: string): string {
+  return MIME_BY_EXTENSION[extension.toLowerCase()] ?? 'application/octet-stream';
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export interface ZipProcessResult {
+  success: boolean;
+  message: string;
+  html?: string;
+  /** True when sanitization stripped markup — surfaced so the uploader knows. */
+  sanitized?: boolean;
+  imagesProcessed?: number;
+}
+
+interface WalkedFile {
+  absolutePath: string;
+  relativePath: string;
+  size: number;
 }
 
 /**
- * Escape string for use in regular expressions
+ * Walks the extraction directory, enforcing the entry-count and total-size
+ * budgets as it goes.
+ *
+ * The counters are checked during the walk rather than after: a zip bomb that
+ * expanded to gigabytes would otherwise already be on disk before anyone looked
+ * at the total.
  */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+async function walkExtracted(root: string): Promise<WalkedFile[]> {
+  const files: WalkedFile[] = [];
+  let totalBytes = 0;
 
-/**
- * Build a set of common path variations so we can find and replace references
- * regardless of leading `./`, `/`, or nested directory components.
- */
-function getPathVariations(originalPath: string): string[] {
-  const normalizedPath = originalPath.replace(/\\/g, '/');
-  const basename = path.basename(normalizedPath);
-
-  return [normalizedPath, `./${normalizedPath}`, `/${normalizedPath}`, basename];
-}
-
-/**
- * Process a zip file and extract HTML content
- * @param filePath Path to the uploaded ZIP file
- * @param articleId ID of the article to update with HTML content
- * @returns Result of the operation
- */
-export async function processZipFile(filePath: string, articleId: number): Promise<{ success: boolean; message: string; html?: string }> {
-  const tempDir = path.join(process.cwd(), 'temp', `article-${articleId}-${Date.now()}`);
-
-  try {
-    // Make sure temp directory exists
-    if (!fs.existsSync(path.join(process.cwd(), 'temp'))) {
-      fs.mkdirSync(path.join(process.cwd(), 'temp'), { recursive: true });
+  async function walk(dir: string, depth: number): Promise<void> {
+    if (depth > MAX_DIRECTORY_DEPTH) {
+      throw new Error(`Archive nests directories more than ${MAX_DIRECTORY_DEPTH} levels deep`);
     }
 
-    // Create temp extraction directory
-    fs.mkdirSync(tempDir, { recursive: true });
+    const entries = await fs.readdir(dir, { withFileTypes: true });
 
-    // Extract ZIP using extract-zip (works in Railway without system unzip)
-    console.log(`Extracting ZIP file to ${tempDir} using extract-zip...`);
-    await extract(filePath, { dir: tempDir });
+    for (const entry of entries) {
+      const absolutePath = path.join(dir, entry.name);
 
-    // Recursive file finder helper function
-    const findFiles = (dir: string, extensions: string[]): string[] => {
-      let results: string[] = [];
-      const items = fs.readdirSync(dir);
+      // Symlinks could point outside the extraction directory; skip them.
+      if (entry.isSymbolicLink()) continue;
 
-      for (const item of items) {
-        const itemPath = path.join(dir, item);
-        const stat = fs.statSync(itemPath);
-
-        if (stat.isDirectory()) {
-          // Recursively search subdirectories
-          results = results.concat(findFiles(itemPath, extensions));
-        } else if (extensions.some(ext => item.toLowerCase().endsWith(ext.toLowerCase()))) {
-          results.push(itemPath);
-        }
+      if (entry.isDirectory()) {
+        await walk(absolutePath, depth + 1);
+        continue;
       }
 
-      return results;
-    };
+      if (!entry.isFile()) continue;
 
-    // Look for HTML files recursively
-    const findHtmlFiles = (dir: string): string[] => {
-      return findFiles(dir, ['.html']);
-    };
-
-    // Look for image files recursively
-    const findImageFiles = (dir: string): string[] => {
-      return findFiles(dir, ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']);
-    };
-
-    // Find all HTML files in the extracted ZIP
-    const htmlFiles = findHtmlFiles(tempDir);
-
-    if (htmlFiles.length === 0) {
-      throw new Error('No HTML files found in ZIP archive');
-    }
-
-    // Prioritize index.html if it exists, otherwise use the first HTML file
-    let mainHtmlFile = htmlFiles.find(file => path.basename(file).toLowerCase() === 'index.html') || htmlFiles[0];
-    console.log(`Using HTML file: ${mainHtmlFile}`);
-
-    // Read HTML content
-    let htmlContent = fs.readFileSync(mainHtmlFile, 'utf-8');
-    if (!htmlContent) {
-      throw new Error(`HTML file is empty: ${path.basename(mainHtmlFile)}`);
-    }
-
-    // Find all image files in the extracted ZIP
-    const imageFiles = findImageFiles(tempDir);
-    console.log(`Found ${imageFiles.length} image files in ZIP archive`);
-
-    // Upload images to ImgBB and build a mapping of original paths to new URLs
-    const imageMapping: Record<string, string> = {};
-
-    if (imageFiles.length > 0) {
-      for (const imagePath of imageFiles) {
-        const relativePath = path.relative(tempDir, imagePath);
-        const mimeType = getMimeTypeFromExtension(path.extname(imagePath));
-
-        // Prepare for ImgBB upload
-        const fileInfo: UploadedFileInfo = {
-          path: imagePath,
-          filename: path.basename(imagePath),
-          size: fs.statSync(imagePath).size,
-          mimetype: mimeType
-        };
-
-        // Upload to ImgBB
-        console.log(`Uploading image: ${relativePath}`);
-        const uploadResult = await uploadImageToImgBB(fileInfo);
-
-        if (uploadResult) {
-          // Store the mapping of original path to ImgBB URL
-          imageMapping[relativePath] = uploadResult.display_url;
-          console.log(`Uploaded image ${relativePath} to ImgBB: ${uploadResult.display_url}`);
-
-          // Also store the image in our database
-          const imageAsset: InsertImageAsset = {
-            originalFilename: path.basename(imagePath),
-            storagePath: uploadResult.url,
-            mimeType: fileInfo.mimetype,
-            size: fileInfo.size,
-            hash: uploadResult.id,
-            isDefault: false,
-            category: 'article',
-            metadata: {
-              articleId,
-              originalPath: relativePath,
-              displayUrl: uploadResult.display_url,
-              imgbbData: uploadResult
-            }
-          };
-          await storage.createImageAsset(imageAsset);
-        } else {
-          console.warn(`Failed to upload image: ${relativePath}`);
-        }
+      if (files.length >= env.uploads.maxZipEntries) {
+        throw new Error(`Archive contains more than ${env.uploads.maxZipEntries} files`);
       }
 
-      // Replace image paths in HTML content
-      Object.entries(imageMapping).forEach(([originalPath, newUrl]) => {
-        
-        // Replace all variations of the path with the new URL
-        const pathVariations = getPathVariations(originalPath);
+      const stat = await fs.stat(absolutePath);
+      totalBytes += stat.size;
 
-        pathVariations.forEach(pathVar => {
-          const attributeRegex = new RegExp(`(src|href|data-src)=['"](${escapeRegExp(pathVar)})['"']`, 'gi');
-          const inlineStyleRegex = new RegExp(`url\(\s*(['"])${escapeRegExp(pathVar)}\\1\s*\)`, 'gi');
-          const inlineStyleNoQuoteRegex = new RegExp(`url\(\s*${escapeRegExp(pathVar)}\s*\)`, 'gi');
+      if (totalBytes > env.uploads.maxZipExpandedBytes) {
+        const limitMb = Math.round(env.uploads.maxZipExpandedBytes / (1024 * 1024));
+        throw new Error(`Archive expands to more than ${limitMb}MB`);
+      }
 
-          htmlContent = htmlContent
-            .replace(attributeRegex, `$1="${newUrl}"`)
-            .replace(inlineStyleRegex, `url(${newUrl})`)
-            .replace(inlineStyleNoQuoteRegex, `url(${newUrl})`);
-        });
+      files.push({
+        absolutePath,
+        relativePath: path.relative(root, absolutePath),
+        size: stat.size,
       });
     }
+  }
 
-    // Capture the final HTML after all replacements so we consistently persist the same string
-    const finalHtmlContent = htmlContent;
+  await walk(root, 0);
+  return files;
+}
 
-    // Update article content
+/**
+ * Rewrites references to a bundled image so they point at its hosted URL.
+ *
+ * Handles `src`/`href`/`data-src` attributes and CSS `url()` in both quoted and
+ * unquoted form. The previous version built these patterns inside template
+ * literals containing `\s` and `\(`; neither is a valid string escape, so they
+ * collapsed to `s` and `(` and the compiled expression matched nothing —
+ * meaning CSS-referenced images silently kept pointing at paths that no longer
+ * existed. Using `String.raw` keeps the backslashes intact.
+ */
+function rewriteImageReferences(html: string, originalPath: string, newUrl: string): string {
+  const normalized = originalPath.replace(/\\/g, '/');
+
+  // A reference may be written relative, root-relative, dot-relative, or as a
+  // bare filename.
+  const variations = Array.from(
+    new Set([normalized, `./${normalized}`, `/${normalized}`, path.basename(normalized)]),
+  );
+
+  let result = html;
+
+  for (const variation of variations) {
+    const escaped = escapeRegExp(variation);
+
+    const attributeRef = new RegExp(
+      String.raw`(src|href|data-src)\s*=\s*["']${escaped}["']`,
+      'gi',
+    );
+    const quotedCssUrl = new RegExp(
+      String.raw`url\(\s*(["'])${escaped}\1\s*\)`,
+      'gi',
+    );
+    const bareCssUrl = new RegExp(
+      String.raw`url\(\s*${escaped}\s*\)`,
+      'gi',
+    );
+
+    result = result
+      .replace(attributeRef, `$1="${newUrl}"`)
+      .replace(quotedCssUrl, `url("${newUrl}")`)
+      .replace(bareCssUrl, `url("${newUrl}")`);
+  }
+
+  return result;
+}
+
+/**
+ * Processes an uploaded archive and sets the article's HTML body.
+ *
+ * @param filePath  Path to the uploaded ZIP.
+ * @param articleId Article to update.
+ * @param userId    Actor for the activity log; omitted for contributor uploads
+ *                  so the entry is not misattributed to a real account.
+ */
+export async function processZipFile(
+  filePath: string,
+  articleId: number,
+  userId?: number,
+): Promise<ZipProcessResult> {
+  const tempRoot = path.join(process.cwd(), 'temp');
+  // `mkdtemp` avoids the collision that a timestamped name allows when two
+  // uploads for the same article land in the same millisecond.
+  await fs.mkdir(tempRoot, { recursive: true });
+  const tempDir = await fs.mkdtemp(path.join(tempRoot, `article-${articleId}-`));
+
+  try {
+    // extract-zip rejects entries that resolve outside the target directory,
+    // which is the zip-slip guard; the budgets below cover volume instead.
+    await extract(filePath, { dir: tempDir });
+
+    const files = await walkExtracted(tempDir);
+
+    const htmlFiles = files.filter((file) => file.relativePath.toLowerCase().endsWith('.html'));
+    if (htmlFiles.length === 0) {
+      throw new Error('No HTML file found in the archive');
+    }
+
+    // index.html wins when present; otherwise take the first, deterministically.
+    const mainHtmlFile =
+      htmlFiles.find((file) => path.basename(file.relativePath).toLowerCase() === 'index.html') ??
+      htmlFiles.sort((a, b) => a.relativePath.localeCompare(b.relativePath))[0];
+
+    let html = await fs.readFile(mainHtmlFile.absolutePath, 'utf-8');
+    if (!html.trim()) {
+      throw new Error(`HTML file is empty: ${path.basename(mainHtmlFile.relativePath)}`);
+    }
+
+    const imageFiles = files.filter((file) =>
+      IMAGE_EXTENSIONS.some((ext) => file.relativePath.toLowerCase().endsWith(ext)),
+    );
+
+    if (imageFiles.length > env.uploads.maxZipImages) {
+      throw new Error(
+        `Archive contains ${imageFiles.length} images; the limit is ${env.uploads.maxZipImages}`,
+      );
+    }
+
+    let imagesProcessed = 0;
+
+    for (const image of imageFiles) {
+      const fileInfo: UploadedFileInfo = {
+        path: image.absolutePath,
+        filename: path.basename(image.relativePath),
+        size: image.size,
+        mimetype: mimeTypeFor(path.extname(image.relativePath)),
+      };
+
+      const uploaded = await uploadImageToImgBB(fileInfo);
+
+      if (!uploaded) {
+        // One failed image should not discard an otherwise good submission; the
+        // reference simply stays as-is and the log records it.
+        log(`Failed to upload image ${image.relativePath} for article ${articleId}`, 'zip');
+        continue;
+      }
+
+      html = rewriteImageReferences(html, image.relativePath, uploaded.display_url);
+      imagesProcessed += 1;
+
+      const imageAsset: InsertImageAsset = {
+        originalFilename: fileInfo.filename,
+        storagePath: uploaded.url,
+        mimeType: fileInfo.mimetype,
+        size: fileInfo.size,
+        hash: uploaded.id,
+        isDefault: false,
+        category: 'article',
+        metadata: {
+          articleId,
+          originalPath: image.relativePath,
+          displayUrl: uploaded.display_url,
+        },
+      };
+      await storage.createImageAsset(imageAsset);
+    }
+
+    // Sanitize last, so rewritten URLs are validated by the same pass that
+    // strips scripts.
+    const { html: safeHtml, modified: sanitized } = sanitizeArticleHtml(html);
+
+    if (sanitized) {
+      log(`Sanitizer removed markup from the upload for article ${articleId}`, 'zip');
+    }
+
+    if (!safeHtml.trim()) {
+      throw new Error('The HTML contained no publishable content after sanitization');
+    }
+
     const article = await storage.getArticle(articleId);
     if (!article) {
-      throw new Error(`Article with ID ${articleId} not found`);
+      throw new Error(`Article ${articleId} not found`);
     }
 
-    const updatedArticle = await storage.updateArticle(articleId, {
-      content: finalHtmlContent,
-      // Ensure CMS knows this is HTML content
-      contentFormat: 'html'
+    const updated = await storage.updateArticle(articleId, {
+      content: safeHtml,
+      contentFormat: 'html',
     });
 
-    if (!updatedArticle) {
-      throw new Error('Failed to update article with HTML content');
+    if (!updated) {
+      throw new Error('Failed to store the article content');
     }
 
-    // If article has an external ID (Airtable), update it there as well
     if (article.source === 'airtable' && article.externalId) {
       try {
-        // Get Airtable settings
-        const apiKeySetting = await storage.getIntegrationSettingByKey('airtable', 'api_key');
-        const baseIdSetting = await storage.getIntegrationSettingByKey('airtable', 'base_id');
-        const tableNameSetting = await storage.getIntegrationSettingByKey('airtable', 'articles_table');
-
-        if (apiKeySetting?.value && baseIdSetting?.value && tableNameSetting?.value) {
-          // Prepare Airtable update
-          const updatePayload = {
-            fields: {
-              // Airtable field for the HTML body (matches public-upload behavior)
-              Body: finalHtmlContent
-            }
-          };
-
-          // Call Airtable API
-          const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${tableNameSetting.value}/${article.externalId}`;
-          console.log('Setting HTML content in Airtable');
-
-          const airtableResponse = await fetch(airtableUrl, {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${apiKeySetting.value}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(updatePayload)
-          });
-
-          if (!airtableResponse.ok) {
-            console.error('Failed to update Airtable:', await airtableResponse.text());
-          }
+        const config = await getAirtableConfig();
+        if (config) {
+          await updateRecord(config, article.externalId, { Body: safeHtml });
         }
-      } catch (airtableError) {
-        console.error('Error syncing HTML content to Airtable:', airtableError);
-        // Don't fail the whole operation if Airtable sync fails
+      } catch (error) {
+        // Airtable is a mirror; the authoritative write already succeeded.
+        log(`Failed to sync article ${articleId} body to Airtable: ${String(error)}`, 'zip');
       }
     }
 
-    // Log activity
     await storage.createActivityLog({
-      userId: 1, // Default to system user
+      // Left undefined for contributor uploads rather than attributed to a
+      // hardcoded user id that may not even exist.
+      userId,
       action: 'upload',
       resourceType: 'html_content',
       resourceId: articleId.toString(),
       details: {
         fieldName: 'content',
-        contentSize: finalHtmlContent.length,
-        sourceFile: path.basename(filePath)
-      }
+        contentSize: safeHtml.length,
+        imagesProcessed,
+        sanitized,
+      },
     });
 
     return {
       success: true,
-      message: `HTML content extracted and set as article content. ${Object.keys(imageMapping).length} images processed and uploaded to ImgBB.`,
-      html: finalHtmlContent
+      message: `Article content updated. ${imagesProcessed} image(s) hosted.${
+        sanitized ? ' Some unsupported markup was removed.' : ''
+      }`,
+      html: safeHtml,
+      sanitized,
+      imagesProcessed,
     };
-
   } catch (error) {
-    console.error('Error processing ZIP file:', error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : String(error)
-    };
+    const message = error instanceof Error ? error.message : String(error);
+    log(`ZIP processing failed for article ${articleId}: ${message}`, 'zip');
+    return { success: false, message };
   } finally {
-    // Clean up
-    try {
-      if (fs.existsSync(tempDir)) {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-      }
-    } catch (cleanupError) {
-      console.error('Error cleaning up temp directory:', cleanupError);
-    }
+    await fs.rm(tempDir, { recursive: true, force: true }).catch((error) => {
+      log(`Failed to clean up ${tempDir}: ${String(error)}`, 'zip');
+    });
   }
 }

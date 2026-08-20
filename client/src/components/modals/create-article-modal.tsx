@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, withCsrf } from "@/lib/queryClient";
 import { InsertArticle, TeamMember } from "@shared/schema";
 import { Loader2, AlertCircle, RefreshCw, Upload, Image, Camera, FileArchive } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -532,12 +532,15 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("articleId", editArticle.id.toString());
 
     try {
-      const response = await fetch(`/api/public-upload/${type}`, {
+      // Editors upload through the authenticated route; contributor links are
+      // only for people working outside the dashboard.
+      const response = await fetch(`/api/articles/${editArticle.id}/assets/${type}`, {
         method: "POST",
+        headers: withCsrf("POST"),
         body: formData,
+        credentials: "include",
       });
 
       const responseText = await response.text();

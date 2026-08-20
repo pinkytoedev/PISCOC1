@@ -10,6 +10,9 @@ import {
   cleanupUploadedFile
 } from "../utils/imageUploader";
 import { uploadImageToImgBB, uploadImageUrlToImgBB } from "../utils/imgbbUploader";
+import { redactIntegrationSetting } from '../lib/redact';
+import { verifyWebhookSecret } from '../middleware/webhookAuth';
+import { isAdmin } from '../middleware/auth';
 
 // Type definitions for Airtable responses
 interface AirtableRecord<T> {
@@ -1085,14 +1088,14 @@ export function setupAirtableRoutes(app: Express) {
       }
 
       const settings = await storage.getIntegrationSettings("airtable");
-      res.json(settings);
+      res.json(settings.map(redactIntegrationSetting));
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch Airtable settings" });
     }
   });
 
   // Update Airtable integration settings
-  app.post("/api/airtable/settings", async (req, res) => {
+  app.post("/api/airtable/settings", isAdmin, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -1132,7 +1135,7 @@ export function setupAirtableRoutes(app: Express) {
   });
 
   // Update Airtable API key from environment variable
-  app.post("/api/airtable/update-api-key", async (req, res) => {
+  app.post("/api/airtable/update-api-key", isAdmin, async (req, res) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "Unauthorized" });
@@ -1209,7 +1212,7 @@ export function setupAirtableRoutes(app: Express) {
   });
 
   // Webhook to trigger article sync from external CMS
-  app.post("/api/webhooks/article-published", async (req, res) => {
+  app.post("/api/webhooks/article-published", verifyWebhookSecret, async (req, res) => {
     try {
       console.log("Received article-published webhook");
 

@@ -3,6 +3,7 @@
  */
 import fs from 'fs';
 import express from 'express';
+import { isAuthenticated } from './middleware/auth';
 
 // Progress files for different migration types
 const PROGRESS_FILES = [
@@ -130,7 +131,7 @@ export function getMigrationProgress(): MigrationResponse {
  */
 export function registerMigrationRoutes(app: express.Express): void {
   // Get migration progress
-  app.get('/api/migration-progress', (req, res) => {
+  app.get('/api/migration-progress', isAuthenticated, (req, res) => {
     try {
       // Add cache control headers to prevent caching
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

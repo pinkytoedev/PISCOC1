@@ -24,7 +24,7 @@ import InstagramPage from "@/pages/integrations/instagram-page";
 import ImgBBPage from "@/pages/integrations/imgbb-page";
 import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import TestPage from "@/pages/test-page";
-import PublicUploadPage from "@/pages/public-upload";
+import ContributorUploadPage from "@/pages/contributor-upload";
 import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
 import NotFound from "@/pages/not-found";
@@ -61,8 +61,8 @@ function Router() {
       <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
       <Route path="/test" component={TestPage} />
 
-      {/* Public upload routes - these don't require auth */}
-      <Route path="/public-upload" component={PublicUploadPage} />
+      {/* Contributor routes - authorized by the link, not by a session */}
+      <Route path="/upload/:token" component={ContributorUploadPage} />
       <Route path="/team-upload" component={PublicTeamUploadPage} />
 
       <Route component={NotFound} />

@@ -1,10 +1,41 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const CSRF_COOKIE = "csrf_token";
+const CSRF_HEADER = "x-csrf-token";
+
+/**
+ * Reads the CSRF token the server sets as a readable cookie. It has to be
+ * echoed back in a header on every state-changing request — an attacker's page
+ * can cause the cookie to be sent but cannot read it to build this header.
+ */
+function csrfToken(): string | undefined {
+  return document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${CSRF_COOKIE}=`))
+    ?.split("=")[1];
+}
+
+/** Adds the CSRF header to anything that is not a safe method. */
+export function withCsrf(method: string, headers: Record<string, string> = {}) {
+  if (["GET", "HEAD", "OPTIONS"].includes(method.toUpperCase())) return headers;
+  const token = csrfToken();
+  return token ? { ...headers, [CSRF_HEADER]: token } : headers;
+}
+
 async function throwIfResNotOk(res: Response) {
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+  if (res.ok) return;
+
+  // Errors are JSON `{ message }`; fall back to raw text for non-API failures
+  // such as a proxy error page.
+  const text = await res.text();
+  let message = text || res.statusText;
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed?.message) message = parsed.message;
+  } catch {
+    // Not JSON — keep the raw text.
   }
+  throw new Error(message);
 }
 
 export async function apiRequest(
@@ -14,8 +45,21 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: withCsrf(method, data ? { "Content-Type": "application/json" } : {}),
     body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
+  });
+
+  await throwIfResNotOk(res);
+  return res;
+}
+
+/** Multipart uploads set their own Content-Type, so only the CSRF header is added. */
+export async function apiUpload(url: string, body: FormData): Promise<Response> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: withCsrf("POST"),
+    body,
     credentials: "include",
   });
 

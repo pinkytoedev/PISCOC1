@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Article } from "@shared/schema";
-import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { Edit, Eye, Trash2, Info, RefreshCw, Loader2, Upload, Image, ImagePlus, ChevronDown, ChevronLeft, ChevronRight, RotateCcw, CheckCircle2, XCircle } from "lucide-react";
 import { SiAirtable, SiInstagram } from "react-icons/si";
 import {
   DropdownMenu,
@@ -127,26 +127,84 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
     },
   });
 
-  // Re-upload mutation
+  /**
+   * Opens a re-upload session.
+   *
+   * The response carries a contributor link, shown once. Copying it straight to
+   * the clipboard is the whole handoff: the editor pastes it into a message and
+   * the contributor needs nothing else.
+   */
   const reuploadMutation = useMutation({
     mutationFn: async (articleId: number) => {
-      const response = await apiRequest(
-        "POST",
-        `/api/articles/${articleId}/reupload`
-      );
-      return await response.json();
+      const response = await apiRequest("POST", `/api/articles/${articleId}/reupload`);
+      return (await response.json()) as { uploadUrl?: string };
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+
+      let copied = false;
+      if (data.uploadUrl) {
+        try {
+          await navigator.clipboard.writeText(data.uploadUrl);
+          copied = true;
+        } catch {
+          // Clipboard access needs a secure context and can be denied; the URL
+          // is still shown so it can be copied by hand.
+        }
+      }
+
       toast({
-        title: "Re-upload Mode Started",
-        description: "Article is now in draft mode and ready for upload. Finished status in Airtable has been unchecked.",
+        title: "Re-upload session open",
+        description: copied
+          ? "Upload link copied to your clipboard — send it to your contributor."
+          : data.uploadUrl
+            ? `Send this link to your contributor: ${data.uploadUrl}`
+            : "The article is now a draft and ready for new content.",
+        duration: copied ? 5000 : 20000,
       });
     },
     onError: (error) => {
       toast({
         title: "Failed to start re-upload",
-        description: error.message || "Could not set article to re-upload mode.",
+        description: error.message || "Could not open a re-upload session.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  /** Publishes a re-upload session from the dashboard side. */
+  const completeReuploadMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      const response = await apiRequest("POST", `/api/articles/${articleId}/reupload/complete`);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({ title: "Published", description: "The article is live again." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not publish",
+        description: error.message || "Failed to complete the re-upload.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  /** Abandons a session, restoring the article to how it was. */
+  const cancelReuploadMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      const response = await apiRequest("POST", `/api/articles/${articleId}/reupload/cancel`);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
+      toast({ title: "Re-upload cancelled", description: "The article was restored." });
+    },
+    onError: (error) => {
+      toast({
+        title: "Could not cancel",
+        description: error.message || "Failed to cancel the re-upload.",
         variant: "destructive",
       });
     },
@@ -958,34 +1016,77 @@ export function ArticleTable({ filter, sort, onEdit, onView, onDelete, highlight
                         </TooltipProvider>
                       )}
 
-                      {/* Re-upload Button for published/finished articles */}
-                      {(article.status === 'published' || article.finished) && (
-                         <TooltipProvider>
-                           <Tooltip>
-                             <TooltipTrigger asChild>
-                               <Button
-                                 variant="ghost"
-                                 size="icon"
-                                 onClick={() => {
-                                    if (confirm("Start re-upload mode? This will unpublish the article temporarily.")) {
-                                      reuploadMutation.mutate(article.id);
-                                    }
-                                 }}
-                                 className="text-orange-600 hover:text-orange-800"
-                                 disabled={reuploadMutation.isPending}
-                               >
-                                 {reuploadMutation.isPending ? (
-                                   <Loader2 className="h-4 w-4 animate-spin" />
-                                 ) : (
-                                   <RotateCcw className="h-4 w-4" />
-                                 )}
-                               </Button>
-                             </TooltipTrigger>
-                             <TooltipContent side="bottom">
-                               <p>Re-upload Content</p>
-                             </TooltipContent>
-                           </Tooltip>
-                         </TooltipProvider>
+                      {/* Open a re-upload session on a live article. */}
+                      {(article.status === 'published' || article.finished) && !article.isReuploading && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => reuploadMutation.mutate(article.id)}
+                                className="text-orange-600 hover:text-orange-800"
+                                disabled={reuploadMutation.isPending}
+                              >
+                                {reuploadMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              <p>Re-upload content (copies an upload link)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+
+                      {/* An open session offers the two ways to close it. */}
+                      {article.isReuploading && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => completeReuploadMutation.mutate(article.id)}
+                                className="text-emerald-600 hover:text-emerald-800"
+                                disabled={completeReuploadMutation.isPending}
+                              >
+                                {completeReuploadMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              <p>Finish re-upload and publish</p>
+                            </TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => cancelReuploadMutation.mutate(article.id)}
+                                className="text-muted-foreground hover:text-foreground"
+                                disabled={cancelReuploadMutation.isPending}
+                              >
+                                {cancelReuploadMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <XCircle className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                              <p>Cancel re-upload</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
 
                       <Button

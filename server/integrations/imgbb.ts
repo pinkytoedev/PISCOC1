@@ -5,6 +5,8 @@ import multer from 'multer';
 import fs from 'fs';
 import { storage } from '../storage';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
+import { redactIntegrationSetting } from '../lib/redact';
+import { isAdmin } from '../middleware/auth';
 
 // Configure multer for file uploads
 const upload = multer({ dest: 'uploads/' });
@@ -37,7 +39,7 @@ export function setupImgBBRoutes(app: Express) {
       }
 
       const settings = await storage.getIntegrationSettings('imgbb');
-      res.json(settings);
+      res.json(settings.map(redactIntegrationSetting));
     } catch (error) {
       console.error('Error fetching ImgBB settings:', error);
       res.status(500).json({
@@ -48,7 +50,7 @@ export function setupImgBBRoutes(app: Express) {
   });
 
   // Update ImgBB integration setting
-  app.post('/api/imgbb/settings/:key', async (req: Request, res: Response) => {
+  app.post('/api/imgbb/settings/:key', isAdmin, async (req: Request, res: Response) => {
     try {
       if (!req.isAuthenticated()) {
         return res.status(401).json({ message: 'Unauthorized' });
