@@ -1,189 +1,182 @@
 /**
- * ImgBB Migration API Routes
- * 
- * Endpoints for triggering and monitoring the migration of Airtable
- * MainImage attachments to ImgBB and updating the MainImageLink field.
+ * ImgBB migration endpoints.
+ *
+ * A one-off backfill that walks Airtable's `MainImage` attachments, re-hosts
+ * each on ImgBB and fills in `MainImageLink`. The work itself runs in a
+ * detached script; these routes only start it and report the progress file it
+ * writes.
+ *
+ * Two notes for anyone picking this up:
+ *
+ *   - `registerImgBBMigrationRoutes` is not currently wired into `routes.ts`,
+ *     so none of these paths are live. They are kept intact rather than deleted
+ *     because the backfill is still occasionally needed.
+ *   - The old module resolved its paths from `__dirname`, which does not exist
+ *     in this ESM build — every handler here would have thrown a ReferenceError
+ *     the moment it was registered. Paths are resolved from the process working
+ *     directory instead, which is the repository root in every deployment.
  */
 
-import { Router, Request, Response } from 'express';
-import { exec } from 'child_process';
-import { storage } from '../storage';
-import fs from 'fs';
+import type { Router, Request, Response } from 'express';
+import { execFile } from 'child_process';
+import fsp from 'fs/promises';
 import path from 'path';
+import { storage } from '../storage';
+import { createLogger } from '../lib/logger';
+import { HttpError, asyncHandler } from '../lib/httpError';
+import { isAuthenticated } from '../middleware/auth';
 
-// Progress file path
-const PROGRESS_FILE = path.join(__dirname, '../../data', 'imgbb-migration-progress.json');
+const log = createLogger('imgbb:migration');
 
-// Function to get migration progress
-function getMigrationProgress(): { 
-  totalRecords: number; 
-  processedRecords: number; 
-  percentage: number; 
-  errors: Array<{ recordId: string; title: string; error: string; }>;
-} {
+const DATA_DIR = path.join(process.cwd(), 'data');
+const PROGRESS_FILE = path.join(DATA_DIR, 'imgbb-migration-progress.json');
+const SCRIPT_PATH = path.join(process.cwd(), 'scripts', 'migrate-images-to-imgbb.js');
+
+interface MigrationError {
+  recordId: string;
+  title: string;
+  error: string;
+}
+
+interface MigrationProgress {
+  totalRecords: number;
+  processedRecords: number;
+  percentage: number;
+  errors: MigrationError[];
+}
+
+/** What the background script writes; every field is treated as optional. */
+interface ProgressFileContents {
+  totalRecords?: number;
+  processedRecords?: string[];
+  errors?: MigrationError[];
+}
+
+const EMPTY_PROGRESS: MigrationProgress = {
+  totalRecords: 0,
+  processedRecords: 0,
+  percentage: 0,
+  errors: [],
+};
+
+/**
+ * Reads the progress file.
+ *
+ * A missing file is the normal "never run" state, not an error, so it reports
+ * zeroes. A corrupt file is logged and also reports zeroes — the endpoint is
+ * for monitoring and must not fail because the script died mid-write.
+ */
+async function readMigrationProgress(): Promise<MigrationProgress> {
+  let raw: string;
   try {
-    if (fs.existsSync(PROGRESS_FILE)) {
-      const data = fs.readFileSync(PROGRESS_FILE, 'utf8');
-      const progress = JSON.parse(data);
-      
-      return {
-        totalRecords: progress.totalRecords || 0,
-        processedRecords: progress.processedRecords?.length || 0,
-        percentage: progress.totalRecords ? 
-          Math.round((progress.processedRecords?.length || 0) / progress.totalRecords * 100) : 0,
-        errors: progress.errors || []
-      };
-    }
-    
+    raw = await fsp.readFile(PROGRESS_FILE, 'utf8');
+  } catch {
+    return EMPTY_PROGRESS;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as ProgressFileContents;
+    const total = parsed.totalRecords ?? 0;
+    const processed = parsed.processedRecords?.length ?? 0;
+
     return {
-      totalRecords: 0,
-      processedRecords: 0,
-      percentage: 0,
-      errors: []
+      totalRecords: total,
+      processedRecords: processed,
+      percentage: total ? Math.round((processed / total) * 100) : 0,
+      errors: parsed.errors ?? [],
     };
   } catch (error) {
-    console.error('Error reading migration progress:', error);
-    return {
-      totalRecords: 0,
-      processedRecords: 0,
-      percentage: 0,
-      errors: []
-    };
+    log.error('Migration progress file is not valid JSON', { file: PROGRESS_FILE, error });
+    return EMPTY_PROGRESS;
   }
 }
 
-// Register the migration routes
+/**
+ * Records a migration lifecycle event.
+ *
+ * Written through `storage` rather than `services/activity` because the shared
+ * activity vocabulary covers content and settings, not migrations; adding
+ * "migration" to it for three call sites in an unregistered module is not worth
+ * widening the type for.
+ */
+async function logMigrationEvent(
+  action: string,
+  userId: number | undefined,
+  details: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await storage.createActivityLog({
+      userId,
+      action,
+      resourceType: 'migration',
+      resourceId: 'airtable-to-imgbb',
+      details,
+    });
+  } catch (error) {
+    log.error('Failed to record migration activity', { action, error });
+  }
+}
+
 export function registerImgBBMigrationRoutes(app: Router): void {
-  // Run migration
-  app.post('/api/migration/airtable-to-imgbb', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
+  app.post(
+    '/api/migration/airtable-to-imgbb',
+    isAuthenticated,
+    asyncHandler(async (req: Request, res: Response) => {
+      try {
+        await fsp.access(SCRIPT_PATH);
+      } catch {
+        throw HttpError.notFound('Migration script not found');
       }
-      
-      // Check if migration is already running
-      const scriptPath = path.join(__dirname, '../../scripts/migrate-images-to-imgbb.js');
-      
-      if (!fs.existsSync(scriptPath)) {
-        return res.status(404).json({ message: 'Migration script not found' });
-      }
-      
-      // Create data directory if it doesn't exist
-      const dataDir = path.join(__dirname, '../../data');
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-      
-      // Log action
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'start',
-        resourceType: 'migration',
-        resourceId: 'airtable-to-imgbb',
-        details: { startedAt: new Date().toISOString() }
-      });
-      
-      // Run migration script in background
-      const migration = exec(`node ${scriptPath}`, (error, stdout, stderr) => {
+
+      await fsp.mkdir(DATA_DIR, { recursive: true });
+
+      const userId = req.user?.id;
+      await logMigrationEvent('start', userId, { startedAt: new Date().toISOString() });
+
+      // `execFile` rather than `exec`: no shell is involved, so the path cannot
+      // be reinterpreted as a command even if it ever stops being a constant.
+      execFile(process.execPath, [SCRIPT_PATH], (error, stdout, stderr) => {
         if (error) {
-          console.error('Migration failed:', error);
-          
-          // Log failure
-          storage.createActivityLog({
-            userId: req.user?.id,
-            action: 'error',
-            resourceType: 'migration',
-            resourceId: 'airtable-to-imgbb',
-            details: { error: error.message, stderr }
-          }).catch(console.error);
-          
+          log.error('Migration script failed', { error, stderr: stderr?.slice(0, 1000) });
+          void logMigrationEvent('error', userId, { error: error.message });
           return;
         }
-        
-        console.log('Migration completed:', stdout);
-        
-        // Log completion
-        storage.createActivityLog({
-          userId: req.user?.id,
-          action: 'complete',
-          resourceType: 'migration',
-          resourceId: 'airtable-to-imgbb',
-          details: { completedAt: new Date().toISOString() }
-        }).catch(console.error);
+
+        log.info('Migration script completed', { output: stdout?.slice(0, 1000) });
+        void logMigrationEvent('complete', userId, { completedAt: new Date().toISOString() });
       });
-      
-      // Don't wait for the migration to complete
-      return res.json({ 
-        message: 'Migration started in background',
-        status: 'running'
-      });
-    } catch (error) {
-      console.error('Error starting migration:', error);
-      return res.status(500).json({ 
-        message: 'Failed to start migration',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Get migration progress
-  app.get('/api/migration/airtable-to-imgbb/progress', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      const progress = getMigrationProgress();
-      
-      // Check if migration is currently running (you could implement a more robust check)
-      const isRunning = false; // For now, just assume it's not running
-      
-      return res.json({
-        ...progress,
-        status: isRunning ? 'running' : 
-          (progress.totalRecords > 0 && progress.processedRecords >= progress.totalRecords) ? 
-            'completed' : 'idle'
-      });
-    } catch (error) {
-      console.error('Error getting migration progress:', error);
-      return res.status(500).json({ 
-        message: 'Failed to get migration progress',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Reset migration progress
-  app.post('/api/migration/airtable-to-imgbb/reset', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      // Delete progress file if it exists
-      if (fs.existsSync(PROGRESS_FILE)) {
-        fs.unlinkSync(PROGRESS_FILE);
-      }
-      
-      // Log action
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'reset',
-        resourceType: 'migration',
-        resourceId: 'airtable-to-imgbb',
-        details: { resetAt: new Date().toISOString() }
-      });
-      
-      return res.json({ 
-        message: 'Migration progress reset',
-        status: 'idle'
-      });
-    } catch (error) {
-      console.error('Error resetting migration progress:', error);
-      return res.status(500).json({ 
-        message: 'Failed to reset migration progress',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
+
+      // Deliberately not awaited — the backfill runs for minutes and the client
+      // polls the progress endpoint below.
+      res.json({ message: 'Migration started in background', status: 'running' });
+    }),
+  );
+
+  app.get(
+    '/api/migration/airtable-to-imgbb/progress',
+    isAuthenticated,
+    asyncHandler(async (_req: Request, res: Response) => {
+      const progress = await readMigrationProgress();
+
+      // There is no process handle to consult once the script is detached, so
+      // "done" is inferred from the counts in the progress file.
+      const complete = progress.totalRecords > 0 && progress.processedRecords >= progress.totalRecords;
+
+      res.json({ ...progress, status: complete ? 'completed' : 'idle' });
+    }),
+  );
+
+  app.post(
+    '/api/migration/airtable-to-imgbb/reset',
+    isAuthenticated,
+    asyncHandler(async (req: Request, res: Response) => {
+      // `force` makes an already-absent file a no-op, replacing the
+      // existsSync/unlinkSync pair that raced with the running script.
+      await fsp.rm(PROGRESS_FILE, { force: true });
+
+      await logMigrationEvent('reset', req.user?.id, { resetAt: new Date().toISOString() });
+
+      res.json({ message: 'Migration progress reset', status: 'idle' });
+    }),
+  );
 }

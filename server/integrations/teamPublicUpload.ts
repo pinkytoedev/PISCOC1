@@ -34,7 +34,9 @@ import { HttpError, asyncHandler, parseId } from '../lib/httpError';
 import { createLogger } from '../lib/logger';
 import { isAdmin } from '../middleware/auth';
 import { publicApiRateLimit, uploadRateLimit } from '../middleware/rateLimit';
-import { assertFileKind, cleanupUploadedFile, imageUpload } from '../middleware/upload';
+import { assertFileKind, cleanupUploadedFile, imageUpload,
+  normalizeImage,
+} from '../middleware/upload';
 import { recordActivity } from '../services/activity';
 import { getSettingValue, putSetting } from '../services/settings';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
@@ -172,12 +174,7 @@ export function setupTeamPublicUploadRoutes(app: Express) {
       if (req.file) {
         await assertFileKind(req.file.path, 'image');
 
-        const uploaded = await uploadImageToImgBB({
-          path: req.file.path,
-          filename: req.file.originalname,
-          size: req.file.size,
-          mimetype: req.file.mimetype,
-        });
+        const uploaded = await uploadImageToImgBB(await normalizeImage(req.file!));
 
         // Previously a null result was ignored, so the member was told their
         // profile was updated while the old photo stayed in place.

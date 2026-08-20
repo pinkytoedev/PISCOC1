@@ -14,7 +14,8 @@
     "test:setup": "node scripts/test-setup.js",
     "test:neon": "node scripts/test-neon.js",
     "verify:security": "node scripts/verify-security.mjs",
-    "verify:routes": "node scripts/verify-routes.mjs"
+    "verify:routes": "node scripts/verify-routes.mjs",
+    "verify:uploads": "tsx scripts/verify-uploads.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.17",

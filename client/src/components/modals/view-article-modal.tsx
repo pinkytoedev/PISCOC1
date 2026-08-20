@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Article } from "@shared/schema";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -65,12 +64,8 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
         />
       );
     } else if (format === 'plaintext' || format === 'txt') {
-      // For plain text, we offer two display options:
-      // 1. Convert to HTML using marked library (for better display)
-      // 2. Preserve original formatting (for viewing raw content)
-
-      console.log('Converting plaintext to HTML using marked');
-
+      // Plain text is rendered through marked so lists and emphasis show up,
+      // with the untouched source kept one click away.
       try {
         // Convert plaintext to HTML using marked
         const htmlContent = DOMPurify.sanitize(marked.parse(content || '') as string);
@@ -89,8 +84,7 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
             </details>
           </>
         );
-      } catch (error) {
-        console.error('Error converting plaintext to HTML:', error);
+      } catch {
         // Fallback to plain display if markdown parsing fails
         return (
           <div className="whitespace-pre-wrap border-l-4 border-gray-200 pl-4 font-mono text-sm">

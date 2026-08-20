@@ -53,7 +53,7 @@ export async function pushArticleToAirtable(
 ): Promise<PushArticleResult> {
   const article = await storage.getArticle(articleId);
   if (!article) {
-    throw new Error('Article not found');
+    throw HttpError.notFound('Article not found');
   }
 
   const config = await requireConfig('articles');
@@ -122,7 +122,7 @@ export async function pushTeamMembersToAirtable(
     'PATCH',
     toUpdate.map((member) => ({
       id: member.externalId as string,
-      fields: { ...convertTeamMemberToAirtableFormat(member) },
+      fields: convertTeamMemberToAirtableFormat(member),
     })),
     results,
     'team members',
@@ -131,7 +131,7 @@ export async function pushTeamMembersToAirtable(
   const created = await runBatches<AirtableTeamMemberFields>(
     config,
     'POST',
-    toCreate.map((member) => ({ fields: { ...convertTeamMemberToAirtableFormat(member) } })),
+    toCreate.map((member) => ({ fields: convertTeamMemberToAirtableFormat(member) })),
     results,
     'team members',
   );
@@ -175,7 +175,7 @@ export async function pushCarouselQuotesToAirtable(
     'PATCH',
     toUpdate.map((quote) => ({
       id: quote.externalId as string,
-      fields: { ...convertCarouselQuoteToAirtableFormat(quote) },
+      fields: convertCarouselQuoteToAirtableFormat(quote),
     })),
     results,
     'quotes',
@@ -184,7 +184,7 @@ export async function pushCarouselQuotesToAirtable(
   const created = await runBatches<AirtableCarouselQuoteFields>(
     config,
     'POST',
-    toCreate.map((quote) => ({ fields: { ...convertCarouselQuoteToAirtableFormat(quote) } })),
+    toCreate.map((quote) => ({ fields: convertCarouselQuoteToAirtableFormat(quote) })),
     results,
     'quotes',
   );
@@ -215,11 +215,13 @@ export async function updateCarouselQuoteInAirtable(
   quoteId: number,
   externalId: string,
   input: CarouselQuoteInput,
-): Promise<void> {
+) {
   const config = await requireConfig('quotes');
   const fields = convertCarouselQuoteToAirtableFormat(input);
 
-  await writeRecords<AirtableCarouselQuoteFields>(config, 'PATCH', [{ id: externalId, fields }]);
+  const response = await writeRecords<AirtableCarouselQuoteFields>(config, 'PATCH', [
+    { id: externalId, fields },
+  ]);
 
   const quote = await storage.getCarouselQuote(quoteId);
   if (quote) {
@@ -228,6 +230,8 @@ export async function updateCarouselQuoteInAirtable(
       philo: input.philo ?? null,
     });
   }
+
+  return response;
 }
 
 /**

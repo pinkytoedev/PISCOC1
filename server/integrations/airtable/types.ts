@@ -77,7 +77,7 @@ export interface AirtableArticleFields {
 }
 
 /** Articles table as written. */
-export interface AirtableArticleFieldsWrite {
+export type AirtableArticleFieldsWrite = {
   Name: string;
   Body: string;
   Description?: string;
@@ -93,7 +93,7 @@ export interface AirtableArticleFieldsWrite {
   Author?: string[];
   Photo?: string[];
   _updatedTime?: string;
-}
+};
 
 /** Teams table as read. `Role` is a multi-select, but older rows hold a string. */
 export interface AirtableTeamMemberFields {
@@ -107,17 +107,17 @@ export interface AirtableTeamMemberFields {
   [field: string]: unknown;
 }
 
-export interface AirtableTeamMemberFieldsWrite {
+export type AirtableTeamMemberFieldsWrite = {
   Name: string;
   Role: string[];
   Bio?: string;
-}
+};
 
 /** Carousel quotes table; the same two columns in both directions. */
-export interface AirtableCarouselQuoteFields {
+export type AirtableCarouselQuoteFields = {
   main?: string;
   philo?: string;
-}
+};
 
 /** Outcome shared by every sync and push routine. */
 export interface SyncResults {

@@ -15,7 +15,22 @@ import { closeDatabase } from "./db";
 const app = express();
 export { app };
 
-app.use(express.json({ limit: "2mb" }));
+/**
+ * Captures the exact request bytes alongside the parsed body.
+ *
+ * Meta signs the raw payload of a webhook delivery. Verifying against
+ * `JSON.stringify(req.body)` cannot be correct — re-serializing normalizes key
+ * order, whitespace and unicode escaping, so the reconstructed string is not
+ * the string that was signed. Only routes that verify a signature read this.
+ */
+app.use(
+  express.json({
+    limit: "2mb",
+    verify: (req, _res, buf) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
 app.use(express.urlencoded({ extended: false, limit: "2mb" }));
 app.use(cookieParser());
 

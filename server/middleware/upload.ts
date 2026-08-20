@@ -19,6 +19,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import multer from 'multer';
+import sharp from 'sharp';
 import type { NextFunction, Request, Response } from 'express';
 import { env } from '../lib/env';
 import { HttpError } from '../lib/httpError';
@@ -40,23 +41,43 @@ const storage = multer.diskStorage({
   },
 });
 
+/**
+ * Accepted image types.
+ *
+ * HEIC/HEIF are included because that is what an iPhone camera produces by
+ * default — rejecting it would break photo submissions from the most common
+ * device. They are transcoded to JPEG after upload (see `normalizeImage`),
+ * since ImgBB and browsers do not handle HEIC reliably.
+ *
+ * SVG is deliberately absent: it is an XML document that can carry script, and
+ * these images are served back to users.
+ */
 const IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/jpg',
   'image/png',
   'image/gif',
   'image/webp',
+  'image/heic',
+  'image/heif',
+  'image/avif',
 ]);
 
 export const imageUpload = multer({
   storage,
   limits: { fileSize: env.uploads.maxImageBytes, files: 1 },
   fileFilter: (_req, file, cb) => {
-    if (IMAGE_MIME_TYPES.has(file.mimetype.toLowerCase())) {
+    const mime = file.mimetype.toLowerCase();
+    // Safari sometimes sends HEIC as application/octet-stream; fall back to the
+    // extension, and rely on the magic-byte check to confirm.
+    const heicByExtension =
+      mime === 'application/octet-stream' && /\.(heic|heif|avif)$/i.test(file.originalname);
+
+    if (IMAGE_MIME_TYPES.has(mime) || heicByExtension) {
       cb(null, true);
       return;
     }
-    cb(HttpError.badRequest('Only JPEG, PNG, GIF and WebP images are accepted'));
+    cb(HttpError.badRequest('Only JPEG, PNG, GIF, WebP, HEIC and AVIF images are accepted'));
   },
 });
 
@@ -78,7 +99,13 @@ export const zipUpload = multer({
   },
 });
 
-/** Leading bytes that identify a format regardless of what the client claimed. */
+/**
+ * Leading bytes that identify a format regardless of what the client claimed.
+ *
+ * HEIC/HEIF are ISO base-media files: the first four bytes are a box length,
+ * then the literal "ftyp" at offset 4, then a brand. Matching on "ftyp" alone
+ * would also accept MP4, so the brand is checked too.
+ */
 const MAGIC_BYTES: Array<{ kind: 'image' | 'zip'; signature: number[]; offset?: number }> = [
   { kind: 'image', signature: [0xff, 0xd8, 0xff] }, // JPEG
   { kind: 'image', signature: [0x89, 0x50, 0x4e, 0x47] }, // PNG
@@ -89,15 +116,37 @@ const MAGIC_BYTES: Array<{ kind: 'image' | 'zip'; signature: number[]; offset?: 
 ];
 
 /**
+ * ISO base-media brands that denote a still image rather than video.
+ *
+ * Covers HEIC (what an iPhone camera writes) and AVIF, which shares the
+ * container and which both modern phones and `sharp` itself produce. Video
+ * brands such as `isom`/`mp4x` are deliberately excluded — they use the same
+ * `ftyp` header, so matching on that alone would accept an MP4 as an image.
+ */
+const HEIF_BRANDS = new Set([
+  'heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1',
+  'avif', 'avis',
+]);
+
+function isHeif(header: Buffer): boolean {
+  if (header.length < 12) return false;
+  if (header.subarray(4, 8).toString('latin1') !== 'ftyp') return false;
+  return HEIF_BRANDS.has(header.subarray(8, 12).toString('latin1').toLowerCase());
+}
+
+/**
  * Confirms a file really is what its declared type says.
  * Rejects, for example, an HTML document sent as `image/png`.
  */
 export async function assertFileKind(filePath: string, expected: 'image' | 'zip'): Promise<void> {
   const handle = await fs.open(filePath, 'r');
   try {
-    const buffer = Buffer.alloc(8);
-    const { bytesRead } = await handle.read(buffer, 0, 8, 0);
+    // 12 bytes covers the longest signature checked here (the HEIF brand).
+    const buffer = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(buffer, 0, 12, 0);
     const header = buffer.subarray(0, bytesRead);
+
+    if (expected === 'image' && isHeif(header)) return;
 
     const matches = MAGIC_BYTES.some(
       ({ kind, signature, offset = 0 }) =>
@@ -115,6 +164,59 @@ export async function assertFileKind(filePath: string, expected: 'image' | 'zip'
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * Converts an uploaded image to a web-safe format when necessary.
+ *
+ * iPhones upload HEIC, which neither browsers nor the image host render
+ * reliably, so it is transcoded to JPEG in place. Everything else is left
+ * untouched — re-encoding a JPEG would only lose quality.
+ *
+ * Returns the descriptor the caller should hand to the image host, since the
+ * filename and mime type change when a conversion happens.
+ */
+export async function normalizeImage(file: Express.Multer.File): Promise<{
+  path: string;
+  filename: string;
+  size: number;
+  mimetype: string;
+}> {
+  const handle = await fs.open(file.path, 'r');
+  let header: Buffer;
+  try {
+    const buffer = Buffer.alloc(12);
+    const { bytesRead } = await handle.read(buffer, 0, 12, 0);
+    header = buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+
+  if (!isHeif(header)) {
+    return {
+      path: file.path,
+      filename: file.originalname,
+      size: file.size,
+      mimetype: file.mimetype,
+    };
+  }
+
+  const converted = `${file.path}.jpg`;
+  await sharp(file.path).jpeg({ quality: 90 }).toFile(converted);
+  const { size } = await fs.stat(converted);
+
+  // The original is removed now rather than left for the cleanup hook, which
+  // only knows about the path multer produced.
+  await fs.rm(file.path, { force: true }).catch(() => {});
+  // Point the request at the converted file so cleanup collects that instead.
+  file.path = converted;
+
+  return {
+    path: converted,
+    filename: file.originalname.replace(/\.(heic|heif|avif)$/i, '.jpg'),
+    size,
+    mimetype: 'image/jpeg',
+  };
 }
 
 /**

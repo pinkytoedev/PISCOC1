@@ -100,16 +100,19 @@ export function ArticleTable({
     },
   });
 
+  const updateInAirtable = updateAirtableMutation.mutate;
+  const pushToAirtable = pushToAirtableMutation.mutate;
+
   /**
    * A freshly published article has to reach Airtable: linked records get an
-   * update, unlinked ones get created. The push is guarded because an
-   * invalidation can re-run this before the new external id is visible.
+   * update, unlinked ones get created. The push is guarded because a refetch can
+   * re-run this before the new external id is visible.
    */
   const syncPublishedToAirtable = useCallback(
     (article: Article) => {
       // Give the write a moment to land before Airtable reads it back.
       if (article.source === "airtable" && article.externalId) {
-        setTimeout(() => updateAirtableMutation.mutate(article.id), 500);
+        setTimeout(() => updateInAirtable(article.id), 500);
         return;
       }
 
@@ -117,7 +120,7 @@ export function ArticleTable({
       if (recentlyPushedArticles.has(article.id)) return;
 
       setRecentlyPushedArticles((previous) => new Set(previous).add(article.id));
-      setTimeout(() => pushToAirtableMutation.mutate(article.id), 500);
+      setTimeout(() => pushToAirtable(article.id), 500);
       setTimeout(() => {
         setRecentlyPushedArticles((previous) => {
           const next = new Set(previous);
@@ -126,7 +129,7 @@ export function ArticleTable({
         });
       }, 5000);
     },
-    [recentlyPushedArticles, updateAirtableMutation, pushToAirtableMutation],
+    [recentlyPushedArticles, updateInAirtable, pushToAirtable],
   );
 
   const { autoPublishingArticleId } = useAutoPublishScheduler({
@@ -162,8 +165,8 @@ export function ArticleTable({
     onView,
     onDelete: handleDelete,
     onUploadImage: handleUploadImage,
-    onUpdateAirtable: (article) => updateAirtableMutation.mutate(article.id),
-    onPushToAirtable: (article) => pushToAirtableMutation.mutate(article.id),
+    onUpdateAirtable: (article) => updateInAirtable(article.id),
+    onPushToAirtable: (article) => pushToAirtable(article.id),
     onStartReupload: (article) => reupload.start.mutate(article.id),
     onCompleteReupload: (article) => reupload.complete.mutate(article.id),
     onCancelReupload: (article) => reupload.cancel.mutate(article.id),

@@ -40,6 +40,7 @@ import {
   cleanupUploadedFile,
   imageUpload,
   zipUpload,
+  normalizeImage,
 } from '../middleware/upload';
 import { recordActivity } from '../services/activity';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
@@ -84,12 +85,7 @@ async function handleImageUpload(
     filename: req.file.originalname,
   });
 
-  const uploaded = await uploadImageToImgBB({
-    path: req.file.path,
-    filename: req.file.originalname,
-    size: req.file.size,
-    mimetype: req.file.mimetype,
-  });
+  const uploaded = await uploadImageToImgBB(await normalizeImage(req.file!));
   if (!uploaded) throw HttpError.internal('Failed to upload image to ImgBB');
 
   const patch =

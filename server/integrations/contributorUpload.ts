@@ -28,6 +28,7 @@ import {
   cleanupUploadedFile,
   imageUpload,
   zipUpload,
+  normalizeImage,
 } from '../middleware/upload';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
 import { processZipFile } from '../utils/zipProcessor';
@@ -127,12 +128,7 @@ async function handleImageUpload(
 
   await assertFileKind(req.file.path, 'image');
 
-  const uploaded = await uploadImageToImgBB({
-    path: req.file.path,
-    filename: req.file.originalname,
-    size: req.file.size,
-    mimetype: req.file.mimetype,
-  });
+  const uploaded = await uploadImageToImgBB(await normalizeImage(req.file!));
 
   if (!uploaded) throw HttpError.internal('Image hosting is unavailable; try again shortly');
 
@@ -298,12 +294,7 @@ export function setupContributorUploadRoutes(app: Express) {
 
       await assertFileKind(req.file.path, 'image');
 
-      const uploaded = await uploadImageToImgBB({
-        path: req.file.path,
-        filename: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      });
+      const uploaded = await uploadImageToImgBB(await normalizeImage(req.file!));
       if (!uploaded) throw HttpError.internal('Image hosting is unavailable; try again shortly');
 
       const patch =

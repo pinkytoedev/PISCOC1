@@ -25,6 +25,7 @@ import path from 'path';
 import { createLogger } from '../../lib/logger';
 import { env } from '../../lib/env';
 import { recordActivity } from '../../services/activity';
+import { fetchRemoteImage } from '../../services/images';
 
 const log = createLogger('instagram:images');
 
@@ -74,18 +75,16 @@ function safeFilename(imageUrl: string): string {
 export async function hostImageLocally(imageUrl: string): Promise<string> {
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
 
-  const response = await fetch(imageUrl, {
-    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+  // The URL comes from an article's imageUrl, which is user-settable, so this
+  // is a server-side request to an attacker-influenced address. `fetchRemoteImage`
+  // resolves the host and rejects private, loopback and link-local targets —
+  // including the cloud metadata endpoint — re-checking on every redirect hop,
+  // and streams with a hard size cap rather than buffering whatever arrives.
+  const { buffer } = await fetchRemoteImage(imageUrl, {
+    timeoutMs: DOWNLOAD_TIMEOUT_MS,
+    maxBytes: MAX_IMAGE_BYTES,
   });
 
-  if (!response.ok) {
-    throw new Error(`Source image responded ${response.status} ${response.statusText}`);
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (buffer.byteLength > MAX_IMAGE_BYTES) {
-    throw new Error(`Source image is ${buffer.byteLength} bytes, over the ${MAX_IMAGE_BYTES} limit`);
-  }
   if (buffer.byteLength === 0) {
     throw new Error('Source image is empty');
   }

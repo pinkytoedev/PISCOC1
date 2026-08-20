@@ -152,12 +152,11 @@ function timingSafeEquals(a: string, b: string): boolean {
 /**
  * Checks the `X-Hub-Signature` HMAC on an inbound event.
  *
- * Caveat worth knowing: Express has already parsed and discarded the raw body
- * by the time a route runs, so the digest is computed over a re-serialisation
- * of `req.body`. That reproduces Meta's bytes for the payloads they actually
- * send, but it is not a general guarantee — a genuinely robust check needs the
- * raw buffer captured in `express.json({ verify })`, which lives in
- * `server/index.ts`.
+ * The digest is computed over the raw request bytes, captured by the
+ * `express.json({ verify })` hook in `server/index.ts`. Re-serialising
+ * `req.body` would not do: `JSON.stringify` normalises key order, whitespace
+ * and unicode escaping, so the reconstructed string is not the string Meta
+ * signed, and a valid delivery could be rejected.
  *
  * Verification is skipped when no app secret is configured, matching the
  * previous behaviour: a deployment with no Facebook app should not 403 the
@@ -170,7 +169,14 @@ export function verifyWebhookSignature(req: Request): boolean {
     return true;
   }
 
-  const payload = JSON.stringify(req.body ?? {});
+  const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
+  if (!rawBody) {
+    // A signed delivery must never be accepted on a re-serialised body.
+    log.error('Raw body unavailable; cannot verify webhook signature');
+    return false;
+  }
+
+  const payload = rawBody;
 
   // Meta sends both headers; sha256 is the current one.
   const candidates: Array<{ header: string; algorithm: string }> = [

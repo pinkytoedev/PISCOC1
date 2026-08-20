@@ -1,353 +1,219 @@
-import { Express, Request, Response } from 'express';
-import { storage } from '../storage';
-import { uploadLinkToAirtableTestField, migrateArticleImagesToLinks } from '../utils/airtableTestField';
-import { uploadImageUrlAsLinkField } from '../utils/imageUploader';
-import { isAdmin } from '../middleware/auth';
-
 /**
- * Register the Airtable test routes
+ * Diagnostic endpoints for the Airtable link-field migration.
+ *
+ * These exist to answer "can this deployment write a URL into Airtable at all?"
+ * before the real image fields are switched over. They mutate a scratch column
+ * or an article's link fields and report what happened; none of them are part
+ * of the editorial flow.
  */
+
+import type { Express } from 'express';
+import type { Article } from '@shared/schema';
+import { storage } from '../storage';
+import { asyncHandler, HttpError, parseId } from '../lib/httpError';
+import { createLogger } from '../lib/logger';
+import { isAdmin, isAuthenticated } from '../middleware/auth';
+import { recordActivity } from '../services/activity';
+import { migrateArticleImagesToLinks, uploadLinkToAirtableTestField } from '../utils/airtableTestField';
+import { uploadImageUrlAsLinkField } from '../utils/imageUploader';
+
+const log = createLogger('airtable:test');
+
+/** Loads an article that is actually backed by an Airtable record. */
+async function requireAirtableArticle(articleId: number): Promise<Article> {
+  const article = await storage.getArticle(articleId);
+  if (!article) throw HttpError.notFound('Article not found');
+  if (article.source !== 'airtable' || !article.externalId) {
+    throw HttpError.badRequest('This article is not from Airtable');
+  }
+  return article;
+}
+
+function describe(article: Article) {
+  return { id: article.id, title: article.title, externalId: article.externalId };
+}
+
 export function registerAirtableTestRoutes(app: Express): void {
-  // Direct test endpoint that doesn't require authentication (for development only)
-  app.get('/api/airtable/direct-test', isAdmin, async (req: Request, res: Response) => {
-    try {
-      // Get all articles
+  // Picks its own subject, so it needs no request body — admin-only because it
+  // writes to whichever article it happens to find first.
+  app.get(
+    '/api/airtable/direct-test',
+    isAdmin,
+    asyncHandler(async (_req, res) => {
       const articles = await storage.getArticles();
-      
-      // Find the first Airtable article with an image URL
-      const testArticle = articles.find(article => 
-        article.source === 'airtable' && 
-        article.externalId && 
-        article.imageUrl
+      const subject = articles.find(
+        (article) => article.source === 'airtable' && article.externalId && article.imageUrl,
       );
-      
-      if (!testArticle) {
-        return res.status(404).json({ message: 'No suitable Airtable article found for testing' });
+
+      if (!subject) {
+        throw HttpError.notFound('No suitable Airtable article found for testing');
       }
-      
-      // Test uploading the link to the "Test" field in Airtable
-      console.log(`Testing article: ${testArticle.id} - ${testArticle.title}`);
-      console.log(`ExternalId: ${testArticle.externalId}`);
-      console.log(`Image URL: ${testArticle.imageUrl}`);
-      
-      if (!testArticle.imageUrl) {
-        return res.status(400).json({ message: 'Selected article has no image URL' });
-      }
-      
-      if (!testArticle.externalId) {
-        return res.status(400).json({ message: 'Selected article has no external ID' });
-      }
-      
+
       const success = await uploadLinkToAirtableTestField(
-        testArticle.imageUrl,
-        testArticle.externalId,
-        `test-image-${testArticle.id}.jpg`
+        subject.imageUrl,
+        subject.externalId as string,
+        `test-image-${subject.id}.jpg`,
       );
-      
+
       if (!success) {
-        return res.status(500).json({ 
-          message: 'Failed to update Airtable Test field',
-          article: {
-            id: testArticle.id,
-            title: testArticle.title,
-            externalId: testArticle.externalId,
-            imageUrl: testArticle.imageUrl
-          }
-        });
+        throw HttpError.internal('Failed to update Airtable Test field');
       }
-      
-      return res.json({
+
+      res.json({
         message: 'Successfully updated Airtable Test field with image URL',
-        article: {
-          id: testArticle.id,
-          title: testArticle.title,
-          externalId: testArticle.externalId,
-          imageUrl: testArticle.imageUrl
-        }
+        article: { ...describe(subject), imageUrl: subject.imageUrl },
       });
-    } catch (error) {
-      console.error('Error in direct Airtable test:', error);
-      return res.status(500).json({ 
-        message: 'Failed to process direct test',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  // Test endpoint to upload an image link to the Airtable "Test" field
-  app.post('/api/airtable/test-link/:articleId', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
+    }),
+  );
+
+  app.post(
+    '/api/airtable/test-link/:articleId',
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const articleId = parseId(req.params.articleId, 'article ID');
+      const { imageUrl } = req.body ?? {};
+      if (typeof imageUrl !== 'string' || !imageUrl) {
+        throw HttpError.badRequest('Image URL is required');
       }
-      
-      const articleId = parseInt(req.params.articleId);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      const { imageUrl } = req.body;
-      
-      if (!imageUrl) {
-        return res.status(400).json({ message: 'Image URL is required' });
-      }
-      
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
-      // Upload the link to the "Test" field in Airtable
+
+      const article = await requireAirtableArticle(articleId);
       const success = await uploadLinkToAirtableTestField(
         imageUrl,
-        article.externalId,
-        `test-image-${article.id}.jpg`
+        article.externalId as string,
+        `test-image-${article.id}.jpg`,
       );
-      
-      if (!success) {
-        return res.status(500).json({ message: 'Failed to update Airtable Test field' });
-      }
-      
-      // Log the activity
-      await storage.createActivityLog({
+
+      if (!success) throw HttpError.internal('Failed to update Airtable Test field');
+
+      await recordActivity({
         userId: req.user?.id,
-        action: 'test',
-        resourceType: 'image_url',
-        resourceId: articleId.toString(),
-        details: {
-          field: 'Test',
-          imageUrl
-        }
+        action: 'update',
+        resource: 'article',
+        resourceId: articleId,
+        details: { operation: 'airtable-test-link', field: 'Test' },
       });
-      
-      return res.json({
+
+      res.json({
         message: 'Image URL successfully uploaded to Airtable Test field',
-        article: {
-          id: article.id,
-          title: article.title,
-          externalId: article.externalId
-        }
+        article: describe(article),
       });
-    } catch (error) {
-      console.error('Error in Airtable Test Link endpoint:', error);
-      return res.status(500).json({ 
-        message: 'Failed to process test link upload',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Endpoint to test migrating a single article's images to the Test field
-  app.post('/api/airtable/test-migration/:articleId', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      const articleId = parseInt(req.params.articleId);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
-      // Run the migration for this article only
+    }),
+  );
+
+  app.post(
+    '/api/airtable/test-migration/:articleId',
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const articleId = parseId(req.params.articleId, 'article ID');
+      const article = await requireAirtableArticle(articleId);
+
       const result = await migrateArticleImagesToLinks(articleId, true);
-      
-      // Log the activity
-      await storage.createActivityLog({
+
+      await recordActivity({
         userId: req.user?.id,
-        action: 'test',
-        resourceType: 'migration',
-        resourceId: articleId.toString(),
-        details: result
+        action: 'update',
+        resource: 'article',
+        resourceId: articleId,
+        details: { operation: 'airtable-test-migration', ...result },
       });
-      
-      return res.json({
-        message: result.success 
-          ? 'Successfully migrated article image to Test field' 
+
+      res.json({
+        message: result.success
+          ? 'Successfully migrated article image to Test field'
           : 'Failed to migrate article image to Test field',
         result,
-        article: {
-          id: article.id,
-          title: article.title,
-          externalId: article.externalId
-        }
+        article: describe(article),
       });
-    } catch (error) {
-      console.error('Error in Airtable Test Migration endpoint:', error);
-      return res.status(500).json({ 
-        message: 'Failed to process test migration',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Endpoint to migrate a specific article from attachment fields to link fields
-  app.post('/api/airtable/migrate-to-link-fields/:articleId', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      const articleId = parseInt(req.params.articleId);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      // Get the article from the database
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      // Check if this is an Airtable article
-      if (article.source !== 'airtable' || !article.externalId) {
-        return res.status(400).json({ message: 'This article is not from Airtable' });
-      }
-      
+    }),
+  );
+
+  // Writes the real link fields for one article, which is the migration itself
+  // rather than a rehearsal.
+  app.post(
+    '/api/airtable/migrate-to-link-fields/:articleId',
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const articleId = parseId(req.params.articleId, 'article ID');
+      const article = await requireAirtableArticle(articleId);
+      const recordId = article.externalId as string;
+
       const results = {
-        mainImage: false,
-        instaPhoto: false
+        mainImage: article.imageUrl
+          ? await uploadImageUrlAsLinkField(article.imageUrl, recordId, 'MainImageLink')
+          : false,
+        instaPhoto: article.instagramImageUrl
+          ? await uploadImageUrlAsLinkField(article.instagramImageUrl, recordId, 'InstaPhotoLink')
+          : false,
       };
-      
-      // Process main image if it exists
-      if (article.imageUrl) {
-        // Map the field names to their link field equivalents
-        const mainImageResult = await uploadImageUrlAsLinkField(
-          article.imageUrl,
-          article.externalId,
-          'MainImageLink'  // Using the link field
-        );
-        
-        results.mainImage = mainImageResult;
-        
-        if (mainImageResult) {
-          console.log(`Successfully migrated MainImage to MainImageLink for article ${article.id}`);
-        } else {
-          console.error(`Failed to migrate MainImage to MainImageLink for article ${article.id}`);
-        }
-      }
-      
-      // Process Instagram image if it exists
-      if (article.instagramImageUrl) {
-        const instaImageResult = await uploadImageUrlAsLinkField(
-          article.instagramImageUrl,
-          article.externalId,
-          'InstaPhotoLink'  // Using the link field
-        );
-        
-        results.instaPhoto = instaImageResult;
-        
-        if (instaImageResult) {
-          console.log(`Successfully migrated instaPhoto to InstaPhotoLink for article ${article.id}`);
-        } else {
-          console.error(`Failed to migrate instaPhoto to InstaPhotoLink for article ${article.id}`);
-        }
-      }
-      
-      // Log the activity
-      await storage.createActivityLog({
+
+      log.info('Migrated article images to link fields', { articleId, ...results });
+
+      await recordActivity({
         userId: req.user?.id,
-        action: 'migration',
-        resourceType: 'article',
-        resourceId: articleId.toString(),
-        details: {
-          results,
-          title: article.title,
-          externalId: article.externalId
-        }
+        action: 'update',
+        resource: 'article',
+        resourceId: articleId,
+        details: { operation: 'airtable-link-migration', ...results },
       });
-      
-      return res.json({
+
+      res.json({
         message: 'Article migration to link fields complete',
         success: results.mainImage || results.instaPhoto,
         results,
         article: {
-          id: article.id,
-          title: article.title,
-          externalId: article.externalId,
-          hasMainImage: !!article.imageUrl,
-          hasInstaImage: !!article.instagramImageUrl
-        }
+          ...describe(article),
+          hasMainImage: Boolean(article.imageUrl),
+          hasInstaImage: Boolean(article.instagramImageUrl),
+        },
       });
-    } catch (error) {
-      console.error('Error in Airtable link field migration endpoint:', error);
-      return res.status(500).json({ 
-        message: 'Failed to process link field migration',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
-  // Endpoint to run a batch migration test for multiple articles
-  app.post('/api/airtable/test-batch-migration', async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      const { limit = 1 } = req.body;
-      
-      // Get Airtable-sourced articles with images
+    }),
+  );
+
+  app.post(
+    '/api/airtable/test-batch-migration',
+    isAuthenticated,
+    asyncHandler(async (req, res) => {
+      const limit = parseLimit(req.body?.limit);
+
       const articles = await storage.getArticles();
-      const airtableArticles = articles
-        .filter(article => 
-          article.source === 'airtable' && 
-          article.externalId && 
-          (article.imageUrl || article.instagramImageUrl)
+      const subjects = articles
+        .filter(
+          (article) =>
+            article.source === 'airtable'
+            && article.externalId
+            && (article.imageUrl || article.instagramImageUrl),
         )
         .slice(0, limit);
-      
-      if (airtableArticles.length === 0) {
-        return res.status(404).json({ message: 'No Airtable articles with images found' });
+
+      if (subjects.length === 0) {
+        throw HttpError.notFound('No Airtable articles with images found');
       }
-      
+
       const results = [];
-      
-      // Process each article
-      for (const article of airtableArticles) {
+      for (const article of subjects) {
         const result = await migrateArticleImagesToLinks(article.id, true);
-        results.push({
-          articleId: article.id,
-          title: article.title,
-          result
-        });
-        
-        // Log each migration attempt
-        await storage.createActivityLog({
+        results.push({ articleId: article.id, title: article.title, result });
+
+        await recordActivity({
           userId: req.user?.id,
-          action: 'test',
-          resourceType: 'migration',
-          resourceId: article.id.toString(),
-          details: result
+          action: 'update',
+          resource: 'article',
+          resourceId: article.id,
+          details: { operation: 'airtable-test-migration', ...result },
         });
       }
-      
-      return res.json({
-        message: `Tested migration for ${results.length} articles`,
-        results
-      });
-    } catch (error) {
-      console.error('Error in Airtable Batch Migration endpoint:', error);
-      return res.status(500).json({ 
-        message: 'Failed to process batch migration test',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
+
+      res.json({ message: `Tested migration for ${results.length} articles`, results });
+    }),
+  );
+}
+
+/**
+ * Bounds the batch size. The body used to be trusted verbatim, so a `limit` of
+ * a few thousand would hold the request open for one Airtable write per record.
+ */
+function parseLimit(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.min(Math.trunc(parsed), 25);
 }

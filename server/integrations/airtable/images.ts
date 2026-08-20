@@ -106,7 +106,7 @@ export async function uploadArticleImageFile(
 
       const airtable = await uploadImageUrlToAirtable(imgbb.url, recordId, field, file.filename);
       if (!airtable) {
-        throw new HttpError(500, 'Image uploaded to ImgBB but failed to update Airtable');
+        throw HttpError.internal('Image uploaded to ImgBB but failed to update Airtable');
       }
 
       await applyToArticle(article.id, field, imgbb.url);
@@ -169,7 +169,7 @@ export async function uploadArticleImageUrl(
     if (!imgbb) throw HttpError.internal('Failed to upload image URL to ImgBB');
 
     const ok = await uploadImageUrlAsLinkField(imgbb.url, recordId, targetField);
-    if (!ok) throw new HttpError(500, 'Image uploaded to ImgBB but failed to update Airtable');
+    if (!ok) throw HttpError.internal('Image uploaded to ImgBB but failed to update Airtable');
 
     await applyToArticle(article.id, field, imgbb.url);
     await recordActivity({

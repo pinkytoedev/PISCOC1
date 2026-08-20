@@ -8,7 +8,9 @@ import { storage } from '../storage';
 import { asyncHandler, HttpError, parseId } from '../lib/httpError';
 import { isAuthenticated } from '../middleware/auth';
 import { recordActivity } from '../services/activity';
-import { cleanupUploadedFile, imageUpload, assertFileKind } from '../middleware/upload';
+import { cleanupUploadedFile, imageUpload, assertFileKind,
+  normalizeImage,
+} from '../middleware/upload';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
 
 export function teamMembersRouter(): Router {
@@ -27,12 +29,7 @@ export function teamMembersRouter(): Router {
 
       await assertFileKind(req.file.path, 'image');
 
-      const hosted = await uploadImageToImgBB({
-        path: req.file.path,
-        filename: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      });
+      const hosted = await uploadImageToImgBB(await normalizeImage(req.file!));
 
       if (!hosted) throw HttpError.internal('Image hosting is unavailable; try again shortly');
 

@@ -50,6 +50,10 @@ export function useAutoPublishScheduler({ articles, onPublished }: AutoPublishOp
   const autoPublishingArticleId =
     publishMutation.isPending && publishMutation.variables ? publishMutation.variables.id ?? null : null;
 
+  // `mutate` keeps a stable identity; the mutation object itself does not, and
+  // depending on it would tear down the interval below on every render.
+  const publish = publishMutation.mutate;
+
   // Forget handled ids periodically so an article rescheduled later still runs.
   useEffect(() => {
     const resetInterval = setInterval(() => setProcessedArticleIds(new Set()), PROCESSED_RESET_INTERVAL_MS);
@@ -84,8 +88,8 @@ export function useAutoPublishScheduler({ articles, onPublished }: AutoPublishOp
     });
 
     // One at a time; the next tick picks up the rest.
-    publishMutation.mutate({ id: articlesToPublish[0].id, data: { status: "published" } });
-  }, [articles, processedArticleIds, publishMutation, autoPublishingArticleId]);
+    publish({ id: articlesToPublish[0].id, data: { status: "published" } });
+  }, [articles, processedArticleIds, publish, autoPublishingArticleId]);
 
   useEffect(() => {
     if (!articles) return;

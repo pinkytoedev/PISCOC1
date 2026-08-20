@@ -29,6 +29,7 @@ import { putSetting } from '../services/settings';
 import { recordActivity } from '../services/activity';
 import {
   AirtableWriteError,
+  isImgBBConfigured,
   uploadFileToImgBB,
   uploadUrlToImgBB,
   writeRecordFields,
@@ -50,6 +51,18 @@ const LINK_FIELD_BY_IMAGE_FIELD: Record<ImageField, string> = {
 function parseImageField(value: string): ImageField {
   if ((IMAGE_FIELDS as readonly string[]).includes(value)) return value as ImageField;
   throw HttpError.badRequest("Invalid field name. Must be 'MainImage' or 'instaPhoto'");
+}
+
+/**
+ * Fails fast when ImgBB is unusable.
+ *
+ * A missing or disabled key is an operator problem, not a server fault, so it
+ * stays a 400 — the same status these routes returned before.
+ */
+async function requireImgBB(): Promise<void> {
+  if (!(await isImgBBConfigured())) {
+    throw HttpError.badRequest('ImgBB integration is not enabled or not configured properly');
+  }
 }
 
 /**
@@ -178,6 +191,8 @@ export function setupImgBBRoutes(app: Express) {
 
       if (!req.file) throw HttpError.badRequest('No file uploaded');
 
+      await requireImgBB();
+
       // The declared MIME type is client-controlled; check the actual bytes.
       await assertFileKind(req.file.path, 'image');
 
@@ -212,6 +227,8 @@ export function setupImgBBRoutes(app: Express) {
       if (typeof imageUrl !== 'string' || !imageUrl.trim()) {
         throw HttpError.badRequest('Image URL is required');
       }
+
+      await requireImgBB();
 
       const { externalId } = await requireAirtableBackedArticle(articleId);
 
