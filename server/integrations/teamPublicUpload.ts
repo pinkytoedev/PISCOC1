@@ -1,310 +1,211 @@
 /**
- * Team Public Upload API
- * Allows public access to update team member profiles via a toggleable link
+ * Public team profile updates.
+ *
+ * An admin can open a link that lets team members correct their own name, role,
+ * bio and photo without an account. The toggle behind it lives in integration
+ * settings (`team_upload.public_link_active`) and every public route below is
+ * refused while it is off.
+ *
+ * What changed and why:
+ *
+ *   - The feature gate ran *after* multer, so a 10 MB image was written to disk
+ *     and only then rejected with "public upload is currently disabled" — and
+ *     the cleanup for that path, like the one for a missing member, was a
+ *     `existsSync`/`unlinkSync` pair repeated at each early return. On the
+ *     unauthenticated route that is a disk-fill primitive: post large files at a
+ *     closed link until the volume is full. The gate is now a middleware that
+ *     runs before any bytes are accepted, and `cleanupUploadedFile` removes the
+ *     temp file when the response finishes regardless of outcome.
+ *
+ *   - The hand-rolled rate limiter kept an entry per IP in a `Map` that was
+ *     never pruned, so the process leaked memory for the life of the deploy.
+ *     Replaced with the shared `express-rate-limit` limiters.
+ *
+ *   - The image was uploaded to ImgBB on trust; it is now checked against its
+ *     magic bytes, and a hosting failure is reported instead of quietly
+ *     returning success with the photo unchanged.
  */
 
-import { Express, Request, Response } from 'express';
-import path from 'path';
-import fs from 'fs';
-import multer from 'multer';
-import sharp from 'sharp';
+import type { Express } from 'express';
+import { z } from 'zod';
+import type { InsertTeamMember, TeamMember } from '@shared/schema';
 import { storage } from '../storage';
-import { uploadImageToImgBB } from '../utils/imgbbUploader';
+import { HttpError, asyncHandler, parseId } from '../lib/httpError';
+import { createLogger } from '../lib/logger';
 import { isAdmin } from '../middleware/auth';
+import { publicApiRateLimit, uploadRateLimit } from '../middleware/rateLimit';
+import { assertFileKind, cleanupUploadedFile, imageUpload } from '../middleware/upload';
+import { recordActivity } from '../services/activity';
+import { getSettingValue, putSetting } from '../services/settings';
+import { uploadImageToImgBB } from '../utils/imgbbUploader';
 
-// Simple in-memory rate limiting
-const uploadAttempts = new Map<string, { count: number; resetTime: number }>();
-
-const checkRateLimit = (ip: string): boolean => {
-    const now = Date.now();
-    const windowMs = 15 * 60 * 1000; // 15 minutes
-    const maxAttempts = 20; // Higher limit for team updates
-
-    const record = uploadAttempts.get(ip);
-
-    if (!record || now > record.resetTime) {
-        uploadAttempts.set(ip, { count: 1, resetTime: now + windowMs });
-        return true;
-    }
-
-    if (record.count >= maxAttempts) {
-        return false;
-    }
-
-    record.count++;
-    return true;
-};
-
-// Rate limiting middleware
-const rateLimitMiddleware = (req: Request, res: Response, next: Function) => {
-    const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
-
-    if (!checkRateLimit(clientIp)) {
-        return res.status(429).json({
-            message: 'Too many attempts from this IP, please try again later.'
-        });
-    }
-
-    next();
-};
-
-// Authentication middleware
-const isAuthenticated = (req: Request, res: Response, next: Function) => {
-    if (req.isAuthenticated()) {
-        return next();
-    }
-    res.status(401).json({ message: "Unauthorized" });
-};
-
-// Configure multer for file uploads
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const diskStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const sanitizedOriginalName = path.basename(file.originalname).replace(/[^a-zA-Z0-9.-]/g, '_');
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + '-' + sanitizedOriginalName);
-    }
-});
-
-const imageUpload = multer({
-    storage: diskStorage,
-    limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB
-        files: 1
-    },
-    fileFilter: (req, file, cb) => {
-        const allowedMimeTypes = [
-            'image/jpeg', 'image/jpg', 'image/png',
-            'image/gif', 'image/webp',
-            'image/heic', 'image/heif'
-        ];
-
-        if (allowedMimeTypes.includes(file.mimetype.toLowerCase())) {
-            cb(null, true);
-        } else {
-            cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, and HEIC images are allowed.'));
-        }
-    }
-});
+const log = createLogger('upload:team-public');
 
 const SERVICE_NAME = 'team_upload';
 const SETTING_KEY = 'public_link_active';
 
-// Helper function to get available roles
-// This list is based on the Airtable configuration found in server/integrations/airtable.ts
-const getAvailableRoles = () => {
-    return [
-        'Special Projects',
-        'Photo',
-        'Dev',
-        'E-Board',
-        'Writer',
-    ];
-};
+/**
+ * Roles offered to the member, mirroring the Airtable single-select in
+ * server/integrations/airtable.ts.
+ */
+const AVAILABLE_ROLES = [
+  'Special Projects',
+  'Photo',
+  'Dev',
+  'E-Board',
+  'Writer',
+] as const;
+
+/** Text a member may edit, bounded because this endpoint takes no credentials. */
+const profileSchema = z.object({
+  name: z.string().trim().max(200).optional(),
+  role: z.string().trim().max(100).optional(),
+  bio: z.string().trim().max(5000).optional(),
+});
+
+/** The subset of a member record that is safe to hand to an anonymous caller. */
+function publicView(member: TeamMember) {
+  return {
+    id: member.id,
+    name: member.name,
+    role: member.role,
+    // Current values, so the form can be pre-filled with what is already there.
+    bio: member.bio,
+    imageUrl: member.imageUrl,
+  };
+}
+
+async function isPublicUploadEnabled(): Promise<boolean> {
+  return (await getSettingValue(SERVICE_NAME, SETTING_KEY)) === 'true';
+}
+
+/**
+ * Refuses every public route while the link is switched off.
+ *
+ * Deliberately the first middleware on the upload route — ahead of multer — so
+ * a request that will be rejected never reaches the filesystem.
+ */
+const requirePublicUploadEnabled = asyncHandler(async (_req, _res, next) => {
+  if (!(await isPublicUploadEnabled())) {
+    throw HttpError.forbidden('Public upload is currently disabled');
+  }
+  next();
+});
 
 export function setupTeamPublicUploadRoutes(app: Express) {
+  // Whether the public page should render at all. Readable while the feature is
+  // off — that answer *is* the response.
+  app.get(
+    '/api/public/team-upload-status',
+    publicApiRateLimit,
+    asyncHandler(async (_req, res) => {
+      res.json({ enabled: await isPublicUploadEnabled() });
+    }),
+  );
 
-    // Get public upload status (Open to public to check if page should render)
-    app.get('/api/public/team-upload-status', async (req, res) => {
-        try {
-            const setting = await storage.getIntegrationSettingByKey(SERVICE_NAME, SETTING_KEY);
-            res.json({ enabled: setting ? setting.value === 'true' : false });
-        } catch (error) {
-            res.status(500).json({ message: "Failed to fetch status" });
+  // Roles the member can pick from (public, gated).
+  app.get(
+    '/api/public/team-roles',
+    publicApiRateLimit,
+    requirePublicUploadEnabled,
+    (_req, res) => {
+      res.json([...AVAILABLE_ROLES]);
+    },
+  );
+
+  // Toggle the public link (admin only).
+  app.post(
+    '/api/public/team-upload-status',
+    isAdmin,
+    asyncHandler(async (req, res) => {
+      const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+
+      await putSetting(SERVICE_NAME, SETTING_KEY, String(enabled));
+
+      // Opening or closing anonymous write access to team profiles is worth an
+      // audit entry.
+      await recordActivity({
+        userId: req.user?.id,
+        action: 'update',
+        resource: 'integration_setting',
+        resourceId: `${SERVICE_NAME}.${SETTING_KEY}`,
+        details: { enabled },
+      });
+
+      res.json({ enabled });
+    }),
+  );
+
+  // The list the member picks themselves out of (public, gated).
+  app.get(
+    '/api/public/team-members-list',
+    publicApiRateLimit,
+    requirePublicUploadEnabled,
+    asyncHandler(async (_req, res) => {
+      const members = await storage.getTeamMembers();
+      res.json(members.map(publicView));
+    }),
+  );
+
+  // Apply the member's edits (public, gated).
+  app.post(
+    '/api/public/team-member-update',
+    uploadRateLimit,
+    requirePublicUploadEnabled,
+    cleanupUploadedFile,
+    imageUpload.single('file'),
+    asyncHandler(async (req, res) => {
+      const memberId = parseId(req.body?.memberId, 'member ID');
+      const { name, role, bio } = profileSchema.parse(req.body);
+
+      const member = await storage.getTeamMember(memberId);
+      if (!member) throw HttpError.notFound('Team member not found');
+
+      // A blank field means "leave it alone", which is how the form submits an
+      // untouched input.
+      const updates: Partial<InsertTeamMember> = {
+        name: name || member.name,
+        role: role || member.role,
+        bio: bio || member.bio,
+      };
+
+      if (req.file) {
+        await assertFileKind(req.file.path, 'image');
+
+        const uploaded = await uploadImageToImgBB({
+          path: req.file.path,
+          filename: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+        });
+
+        // Previously a null result was ignored, so the member was told their
+        // profile was updated while the old photo stayed in place.
+        if (!uploaded) {
+          throw HttpError.internal('Image hosting is unavailable; try again shortly');
         }
-    });
 
-    // Get available team roles (Public)
-    app.get('/api/public/team-roles', async (req, res) => {
-        try {
-            const setting = await storage.getIntegrationSettingByKey(SERVICE_NAME, SETTING_KEY);
-            if (!setting || setting.value !== 'true') {
-                return res.status(403).json({ message: "Public upload is currently disabled" });
-            }
+        updates.imageUrl = uploaded.url;
+        updates.imageType = 'url';
+      }
 
-            const roles = getAvailableRoles();
-            res.json(roles);
-        } catch (error) {
-            console.error('Error fetching team roles:', error);
-            res.status(500).json({ message: "Failed to fetch team roles" });
-        }
-    });
+      const updated = await storage.updateTeamMember(member.id, updates);
+      if (!updated) throw HttpError.internal('Failed to update team member');
 
-    // Toggle public upload status (Admin only)
-    app.post('/api/public/team-upload-status', isAdmin, async (req, res) => {
-        try {
-            const { enabled } = req.body;
-            let setting = await storage.getIntegrationSettingByKey(SERVICE_NAME, SETTING_KEY);
+      log.info('Team member updated via public link', {
+        memberId: member.id,
+        withImage: Boolean(req.file),
+      });
 
-            if (setting) {
-                await storage.updateIntegrationSetting(setting.id, { value: String(enabled) });
-            } else {
-                await storage.createIntegrationSetting({
-                    service: SERVICE_NAME,
-                    key: SETTING_KEY,
-                    value: String(enabled),
-                    enabled: true
-                });
-            }
+      await recordActivity({
+        // No userId: there is no account behind a public-link edit.
+        action: 'update',
+        resource: 'team_member',
+        resourceId: member.id,
+        details: { source: 'public-link', updatedFields: Object.keys(updates) },
+      });
 
-            res.json({ enabled });
-        } catch (error) {
-            res.status(500).json({ message: "Failed to update status" });
-        }
-    });
-
-    // Get team members list (Public but guarded by status)
-    app.get('/api/public/team-members-list', async (req, res) => {
-        try {
-            const setting = await storage.getIntegrationSettingByKey(SERVICE_NAME, SETTING_KEY);
-            if (!setting || setting.value !== 'true') {
-                return res.status(403).json({ message: "Public upload is currently disabled" });
-            }
-
-            const members = await storage.getTeamMembers();
-            // Return only necessary info
-            const simplifiedMembers = members.map(m => ({
-                id: m.id,
-                name: m.name,
-                role: m.role,
-                bio: m.bio, // Include bio/role so they can see current values
-                imageUrl: m.imageUrl
-            }));
-
-            res.json(simplifiedMembers);
-        } catch (error) {
-            res.status(500).json({ message: "Failed to fetch team members" });
-        }
-    });
-
-    // Update team member (Public but guarded by status)
-    app.post('/api/public/team-member-update',
-        rateLimitMiddleware,
-        imageUpload.single('file'),
-        async (req: Request, res: Response) => {
-            try {
-                // 1. Check if feature is enabled
-                const setting = await storage.getIntegrationSettingByKey(SERVICE_NAME, SETTING_KEY);
-                if (!setting || setting.value !== 'true') {
-                    // Clean up uploaded file if feature is disabled
-                    if (req.file && fs.existsSync(req.file.path)) {
-                        fs.unlinkSync(req.file.path);
-                    }
-                    return res.status(403).json({ message: "Public upload is currently disabled" });
-                }
-
-                const { memberId, name, role, bio } = req.body;
-
-                if (!memberId) {
-                    if (req.file && fs.existsSync(req.file.path)) {
-                        fs.unlinkSync(req.file.path);
-                    }
-                    return res.status(400).json({ message: "Member ID is required" });
-                }
-
-                const member = await storage.getTeamMember(parseInt(memberId));
-                if (!member) {
-                    if (req.file && fs.existsSync(req.file.path)) {
-                        fs.unlinkSync(req.file.path);
-                    }
-                    return res.status(404).json({ message: "Team member not found" });
-                }
-
-                // Prepare update data
-                const updateData: any = {
-                    name: name || member.name,
-                    role: role || member.role,
-                    bio: bio || member.bio,
-                };
-
-                // 2. Handle Image Upload if present
-                if (req.file) {
-                    let filePath = req.file.path;
-                    let mimeType = req.file.mimetype;
-                    let fileName = req.file.originalname;
-                    let tempFilesToDelete: string[] = [req.file.path];
-
-                    try {
-                        // Convert HEIC/HEIF to JPEG using sharp
-                        if (mimeType === 'image/heic' || mimeType === 'image/heif' ||
-                            fileName.toLowerCase().endsWith('.heic') || fileName.toLowerCase().endsWith('.heif')) {
-
-                            console.log('Detected HEIC image, converting to JPEG...');
-                            const outputPath = filePath + '.jpg';
-
-                            await sharp(filePath)
-                                .toFormat('jpeg', { quality: 90 })
-                                .toFile(outputPath);
-
-                            // Update variables to point to new file
-                            filePath = outputPath;
-                            mimeType = 'image/jpeg';
-                            fileName = fileName.replace(/\.(heic|heif)$/i, '.jpg');
-
-                            // Add new file to cleanup list
-                            tempFilesToDelete.push(outputPath);
-                        }
-
-                        const imgbbResult = await uploadImageToImgBB({
-                            path: filePath,
-                            filename: fileName,
-                            size: fs.statSync(filePath).size,
-                            mimetype: mimeType
-                        });
-
-                        if (imgbbResult) {
-                            updateData.imageUrl = imgbbResult.url;
-                            updateData.imageType = 'url';
-                        }
-                    } catch (uploadError) {
-                        console.error('Image upload/processing failed:', uploadError);
-                        // Don't fail the whole request, just log it? Or fail?
-                        // If image was provided but failed, we probably should tell the user.
-                        return res.status(500).json({ message: "Failed to upload/process image" });
-                    } finally {
-                        // Cleanup all temporary files
-                        for (const fileToDelete of tempFilesToDelete) {
-                            if (fs.existsSync(fileToDelete)) {
-                                try {
-                                    fs.unlinkSync(fileToDelete);
-                                } catch (e) {
-                                    console.error(`Failed to delete temp file ${fileToDelete}:`, e);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 3. Update Database
-                const updatedMember = await storage.updateTeamMember(member.id, updateData);
-
-                // 4. Log Activity
-                await storage.createActivityLog({
-                    action: "update",
-                    resourceType: "team_member",
-                    resourceId: member.id.toString(),
-                    details: {
-                        source: "public-link",
-                        updatedFields: Object.keys(updateData)
-                    }
-                });
-
-                res.json(updatedMember);
-
-            } catch (error) {
-                console.error('Error processing team member update:', error);
-                if (req.file && fs.existsSync(req.file.path)) {
-                    fs.unlinkSync(req.file.path);
-                }
-                res.status(500).json({ message: "Internal server error" });
-            }
-        }
-    );
+      res.json(publicView(updated));
+    }),
+  );
 }

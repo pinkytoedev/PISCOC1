@@ -58,3 +58,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS "upload_tokens_token_hash_idx"
 -- A contributor link now covers a whole submission rather than a single file,
 -- so the default is unlimited uses within the expiry window.
 ALTER TABLE "upload_tokens" ALTER COLUMN "max_uses" SET DEFAULT 0;
+
+-- created_by_id had no ON DELETE action, so removing a user who had ever issued
+-- an upload link failed with a foreign key violation. The link's expiry governs
+-- its lifetime; the issuer is only provenance, so null it out instead.
+ALTER TABLE "upload_tokens"
+  DROP CONSTRAINT IF EXISTS "upload_tokens_created_by_id_users_id_fk";
+
+ALTER TABLE "upload_tokens"
+  ADD CONSTRAINT "upload_tokens_created_by_id_users_id_fk"
+  FOREIGN KEY ("created_by_id") REFERENCES "users"("id")
+  ON DELETE SET NULL;

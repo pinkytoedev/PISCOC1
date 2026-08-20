@@ -1,63 +1,141 @@
 /**
- * Direct Upload API for large files
- * Provides endpoints for uploading images and ZIP files directly through the web interface
+ * Dashboard "direct upload" API.
+ *
+ * Three endpoints an editor uses to attach a cover image, an Instagram image or
+ * an HTML archive to an article they already have open. The routes are kept as
+ * they were — the client posts `file` plus an `articleId` field — but the
+ * implementation no longer carries its own copy of the upload plumbing.
+ *
+ * What changed and why:
+ *
+ *   - Multer wrote into `./uploads` and the file was only unlinked on the paths
+ *     the author remembered. A request rejected for a bad article id left its
+ *     file behind forever. Uploads now go to the OS temp directory through the
+ *     shared middleware, and `cleanupUploadedFile` removes them when the
+ *     response finishes — success, validation failure or thrown error alike.
+ *
+ *   - The session check ran *inside* the handler, i.e. after multer had already
+ *     written the bytes. `isAuthenticated` now runs first, so an anonymous
+ *     caller cannot spend disk here at all.
+ *
+ *   - A declared `image/png` was taken at face value; the file is now verified
+ *     against its magic bytes.
+ *
+ *   - The Airtable sync read the setting key `article_table_id`, which nothing
+ *     in this system ever writes — the UI and every other integration use
+ *     `articles_table`. The sync was therefore silently skipped on every
+ *     upload. Going through `tryUpdateRecord` fixes that and drops the
+ *     hand-rolled fetch.
  */
 
-import { Express, Request, Response } from 'express';
-import path from 'path';
-import fs from 'fs';
-import multer from 'multer';
+import type { Express, Request, Response } from 'express';
+import type { Article } from '@shared/schema';
 import { storage } from '../storage';
+import { HttpError, asyncHandler, parseId } from '../lib/httpError';
+import { createLogger } from '../lib/logger';
+import { tryUpdateRecord } from '../lib/airtableClient';
+import { isAuthenticated } from '../middleware/auth';
+import {
+  assertFileKind,
+  cleanupUploadedFile,
+  imageUpload,
+  zipUpload,
+} from '../middleware/upload';
+import { recordActivity } from '../services/activity';
 import { uploadImageToImgBB } from '../utils/imgbbUploader';
 import { processZipFile } from '../utils/zipProcessor';
 
-// Configure multer for file uploads with larger size limits
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+const log = createLogger('upload:direct');
+
+/** Airtable link field that mirrors each image asset type. */
+const AIRTABLE_IMAGE_FIELD: Record<'image' | 'instagram-image', string> = {
+  image: 'MainImageLink',
+  'instagram-image': 'InstaPhotoLink',
+};
+
+/**
+ * Resolves the article named by the multipart `articleId` field.
+ *
+ * The id travels in the body rather than the path, so it cannot be checked
+ * before multer runs; `cleanupUploadedFile` is what keeps a rejection here from
+ * costing disk.
+ */
+async function requireArticle(req: Request): Promise<Article> {
+  const articleId = parseId(req.body?.articleId, 'article ID');
+  const article = await storage.getArticle(articleId);
+  if (!article) throw HttpError.notFound('Article not found');
+  return article;
 }
 
-// Setup storage for multer
-const diskStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
-  }
-});
+/** Shared handler for the two image endpoints, which differ only in target field. */
+async function handleImageUpload(
+  req: Request,
+  res: Response,
+  assetType: 'image' | 'instagram-image',
+): Promise<void> {
+  if (!req.file) throw HttpError.badRequest('No file uploaded');
 
-// Multer middleware for image uploads (10MB limit)
-const imageUpload = multer({
-  storage: diskStorage,
-  limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed'));
-    }
-  }
-});
+  const article = await requireArticle(req);
+  await assertFileKind(req.file.path, 'image');
 
-// Multer middleware for ZIP uploads (50MB limit)
-const zipUpload = multer({
-  storage: diskStorage,
-  limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB
-  },
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only ZIP files are allowed'));
-    }
+  log.info('Processing direct image upload', {
+    articleId: article.id,
+    assetType,
+    filename: req.file.originalname,
+  });
+
+  const uploaded = await uploadImageToImgBB({
+    path: req.file.path,
+    filename: req.file.originalname,
+    size: req.file.size,
+    mimetype: req.file.mimetype,
+  });
+  if (!uploaded) throw HttpError.internal('Failed to upload image to ImgBB');
+
+  const patch =
+    assetType === 'image'
+      ? { imageUrl: uploaded.url, imageType: 'url' }
+      : { instagramImageUrl: uploaded.url };
+
+  const updated = await storage.updateArticle(article.id, patch);
+  if (!updated) throw HttpError.internal('Failed to update article with image URL');
+
+  if (article.source === 'airtable' && article.externalId) {
+    // Best effort: the local write has already committed, so a third party
+    // being down must not fail the request.
+    await tryUpdateRecord(
+      article.externalId,
+      { [AIRTABLE_IMAGE_FIELD[assetType]]: uploaded.url },
+      `sync ${assetType} for article ${article.id}`,
+    );
   }
-});
+
+  await recordActivity({
+    userId: req.user?.id,
+    action: 'upload',
+    resource: assetType,
+    resourceId: article.id,
+    details: {
+      fieldName: AIRTABLE_IMAGE_FIELD[assetType],
+      imgbbId: uploaded.id,
+      imgbbUrl: uploaded.url,
+      filename: req.file.originalname,
+    },
+  });
+
+  res.json({
+    success: true,
+    message:
+      assetType === 'image'
+        ? 'Image uploaded successfully'
+        : 'Instagram image uploaded successfully',
+    imgbb: {
+      id: uploaded.id,
+      url: uploaded.url,
+      display_url: uploaded.display_url,
+    },
+  });
+}
 
 /**
  * Setup direct upload routes
@@ -65,339 +143,65 @@ const zipUpload = multer({
  */
 export function setupDirectUploadRoutes(app: Express) {
   // Upload main article image
-  app.post('/api/direct-upload/image', imageUpload.single('file'), async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
-      }
-      
-      // Get article ID from the request
-      const articleId = parseInt(req.body.articleId);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      // Verify article exists
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      console.log(`Processing direct image upload for article: ${article.title} (ID: ${articleId})`);
-      
-      // Upload to ImgBB
-      const imgbbResult = await uploadImageToImgBB({
-        path: req.file.path,
-        filename: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype
-      });
-      
-      if (!imgbbResult) {
-        return res.status(500).json({ message: 'Failed to upload image to ImgBB' });
-      }
-      
-      // Update article with image URL
-      const updateData = {
-        imageUrl: imgbbResult.url,
-        imageType: 'url'
-      };
-      
-      const updatedArticle = await storage.updateArticle(articleId, updateData);
-      
-      if (!updatedArticle) {
-        return res.status(500).json({ message: 'Failed to update article with image URL' });
-      }
-      
-      // If article has an external ID (Airtable), update it there as well
-      if (article.source === 'airtable' && article.externalId) {
-        try {
-          // Get Airtable settings
-          const apiKeySetting = await storage.getIntegrationSettingByKey('airtable', 'api_key');
-          const baseIdSetting = await storage.getIntegrationSettingByKey('airtable', 'base_id');
-          const tableIdSetting = await storage.getIntegrationSettingByKey('airtable', 'article_table_id');
-          
-          if (apiKeySetting?.value && baseIdSetting?.value && tableIdSetting?.value) {
-            // Prepare Airtable update
-            const updatePayload = {
-              fields: {
-                MainImageLink: imgbbResult.url
-              }
-            };
-            
-            // Call Airtable API
-            const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${tableIdSetting.value}/${article.externalId}`;
-            console.log('Setting MainImageLink:', imgbbResult.url);
-            console.log('Airtable API request:', 'PATCH', airtableUrl);
-            
-            const airtableResponse = await fetch(airtableUrl, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${apiKeySetting.value}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(updatePayload)
-            });
-            
-            if (!airtableResponse.ok) {
-              console.error('Failed to update Airtable:', await airtableResponse.text());
-            }
-          }
-        } catch (airtableError) {
-          console.error('Error syncing image to Airtable:', airtableError);
-          // Don't fail the whole operation if Airtable sync fails
-        }
-      }
-      
-      // Log activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'upload',
-        resourceType: 'image',
-        resourceId: articleId.toString(),
-        details: {
-          fieldName: 'MainImage',
-          imgbbId: imgbbResult.id,
-          imgbbUrl: imgbbResult.url,
-          filename: req.file.originalname
-        }
-      });
-      
-      // Cleanup temporary file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      return res.json({
-        success: true,
-        message: 'Image uploaded successfully',
-        imgbb: {
-          id: imgbbResult.id,
-          url: imgbbResult.url,
-          display_url: imgbbResult.display_url
-        }
-      });
-      
-    } catch (error) {
-      console.error('Error in direct image upload:', error);
-      
-      // Clean up the temporary file if it exists
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      return res.status(500).json({
-        message: 'Failed to process image upload',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
+  app.post(
+    '/api/direct-upload/image',
+    isAuthenticated,
+    cleanupUploadedFile,
+    imageUpload.single('file'),
+    asyncHandler(async (req, res) => {
+      await handleImageUpload(req, res, 'image');
+    }),
+  );
+
   // Upload Instagram image
-  app.post('/api/direct-upload/instagram-image', imageUpload.single('file'), async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
-      }
-      
-      // Get article ID from the request
-      const articleId = parseInt(req.body.articleId);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      // Verify article exists
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      console.log(`Processing direct Instagram image upload for article: ${article.title} (ID: ${articleId})`);
-      
-      // Upload to ImgBB
-      const imgbbResult = await uploadImageToImgBB({
-        path: req.file.path,
-        filename: req.file.originalname,
-        size: req.file.size,
-        mimetype: req.file.mimetype
-      });
-      
-      if (!imgbbResult) {
-        return res.status(500).json({ message: 'Failed to upload Instagram image to ImgBB' });
-      }
-      
-      // Update article with Instagram image URL
-      const updateData = {
-        instagramImageUrl: imgbbResult.url
-      };
-      
-      const updatedArticle = await storage.updateArticle(articleId, updateData);
-      
-      if (!updatedArticle) {
-        return res.status(500).json({ message: 'Failed to update article with Instagram image URL' });
-      }
-      
-      // If article has an external ID (Airtable), update it there as well
-      if (article.source === 'airtable' && article.externalId) {
-        try {
-          // Get Airtable settings
-          const apiKeySetting = await storage.getIntegrationSettingByKey('airtable', 'api_key');
-          const baseIdSetting = await storage.getIntegrationSettingByKey('airtable', 'base_id');
-          const tableIdSetting = await storage.getIntegrationSettingByKey('airtable', 'article_table_id');
-          
-          if (apiKeySetting?.value && baseIdSetting?.value && tableIdSetting?.value) {
-            // Prepare Airtable update
-            const updatePayload = {
-              fields: {
-                InstaPhotoLink: imgbbResult.url
-              }
-            };
-            
-            // Call Airtable API
-            const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${tableIdSetting.value}/${article.externalId}`;
-            console.log('Setting InstaPhotoLink:', imgbbResult.url);
-            console.log('Airtable API request:', 'PATCH', airtableUrl);
-            
-            const airtableResponse = await fetch(airtableUrl, {
-              method: 'PATCH',
-              headers: {
-                'Authorization': `Bearer ${apiKeySetting.value}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(updatePayload)
-            });
-            
-            if (!airtableResponse.ok) {
-              console.error('Failed to update Airtable:', await airtableResponse.text());
-            }
-          }
-        } catch (airtableError) {
-          console.error('Error syncing Instagram image to Airtable:', airtableError);
-          // Don't fail the whole operation if Airtable sync fails
-        }
-      }
-      
-      // Log activity
-      await storage.createActivityLog({
-        userId: req.user?.id,
-        action: 'upload',
-        resourceType: 'image',
-        resourceId: articleId.toString(),
-        details: {
-          fieldName: 'InstaPhotoLink',
-          imgbbId: imgbbResult.id,
-          imgbbUrl: imgbbResult.url,
-          filename: req.file.originalname
-        }
-      });
-      
-      // Cleanup temporary file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      return res.json({
-        success: true,
-        message: 'Instagram image uploaded successfully',
-        imgbb: {
-          id: imgbbResult.id,
-          url: imgbbResult.url,
-          display_url: imgbbResult.display_url
-        }
-      });
-      
-    } catch (error) {
-      console.error('Error in direct Instagram image upload:', error);
-      
-      // Clean up the temporary file if it exists
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      return res.status(500).json({
-        message: 'Failed to process Instagram image upload',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
-  
+  app.post(
+    '/api/direct-upload/instagram-image',
+    isAuthenticated,
+    cleanupUploadedFile,
+    imageUpload.single('file'),
+    asyncHandler(async (req, res) => {
+      await handleImageUpload(req, res, 'instagram-image');
+    }),
+  );
+
   // Upload and process ZIP file with HTML content
-  app.post('/api/direct-upload/html-zip', zipUpload.single('file'), async (req: Request, res: Response) => {
-    try {
-      if (!req.isAuthenticated()) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-      
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
-      }
-      
-      // Get article ID from the request
-      const articleId = parseInt(req.body.articleId);
-      if (isNaN(articleId)) {
-        return res.status(400).json({ message: 'Invalid article ID' });
-      }
-      
-      // Verify article exists
-      const article = await storage.getArticle(articleId);
-      if (!article) {
-        return res.status(404).json({ message: 'Article not found' });
-      }
-      
-      console.log(`Processing direct ZIP upload for article: ${article.title} (ID: ${articleId})`);
-      
-      // Process the ZIP file
-      const result = await processZipFile(req.file.path, articleId);
-      
-      // Log activity regardless of success
-      await storage.createActivityLog({
+  app.post(
+    '/api/direct-upload/html-zip',
+    isAuthenticated,
+    cleanupUploadedFile,
+    zipUpload.single('file'),
+    asyncHandler(async (req, res) => {
+      if (!req.file) throw HttpError.badRequest('No file uploaded');
+
+      const article = await requireArticle(req);
+      await assertFileKind(req.file.path, 'zip');
+
+      log.info('Processing direct ZIP upload', {
+        articleId: article.id,
+        filename: req.file.originalname,
+      });
+
+      const result = await processZipFile(req.file.path, article.id, req.user?.id);
+
+      // Recorded either way: a rejected archive is the interesting case when
+      // someone asks why an article never picked up its content.
+      await recordActivity({
         userId: req.user?.id,
         action: 'upload',
-        resourceType: 'html',
-        resourceId: articleId.toString(),
+        resource: 'html-zip',
+        resourceId: article.id,
         details: {
           filename: req.file.originalname,
           success: result.success,
-          message: result.message
-        }
+          message: result.message,
+        },
       });
-      
-      // Cleanup temporary file
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      if (!result.success) {
-        return res.status(400).json({
-          message: result.message
-        });
-      }
-      
-      return res.json({
-        success: true,
-        message: result.message
-      });
-      
-    } catch (error) {
-      console.error('Error in direct ZIP upload:', error);
-      
-      // Clean up the temporary file if it exists
-      if (req.file && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
-      return res.status(500).json({
-        message: 'Failed to process ZIP file',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  });
+
+      // The message names what is wrong with the archive, which is what the
+      // editor needs in order to fix it.
+      if (!result.success) throw HttpError.badRequest(result.message);
+
+      res.json({ success: true, message: result.message });
+    }),
+  );
 }

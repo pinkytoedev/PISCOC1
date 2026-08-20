@@ -278,7 +278,9 @@ export const uploadTokens = pgTable("upload_tokens", {
   tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
   articleId: integer("article_id").notNull().references(() => articles.id, { onDelete: 'cascade' }),
   uploadTypes: jsonb("upload_types").notNull(), // Array of enabled upload types: ['image', 'instagram-image', 'html-zip']
-  createdById: integer("created_by_id").references(() => users.id),
+  // Null out rather than block: deleting a user must not be prevented by a
+  // link they once issued, and the link's own expiry still governs its life.
+  createdById: integer("created_by_id").references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
   // 0 means "unlimited within the expiry window" — the default for contributor
