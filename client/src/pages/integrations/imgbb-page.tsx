@@ -138,9 +138,21 @@ export default function ImgBBPage() {
             </div>
             
             {/* Status Banner */}
-            <div className={`mb-8 p-4 rounded-lg ${keyConfigured ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+            <div className={`mb-8 p-4 rounded-lg ${isLoading ? 'bg-gray-50 border border-gray-200' : keyConfigured ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
               <div className="flex items-center gap-3">
-                {keyConfigured ? (
+                {/* Until the settings land, `keyConfigured` is false — which
+                    rendered "Not Configured" over a perfectly good integration
+                    on every first paint, and permanently if the request failed. */}
+                {isLoading ? (
+                  <>
+                    <div className="bg-gray-100 p-2 rounded-full">
+                      <Loader2 className="h-6 w-6 text-gray-500 animate-spin" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-medium text-gray-800">Checking ImgBB integration status…</h2>
+                    </div>
+                  </>
+                ) : keyConfigured ? (
                   <>
                     <div className="bg-green-100 p-2 rounded-full">
                       <Image className="h-6 w-6 text-green-600" />

@@ -113,6 +113,13 @@ export async function getInstagramBusinessAccount(pageId: string): Promise<strin
       });
       return page.instagram_business_account?.id ?? null;
     } catch (error) {
+      // `cached` stores any non-undefined value for the full TTL, so returning
+      // null here on a rate limit or a timeout would memoise "this Page has no
+      // Instagram account" for 24 hours off one transient blip. Rethrowing
+      // leaves the cache untouched, because a rejected callback is never
+      // written to it.
+      if (!(error instanceof GraphApiError) || error.isRetryable) throw error;
+
       // A Page the user administers but has no Instagram permission on is a
       // normal outcome of the scan, not a failure of the whole lookup.
       log.debug('Page has no reachable Instagram account', { pageId, error });
@@ -144,7 +151,15 @@ export async function getInstagramAccountId(): Promise<string | null> {
   }
 
   for (const page of pages) {
-    const accountId = await getInstagramBusinessAccount(page.id);
+    let accountId: string | null = null;
+    try {
+      accountId = await getInstagramBusinessAccount(page.id);
+    } catch (error) {
+      // Transient — and deliberately not cached — so the next call retries this
+      // Page. One throttled Page must not abort discovery across the rest.
+      log.warn('Page lookup failed transiently; skipping', { pageId: page.id, error });
+      continue;
+    }
     if (accountId) {
       await putSetting('instagram', 'account_id', accountId);
       log.info('Discovered Instagram Business Account', { pageId: page.id });

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
+  LayoutDashboard,
   Newspaper,
   Users,
   Quote,
@@ -9,11 +10,8 @@ import {
   Headphones,
   ChevronLeft,
   ChevronRight,
-  Shield,
   X,
   CalendarDays,
-  Upload,
-  Bug,
   Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +60,17 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
 
   // Define all navigation items
   const allNavItems: NavSection[] = [
+    {
+      section: "Overview",
+      items: [
+        {
+          name: "Dashboard",
+          path: "/",
+          icon: <LayoutDashboard className="w-5 h-5" />,
+          adminOnly: false,
+        },
+      ],
+    },
     {
       section: "Content",
       items: [
@@ -129,19 +138,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           path: "/users",
           icon: <UserCog className="w-5 h-5" />,
           adminOnly: true, // This item is admin-only
-        },
-        {
-          name: "Debug Center",
-          path: "/debug-center",
-          icon: <Bug className="w-5 h-5" />,
-          adminOnly: false, // Available to all users
-        },
-
-        {
-          name: "Privacy Policy",
-          path: "/privacy-policy",
-          icon: <Shield className="w-5 h-5" />,
-          adminOnly: false,
         },
       ],
     },

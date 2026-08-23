@@ -57,12 +57,13 @@ interface WalkedFile {
 }
 
 /**
- * Walks the extraction directory, enforcing the entry-count and total-size
- * budgets as it goes.
+ * Walks the extraction directory, re-checking the entry-count and total-size
+ * budgets against what actually landed on disk.
  *
- * The counters are checked during the walk rather than after: a zip bomb that
- * expanded to gigabytes would otherwise already be on disk before anyone looked
- * at the total.
+ * This runs after extraction, so it cannot by itself stop a zip bomb — the
+ * preventive check is the `onEntry` hook in `processZipFile`, which reads the
+ * declared sizes from the central directory before any bytes are written. This
+ * walk stays as defence in depth and to enforce the directory-depth limit.
  */
 async function walkExtracted(root: string): Promise<WalkedFile[]> {
   const files: WalkedFile[] = [];
@@ -180,8 +181,38 @@ export async function processZipFile(
   try {
     // extract-zip rejects entries that resolve outside the target directory,
     // which is the zip-slip guard; the budgets below cover volume instead.
-    await extract(filePath, { dir: tempDir });
+    //
+    // The budgets are enforced from the central directory in `onEntry`, which
+    // extract-zip calls before it opens a write stream for the entry. Checking
+    // only after extraction — as `walkExtracted` does — cannot stop a zip bomb,
+    // because by then the gigabytes are already on disk. A throw here cancels
+    // the extraction and rejects, and yauzl's default `validateEntrySizes`
+    // means an entry that understates `uncompressedSize` errors mid-stream
+    // rather than slipping past this.
+    let entryCount = 0;
+    let declaredBytes = 0;
 
+    await extract(filePath, {
+      dir: tempDir,
+      onEntry: (entry) => {
+        // Directory records carry no payload.
+        if (entry.fileName.endsWith('/')) return;
+
+        entryCount += 1;
+        if (entryCount > env.uploads.maxZipEntries) {
+          throw new Error(`Archive contains more than ${env.uploads.maxZipEntries} files`);
+        }
+
+        declaredBytes += entry.uncompressedSize;
+        if (declaredBytes > env.uploads.maxZipExpandedBytes) {
+          const limitMb = Math.round(env.uploads.maxZipExpandedBytes / (1024 * 1024));
+          throw new Error(`Archive expands to more than ${limitMb}MB`);
+        }
+      },
+    });
+
+    // Kept as defence in depth: this covers what actually landed on disk, plus
+    // the directory-depth guard.
     const files = await walkExtracted(tempDir);
 
     const htmlFiles = files.filter((file) => file.relativePath.toLowerCase().endsWith('.html'));

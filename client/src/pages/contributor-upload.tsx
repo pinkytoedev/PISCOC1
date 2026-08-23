@@ -161,16 +161,33 @@ export default function ContributorUploadPage() {
   const removeFile = (id: string) =>
     setQueue((current) => current.filter((item) => item.id !== id));
 
+  /**
+   * Moves a queued file into another asset slot.
+   *
+   * At most one entry may hold a given assetType: `uploadAll` posts to
+   * `/{token}/{assetType}`, so two entries sharing a type silently overwrite
+   * each other server-side while both report success. The displaced entry
+   * therefore takes the slot this one vacates rather than keeping its own.
+   */
   const changeAssetType = (id: string, assetType: AssetType) =>
-    setQueue((current) =>
-      current.map((item) =>
-        item.id === id
-          ? { ...item, assetType, status: "ready", message: undefined }
-          : item.assetType === assetType
-            ? { ...item, assetType: item.assetType, status: item.status }
-            : item,
-      ),
-    );
+    setQueue((current) => {
+      const target = current.find((item) => item.id === id);
+      if (!target || target.assetType === assetType) return current;
+
+      const vacated = target.assetType;
+
+      return current.map((item) => {
+        if (item.id === id) {
+          return { ...item, assetType, status: "ready" as const, message: undefined };
+        }
+        if (item.assetType === assetType) {
+          // Its previous "done" no longer describes the slot it now holds, so it
+          // goes back to "ready" and must be re-sent.
+          return { ...item, assetType: vacated, status: "ready" as const, message: undefined };
+        }
+        return item;
+      });
+    });
 
   /** Uploads everything queued, one request per asset, reporting per file. */
   const uploadAll = async () => {

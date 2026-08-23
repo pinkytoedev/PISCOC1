@@ -60,7 +60,7 @@ export default function KeysPage() {
   const [copiedKey, setCopiedKey] = useState<string>("");
 
   // Fetch integration statuses
-  const { data: integrations, isLoading, refetch } = useQuery({
+  const { data: integrations, isLoading, isError, refetch } = useQuery({
     queryKey: ["integration-status"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/integration-status");
@@ -258,32 +258,49 @@ export default function KeysPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{configuredKeysCount}</div>
-                    <div className="text-sm text-muted-foreground">Configured</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-600">{apiKeys.length - configuredKeysCount}</div>
-                    <div className="text-sm text-muted-foreground">Missing</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{requiredKeysCount}</div>
-                    <div className="text-sm text-muted-foreground">Required</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-600">{apiKeys.length - requiredKeysCount}</div>
-                    <div className="text-sm text-muted-foreground">Optional</div>
-                  </div>
-                </div>
-
-                {configuredKeysCount < requiredKeysCount && (
-                  <Alert className="mt-4">
+                {/* Without the status response every `configured` flag falls back
+                    to false, so a pending or failed request used to render as
+                    "nothing is configured" plus a red alert — an outage reported
+                    as a misconfiguration. */}
+                {isLoading || isError ? (
+                  <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      Some required integrations are not configured. The application may not function properly.
+                      {isLoading
+                        ? "Checking which integrations are configured…"
+                        : "Could not read integration status. The keys below may be configured — use Refresh to try again."}
                     </AlertDescription>
                   </Alert>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">{configuredKeysCount}</div>
+                        <div className="text-sm text-muted-foreground">Configured</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-red-600">{apiKeys.length - configuredKeysCount}</div>
+                        <div className="text-sm text-muted-foreground">Missing</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">{requiredKeysCount}</div>
+                        <div className="text-sm text-muted-foreground">Required</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-600">{apiKeys.length - requiredKeysCount}</div>
+                        <div className="text-sm text-muted-foreground">Optional</div>
+                      </div>
+                    </div>
+
+                    {configuredKeysCount < requiredKeysCount && (
+                      <Alert className="mt-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          Some required integrations are not configured. The application may not function properly.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>

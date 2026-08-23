@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Button } from "@/components/ui/button";
@@ -60,15 +60,20 @@ export default function ArticlesPlannerPage() {
       let startDate, endDate;
       if (dateStr) {
         // Create proper Date objects for the event
-        const date = new Date(dateStr);
-        
-        // Default to 9 AM if no specific time was provided (most articles)
-        if (dateStr && !dateStr.includes('T')) {
-          // If only date is provided (no time), set it to 9:00 AM
-          startDate = new Date(date.setHours(9, 0, 0));
-          endDate = new Date(date.setHours(10, 0, 0)); // 1 hour duration
+        const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+
+        if (dateOnly) {
+          // An Airtable date-only cell. Build the day from its components in
+          // local time and default to 9 AM: `new Date("2025-08-23")` parses as
+          // UTC midnight, which is still the previous calendar day at any
+          // negative UTC offset, so setHours() used to land the event a day
+          // early for every editor west of Greenwich.
+          const [, y, m, d] = dateOnly;
+          startDate = new Date(Number(y), Number(m) - 1, Number(d), 9, 0, 0, 0);
+          endDate = new Date(Number(y), Number(m) - 1, Number(d), 10, 0, 0, 0);
         } else {
           // Use the actual time from the date
+          const date = new Date(dateStr);
           startDate = date;
           // End time is 1 hour after start time
           endDate = new Date(date);
@@ -135,13 +140,13 @@ export default function ArticlesPlannerPage() {
             <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
               <ol className="flex items-center space-x-2">
                 <li>
-                  <a href="/" className="text-gray-500 hover:text-gray-700">Dashboard</a>
+                  <Link href="/" className="text-gray-500 hover:text-gray-700">Dashboard</Link>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <a href="/articles" className="text-gray-500 hover:text-gray-700">Articles</a>
+                  <Link href="/articles" className="text-gray-500 hover:text-gray-700">Articles</Link>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

@@ -92,6 +92,29 @@ export function CreateArticleModal({ isOpen, onClose, editArticle }: CreateArtic
       initial.publishedAt = new Date(publishedAt);
     }
 
+    // Scheduled is stored as the raw Airtable value, e.g.
+    // "2025-09-01T12:00:00.000Z". A datetime-local input only accepts
+    // `yyyy-mm-ddThh:mm` and silently blanks itself on anything else, so an
+    // Airtable article opened here showed no publication date at all — while
+    // the auto-publisher still acted on the invisible one.
+    const scheduled: unknown = initial.Scheduled;
+    if (typeof scheduled === "string" && scheduled) {
+      const dateOnly = /^(\d{4}-\d{2}-\d{2})$/.exec(scheduled);
+      if (dateOnly) {
+        // Round-tripping a bare date through Date() would parse it as UTC
+        // midnight and show the previous day at negative UTC offsets.
+        initial.Scheduled = `${dateOnly[1]}T00:00`;
+      } else {
+        const when = new Date(scheduled);
+        if (!Number.isNaN(when.getTime())) {
+          const pad = (n: number) => String(n).padStart(2, "0");
+          initial.Scheduled =
+            `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())}` +
+            `T${pad(when.getHours())}:${pad(when.getMinutes())}`;
+        }
+      }
+    }
+
     // The photographer select needs a concrete value for its "None" option.
     if (!initial.photo) initial.photo = "none";
 

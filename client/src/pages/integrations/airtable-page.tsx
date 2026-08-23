@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -217,13 +218,14 @@ export default function AirtablePage() {
             <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
               <ol className="flex items-center space-x-2">
                 <li>
-                  <a href="/" className="text-gray-500 hover:text-gray-700">Dashboard</a>
+                  <Link href="/" className="text-gray-500 hover:text-gray-700">Dashboard</Link>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
-                  <a href="/integrations" className="text-gray-500 hover:text-gray-700">Integrations</a>
+                  {/* Category label, not a destination — there is no /integrations index. */}
+                  <span className="text-gray-500">Integrations</span>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

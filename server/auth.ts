@@ -114,7 +114,15 @@ export function setupAuth(app: Express) {
 
   passport.deserializeUser(async (id: number, done) => {
     try {
-      done(null, await storage.getUser(id));
+      const user = await storage.getUser(id);
+      // `storage.getUser` returns undefined for a row that no longer exists,
+      // but Passport only recognises null/false as "this user is gone". Given
+      // undefined it falls off the end of the deserializer stack and synthesises
+      // "Failed to deserialize user out of session", which the error handler
+      // turns into a 500 on every request the stale cookie makes — including
+      // logout, so the session can never be cleared. `false` makes the session
+      // strategy drop the stale id and fall through to a clean 401.
+      done(null, user ?? false);
     } catch (error) {
       done(error);
     }

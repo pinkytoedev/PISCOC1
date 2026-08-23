@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useSearch } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ArticleTable } from "@/components/dashboard/article-table";
@@ -139,7 +139,7 @@ export default function ArticlesPage() {
             <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
               <ol className="flex items-center space-x-2">
                 <li>
-                  <a href="/" className="text-gray-500 hover:text-gray-700">Dashboard</a>
+                  <Link href="/" className="text-gray-500 hover:text-gray-700">Dashboard</Link>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -179,6 +179,12 @@ export default function ArticlesPage() {
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleSortClick("oldest")}>
                       <CalendarClock className="mr-2 h-4 w-4 rotate-180" /> Oldest First
+                    </DropdownMenuItem>
+                    {/* Implemented in sortArticles and already labelled by the
+                        trigger above, but previously reachable only by editing
+                        the URL. */}
+                    <DropdownMenuItem onClick={() => handleSortClick("chronological")}>
+                      <CalendarDays className="mr-2 h-4 w-4" /> Schedule Order
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>

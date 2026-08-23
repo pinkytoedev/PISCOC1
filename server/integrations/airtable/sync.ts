@@ -141,11 +141,24 @@ async function syncArticleRecord(
     source: 'airtable',
   };
 
-  if (!finished || republished) {
-    if (isRecentlyPublished(record.id)) {
+  const existing = await storage.getArticleByExternalId(record.id);
+
+  if (!finished) {
+    // `articleData` was built from this Airtable snapshot, so it already holds
+    // draft values. Preserving the local publish therefore means writing the
+    // published state back over them — skipping the branch would still persist
+    // the revert, which is what made the guard a no-op.
+    if (!republished && existing && isRecentlyPublished(record.id)) {
       // The scheduler published this locally and its Finished=true write to
-      // Airtable is still in flight; reverting now would undo it.
-      log.debug('Skipping draft-revert during publish race window', { recordId: record.id });
+      // Airtable is still in flight, so this snapshot predates it. An explicit
+      // Republished flag is an editor decision and still wins, above.
+      log.debug('Preserving published state during publish race window', { recordId: record.id });
+      articleData.status = 'published';
+      articleData.finished = true;
+      // Restoring publishedAt is what stops the scheduler's catch-up window
+      // from treating this as due again and re-posting to Instagram.
+      articleData.publishedAt = existing.publishedAt ?? new Date();
+      articleData.Scheduled = existing.Scheduled ?? articleData.Scheduled;
     } else {
       articleData.status = 'draft';
       // Scheduled is left in place for ordinary drafts — the auto-publisher
@@ -154,7 +167,6 @@ async function syncArticleRecord(
     }
   }
 
-  const existing = await storage.getArticleByExternalId(record.id);
   if (existing) {
     await storage.updateArticle(existing.id, articleData);
     results.updated++;

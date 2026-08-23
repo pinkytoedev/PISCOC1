@@ -12,6 +12,7 @@ import { asyncHandler, HttpError, parseId } from '../../lib/httpError';
 import { createLogger } from '../../lib/logger';
 import { redactIntegrationSetting } from '../../lib/redact';
 import { isAdmin, isAuthenticated } from '../../middleware/auth';
+import { assertFileKind, cleanupUploadedFile } from '../../middleware/upload';
 import { verifyWebhookSecret } from '../../middleware/webhookAuth';
 import { getSettingValues, putSetting } from '../../services/settings';
 import { recordActivity } from '../../services/activity';
@@ -369,6 +370,12 @@ export function setupAirtableRoutes(app: Express) {
   app.post(
     '/api/airtable/upload-image/:articleId/:fieldName',
     isAuthenticated,
+    // Installed before multer, as on every other upload route, so the temp file
+    // is removed whatever the outcome. parseId, parseImageField and
+    // requireAirtableArticle all throw after multer has already written to
+    // os.tmpdir(), and the `finally` inside uploadArticleImageFile never runs on
+    // those paths — so a loop of 404s used to leave the files there for good.
+    cleanupUploadedFile,
     upload.single('image'),
     asyncHandler(async (req, res) => {
       const articleId = parseId(req.params.articleId, 'article ID');
@@ -376,6 +383,9 @@ export function setupAirtableRoutes(app: Express) {
       const article = await requireAirtableArticle(articleId);
 
       if (!req.file) throw HttpError.badRequest('No image file uploaded');
+
+      // The only image route that used to trust the declared MIME type.
+      await assertFileKind(req.file.path, 'image');
 
       res.json(
         await uploadArticleImageFile(

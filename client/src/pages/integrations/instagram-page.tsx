@@ -449,10 +449,17 @@ export default function InstagramPage() {
             <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
               <ol className="flex items-center space-x-2">
                 <li>
-                  <Link href="/integrations">Integrations</Link>
+                  <Link href="/" className="text-gray-500 hover:text-gray-700">Dashboard</Link>
                 </li>
                 <li>
-                  <span className="text-gray-500 mx-2">/</span>
+                  <span className="text-gray-400 mx-2">/</span>
+                </li>
+                <li>
+                  {/* Category label, not a destination — there is no /integrations index. */}
+                  <span className="text-gray-500">Integrations</span>
+                </li>
+                <li>
+                  <span className="text-gray-400 mx-2">/</span>
                 </li>
                 <li>
                   <span className="text-gray-900">Instagram</span>
@@ -501,6 +508,27 @@ export default function InstagramPage() {
                         <h3 className="font-medium">{user.name}</h3>
                         <p className="text-sm text-muted-foreground">{user.email}</p>
                       </div>
+                    </div>
+
+                    {/* `/api/instagram/account` was already being fetched on
+                        mount and its result thrown away — every publish depends
+                        on which Business Account resolved, so show it. */}
+                    <div className="mt-3 pt-3 border-t text-sm">
+                      {isLoadingAccount ? (
+                        <span className="flex items-center text-muted-foreground">
+                          <RefreshCcw className="animate-spin h-3 w-3 mr-2" />
+                          Resolving Instagram Business Account…
+                        </span>
+                      ) : instagramAccount?.id ? (
+                        <span className="text-muted-foreground">
+                          Instagram Business Account:{' '}
+                          <span className="font-mono text-foreground">{instagramAccount.id}</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          No Instagram Business Account resolved yet.
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}

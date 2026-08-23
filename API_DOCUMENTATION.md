@@ -153,7 +153,6 @@ syncs Airtable and refreshes the site cache.
 |---|---|---|
 | GET | `/api/health` | public |
 | GET | `/api/config/facebook` | public |
-| GET | `/privacy` | public |
 | GET | `/auth/facebook/callback` | public |
 | GET | `/api/metrics` | auth |
 | GET | `/api/status` | auth |

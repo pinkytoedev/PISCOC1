@@ -114,7 +114,15 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
       return;
     }
 
-    updateArticleMutation.mutate({ id: article.id, data: formData });
+    // "none" is a display sentinel for the author Select, not a value. It is
+    // only mapped back on change, so an editor who never touches the dropdown
+    // would otherwise persist the literal string — unlike `photo`, nothing
+    // downstream treats it as empty, so it reaches the Author column and the
+    // Airtable team-member lookup verbatim.
+    updateArticleMutation.mutate({
+      id: article.id,
+      data: { ...formData, author: formData.author === "none" ? "" : formData.author },
+    });
   };
 
   if (!article) return null;

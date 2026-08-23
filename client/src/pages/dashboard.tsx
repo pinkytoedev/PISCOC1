@@ -4,7 +4,6 @@ import { Link } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { StatusCard } from "@/components/dashboard/status-card";
-import { ArticleTable } from "@/components/dashboard/article-table";
 import { Button } from "@/components/ui/button";
 import { Newspaper, Clock, CheckCircle, ChevronRight, Loader2 } from "lucide-react";
 import { SiAirtable } from "react-icons/si";

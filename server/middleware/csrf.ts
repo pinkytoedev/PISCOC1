@@ -23,19 +23,31 @@ const HEADER_NAME = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * Endpoints legitimately called by parties that have no session and no cookie:
- * contributor upload links (authorized by the token in the URL) and inbound
- * third-party webhooks (authorized by their own signature/secret).
+ * Endpoints legitimately called by parties that have no session and no cookie.
+ *
+ * Matched exactly, never by prefix. `/api/instagram/webhooks/` and `/api/public/`
+ * are not subtrees of unauthenticated routes — each also hosts session- and
+ * admin-guarded mutations (`POST .../webhooks/subscribe`,
+ * `DELETE .../webhooks/subscriptions/:id`, `POST /api/public/team-upload-status`).
+ * Exempting the prefix left those forgeable, which matters because the session
+ * cookie is issued `SameSite=None` in production specifically on the assumption
+ * that CSRF tokens are the compensating control.
  */
-const EXEMPT_PREFIXES = [
-  '/api/public-upload/',
-  '/api/public/',
-  '/api/instagram/webhooks/',
-  '/api/webhooks/',
-];
+const EXEMPT_PATHS = new Set([
+  // Meta's delivery; authenticated by request signature, not by session.
+  '/api/instagram/webhooks/callback',
+  // Public team-profile submission; gated at runtime by the team_upload setting.
+  '/api/public/team-member-update',
+]);
+
+/**
+ * Subtrees where *every* route carries its own authorization independent of the
+ * session: an upload token in the URL, or a shared webhook secret.
+ */
+const EXEMPT_PREFIXES = ['/api/public-upload/', '/api/webhooks/'];
 
 function isExempt(path: string): boolean {
-  return EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix));
+  return EXEMPT_PATHS.has(path) || EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
 /** Issues the CSRF cookie when one is missing. */

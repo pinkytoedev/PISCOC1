@@ -20,7 +20,6 @@ import {
   cleanupUploadedFile,
   uploadImageToAirtable,
   uploadImageUrlAsLinkField,
-  uploadImageUrlToAirtable,
 } from '../../utils/imageUploader';
 import { uploadImageToImgBB, uploadImageUrlToImgBB } from '../../utils/imgbbUploader';
 
@@ -36,6 +35,20 @@ const LINK_FIELD: Record<ImageField, 'MainImageLink' | 'InstaPhotoLink'> = {
   MainImageLink: 'MainImageLink',
   instaPhoto: 'InstaPhotoLink',
   InstaPhotoLink: 'InstaPhotoLink',
+};
+
+/**
+ * The reverse: link field → the attachment twin.
+ *
+ * Only the no-ImgBB path needs this. It has no hosted URL to put in a text
+ * column, so it sends a data-URL attachment — and must address the attachment
+ * column, not whichever spelling the caller happened to use.
+ */
+const ATTACHMENT_FIELD: Record<ImageField, 'MainImage' | 'instaPhoto'> = {
+  MainImage: 'MainImage',
+  MainImageLink: 'MainImage',
+  instaPhoto: 'instaPhoto',
+  InstaPhotoLink: 'instaPhoto',
 };
 
 export function parseImageField(value: string | undefined): ImageField {
@@ -104,7 +117,12 @@ export async function uploadArticleImageFile(
       const imgbb = await uploadImageToImgBB(file);
       if (!imgbb) throw HttpError.internal('Failed to upload image to ImgBB');
 
-      const airtable = await uploadImageUrlToAirtable(imgbb.url, recordId, field, file.filename);
+      // ImgBB is already hosting it, so this writes the link field — the same
+      // thing `uploadArticleImageUrl` does. Sending an attachment array to
+      // `field` verbatim meant a request naming `MainImageLink` or
+      // `InstaPhotoLink` PATCHed a text column with `[{url, filename}]`, which
+      // Airtable rejects, so those two spellings could never succeed.
+      const airtable = await uploadImageUrlAsLinkField(imgbb.url, recordId, LINK_FIELD[field]);
       if (!airtable) {
         throw HttpError.internal('Image uploaded to ImgBB but failed to update Airtable');
       }
@@ -125,7 +143,10 @@ export async function uploadArticleImageFile(
       };
     }
 
-    const attachment = await uploadImageToAirtable(file, recordId, field);
+    // No hosted URL exists for a local file, so this is the one path that still
+    // writes a real attachment — addressed to the attachment column rather than
+    // to whichever spelling the caller used.
+    const attachment = await uploadImageToAirtable(file, recordId, ATTACHMENT_FIELD[field]);
     if (!attachment) throw HttpError.internal('Failed to upload image to Airtable');
 
     if (attachment.url) await applyToArticle(article.id, field, attachment.url);

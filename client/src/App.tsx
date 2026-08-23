@@ -16,13 +16,9 @@ import ArticlesPlannerPage from "@/pages/articles-planner-page";
 import TeamMembersPage from "@/pages/team-members-page";
 import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
-// ApiStatusPage removed - now part of Debug Center
-import DebugCenterPage from "@/pages/debug-center-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import InstagramPage from "@/pages/integrations/instagram-page";
-
 import ImgBBPage from "@/pages/integrations/imgbb-page";
-import PrivacyPolicyPage from "@/pages/privacy-policy-page";
 import ContributorUploadPage from "@/pages/contributor-upload";
 import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
@@ -38,26 +34,10 @@ function Router() {
       <ProtectedRoute path="/team-members" component={TeamMembersPage} />
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
       <AdminProtectedRoute path="/users" component={UserManagementPage} />
-      {/* Redirect API Status to Debug Center */}
-      <Route path="/api-status">
-        {() => {
-          window.location.href = '/debug-center';
-          return null;
-        }}
-      </Route>
-      <ProtectedRoute path="/debug-center" component={DebugCenterPage} />
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/instagram" component={InstagramPage} />
       <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
       <AdminProtectedRoute path="/keys" component={KeysPage} />
-      {/* Redirect Documentation to Debug Center */}
-      <Route path="/docs">
-        {() => {
-          window.location.href = '/debug-center';
-          return null;
-        }}
-      </Route>
-      <ProtectedRoute path="/privacy-policy" component={PrivacyPolicyPage} />
 
       {/* Contributor routes - authorized by the link, not by a session */}
       <Route path="/upload/:token" component={ContributorUploadPage} />

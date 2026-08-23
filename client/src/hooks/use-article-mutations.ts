@@ -4,6 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { Article, InsertArticle } from "@shared/schema";
 
 export const ARTICLES_QUERY_KEY = ["/api/articles"] as const;
+/** The dashboard's status cards are derived from the same articles. */
+export const METRICS_QUERY_KEY = ["/api/metrics"] as const;
 
 /**
  * Callback surface the article hooks expose. Kept narrower than TanStack's own
@@ -18,6 +20,11 @@ export interface MutationCallbacks<TData, TVariables> {
 
 function invalidateArticles() {
   queryClient.invalidateQueries({ queryKey: ARTICLES_QUERY_KEY });
+  // Nothing invalidated the metrics key, and the client sets staleTime:
+  // Infinity with no refetch on focus or interval — so the dashboard's Total /
+  // Drafts / Published Today cards were fetched once and then contradicted the
+  // article lists rendered directly beneath them for the rest of the session.
+  queryClient.invalidateQueries({ queryKey: METRICS_QUERY_KEY });
 }
 
 export interface SaveArticleVariables {

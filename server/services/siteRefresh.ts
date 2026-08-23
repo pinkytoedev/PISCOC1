@@ -29,9 +29,11 @@ export type ChangeReason =
  * a forged Host header could make the server POST to an arbitrary address.
  * Configuration is the only trustworthy source for an outbound URL.
  */
-function webhookUrl(): string | null {
-  if (env.productionWebhookUrl) return env.productionWebhookUrl;
-  if (env.publicDomain) return `https://${env.publicDomain}/api/webhooks/article-published`;
+function webhookTarget(): { url: string; isSelf: boolean } | null {
+  if (env.productionWebhookUrl) return { url: env.productionWebhookUrl, isSelf: false };
+  if (env.publicDomain) {
+    return { url: `https://${env.publicDomain}/api/webhooks/article-published`, isSelf: true };
+  }
   return null;
 }
 
@@ -45,9 +47,9 @@ export async function notifyArticleChanged(
   article: Article,
   reason: ChangeReason,
 ): Promise<void> {
-  const url = webhookUrl();
+  const target = webhookTarget();
 
-  if (!url) {
+  if (!target) {
     log(
       `No webhook target configured (set PRODUCTION_WEBHOOK_URL); skipping refresh for article ${article.id}`,
       'webhook',
@@ -55,16 +57,24 @@ export async function notifyArticleChanged(
     return;
   }
 
+  // The fallback target is this server's own `/api/webhooks/article-published`,
+  // which `verifyWebhookSecret` rejects without the header — so setting
+  // WEBHOOK_SECRET used to silently 401 every refresh it was meant to protect.
+  // The secret is only ever sent to ourselves; an external PRODUCTION_WEBHOOK_URL
+  // is a third-party host and must not receive our inbound secret.
+  const headers =
+    target.isSelf && env.webhookSecret ? { 'x-webhook-secret': env.webhookSecret } : undefined;
+
   try {
     const response = await axios.post(
-      url,
+      target.url,
       {
         articleId: article.id,
         status: article.status,
         reason,
         source: 'cms',
       },
-      { timeout: 10_000 },
+      { timeout: 10_000, headers },
     );
     log(`Site refresh for article ${article.id} (${reason}): ${response.status}`, 'webhook');
   } catch (error) {

@@ -193,10 +193,25 @@ export function ArticleTable({
     return sortArticles(filtered, sort);
   }, [articles, searchQuery, filter, sort]);
 
-  const totalPages = Math.ceil(sortedAllArticles.length / ARTICLES_PER_PAGE);
+  // Narrowing the result set while paged past its new end used to leave the
+  // table empty with a single-page pager, i.e. no control that could get the
+  // user back. Reset to the first page whenever the inputs to the filter change
+  // — the documented React pattern for adjusting state during render rather
+  // than in an effect, which would paint the empty page first.
+  const filterKey = `${searchQuery}|${filter ?? ""}|${sort}`;
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey);
+    setCurrentPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(sortedAllArticles.length / ARTICLES_PER_PAGE));
+  // Belt and braces: a page can also fall out of range when the underlying
+  // query refetches fewer articles, which no input change would catch.
+  const safePage = Math.min(currentPage, totalPages);
   const visibleArticles = sortedAllArticles.slice(
-    (currentPage - 1) * ARTICLES_PER_PAGE,
-    currentPage * ARTICLES_PER_PAGE,
+    (safePage - 1) * ARTICLES_PER_PAGE,
+    safePage * ARTICLES_PER_PAGE,
   );
 
   const handlePageChange = (page: number) => {
@@ -304,7 +319,7 @@ export function ArticleTable({
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center">
+                <td colSpan={7} className="px-6 py-4 text-center">
                   Loading articles...
                 </td>
               </tr>
@@ -322,7 +337,7 @@ export function ArticleTable({
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center">
+                <td colSpan={7} className="px-6 py-4 text-center">
                   No articles found.
                 </td>
               </tr>
@@ -331,7 +346,7 @@ export function ArticleTable({
         </table>
 
         <ArticleTablePagination
-          currentPage={currentPage}
+          currentPage={safePage}
           totalPages={totalPages}
           totalItems={sortedAllArticles.length}
           pageSize={ARTICLES_PER_PAGE}
@@ -386,7 +401,7 @@ export function ArticleTable({
             ))}
 
             <ArticleCardPagination
-              currentPage={currentPage}
+              currentPage={safePage}
               totalPages={totalPages}
               onPageChange={handlePageChange}
             />

@@ -27,7 +27,7 @@ import { AlertTriangle, Edit, Loader2, Trash2, User, UserCog, Users } from "luci
 import { Switch } from "@/components/ui/switch";
 import { apiRequest } from "@/lib/queryClient";
 import { InsertUser, User as UserType } from "@shared/schema";
-import { Header } from "@/components/layout/header";
+import { Layout } from "@/components/layout/layout";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -210,10 +210,8 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <Header title="User Management" />
-      
-      <main className="flex-1 container mx-auto py-8 px-4">
+    <Layout title="User Management">
+      <div className="container mx-auto py-8 px-4">
         <div className="mb-8 flex items-center space-x-4">
           <Users className="h-8 w-8 text-primary" />
           <div>
@@ -575,7 +573,7 @@ export default function UserManagementPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </main>
-    </div>
+      </div>
+    </Layout>
   );
 }

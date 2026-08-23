@@ -19,7 +19,6 @@ import { registerRoutes } from '../server/routes/index.ts';
 /** Routes that are unauthenticated on purpose, and why. */
 const INTENTIONALLY_PUBLIC = new Map([
   ['GET /api/health', 'platform health probe; reports booleans only'],
-  ['GET /privacy', 'public privacy policy page'],
   ['GET /api/config/facebook', 'app id is public and already ships in the client bundle'],
   ['GET /auth/facebook/callback', 'OAuth redirect target; bounces back into the app'],
   ['POST /api/login', 'credential entry point'],

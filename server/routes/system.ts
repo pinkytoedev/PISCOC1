@@ -1,10 +1,9 @@
 /**
  * System endpoints: health, metrics, integration status, activity log, and the
- * two small public routes (the privacy page and the Facebook app id).
+ * two small public routes (the Facebook OAuth callback and the app id).
  */
 
 import { Router } from 'express';
-import path from 'path';
 import { storage } from '../storage';
 import { asyncHandler } from '../lib/httpError';
 import { isAuthenticated } from '../middleware/auth';
@@ -20,8 +19,8 @@ function noStore(res: Parameters<Parameters<Router['get']>[1]>[1]) {
 }
 
 /**
- * Routes that must stay reachable without a session: the platform health probe,
- * the public privacy page, and the OAuth callback.
+ * Routes that must stay reachable without a session: the platform health probe
+ * and the OAuth callback.
  */
 export function publicSystemRouter(): Router {
   const router = Router();
@@ -35,10 +34,6 @@ export function publicSystemRouter(): Router {
       database: Boolean(env.databaseUrl),
       sessionSecret: Boolean(process.env.SESSION_SECRET),
     });
-  });
-
-  router.get('/privacy', (_req, res) => {
-    res.sendFile(path.join(process.cwd(), 'client/public/privacy.html'));
   });
 
   // Facebook redirects here after login; the SDK completes the token exchange
