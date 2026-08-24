@@ -71,6 +71,17 @@ export function useAutoPublishScheduler({ articles, onPublished }: AutoPublishOp
       // resurrect drafts that had been deliberately unpublished.
       if (!article.Scheduled) return false;
 
+      // An open re-upload session has deliberately taken the article offline
+      // while its content is replaced, and `Scheduled` is left untouched by
+      // `startReuploadSession`. Without this check, re-uploading an article
+      // that was scheduled within the window republishes it half-updated
+      // within a minute — the exact outcome re-upload sessions exist to
+      // prevent. The server publisher already skips these (scheduler.ts).
+      if (article.isReuploading) return false;
+
+      // Set when an editor pulls a live article back to draft on purpose.
+      if (article.republished) return false;
+
       const scheduledDate = new Date(article.Scheduled);
       if (scheduledDate > now || scheduledDate < cutoffTime) return false;
 

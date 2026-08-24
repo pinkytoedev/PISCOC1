@@ -12,7 +12,7 @@ import type { Article } from '@shared/schema';
 import { storage } from '../storage';
 import { asyncHandler, HttpError, parseId } from '../lib/httpError';
 import { createLogger } from '../lib/logger';
-import { isAdmin, isAuthenticated } from '../middleware/auth';
+import { isAdmin } from '../middleware/auth';
 import { recordActivity } from '../services/activity';
 import { migrateArticleImagesToLinks, uploadLinkToAirtableTestField } from '../utils/airtableTestField';
 import { uploadImageUrlAsLinkField } from '../utils/imageUploader';
@@ -68,7 +68,7 @@ export function registerAirtableTestRoutes(app: Express): void {
 
   app.post(
     '/api/airtable/test-link/:articleId',
-    isAuthenticated,
+    isAdmin,
     asyncHandler(async (req, res) => {
       const articleId = parseId(req.params.articleId, 'article ID');
       const { imageUrl } = req.body ?? {};
@@ -102,7 +102,7 @@ export function registerAirtableTestRoutes(app: Express): void {
 
   app.post(
     '/api/airtable/test-migration/:articleId',
-    isAuthenticated,
+    isAdmin,
     asyncHandler(async (req, res) => {
       const articleId = parseId(req.params.articleId, 'article ID');
       const article = await requireAirtableArticle(articleId);
@@ -131,7 +131,7 @@ export function registerAirtableTestRoutes(app: Express): void {
   // rather than a rehearsal.
   app.post(
     '/api/airtable/migrate-to-link-fields/:articleId',
-    isAuthenticated,
+    isAdmin,
     asyncHandler(async (req, res) => {
       const articleId = parseId(req.params.articleId, 'article ID');
       const article = await requireAirtableArticle(articleId);
@@ -171,7 +171,7 @@ export function registerAirtableTestRoutes(app: Express): void {
 
   app.post(
     '/api/airtable/test-batch-migration',
-    isAuthenticated,
+    isAdmin,
     asyncHandler(async (req, res) => {
       const limit = parseLimit(req.body?.limit);
 

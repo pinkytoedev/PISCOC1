@@ -45,6 +45,42 @@
   box-shadow: 0 4px 12px rgba(255, 105, 180, 0.2);
 }
 
+/* Documentation pages (/docs), rendered from the markdown in docs/. */
+.docs-prose {
+  /* Sits below the sticky header, so an anchored heading is not hidden by it. */
+  scroll-padding-top: 8rem;
+}
+
+.docs-prose :where(h2, h3) {
+  scroll-margin-top: 8rem;
+}
+
+/* The renderer wraps every table in this, so a wide table scrolls inside its
+   own box instead of forcing the whole page sideways on a phone. */
+.docs-prose .doc-table {
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  border: 1px solid theme("colors.gray.200");
+  border-radius: theme("borderRadius.lg");
+}
+
+.docs-prose .doc-table table {
+  margin: 0;
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.docs-prose .doc-table :where(th, td) {
+  padding: 0.625rem 0.875rem;
+  white-space: nowrap;
+}
+
+.docs-prose .doc-table td:last-child,
+.docs-prose .doc-table th:last-child {
+  white-space: normal;
+  min-width: 18rem;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;

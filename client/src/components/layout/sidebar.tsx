@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
+  BookOpen,
   LayoutDashboard,
   Newspaper,
   Users,
@@ -131,6 +132,12 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           path: "/users",
           icon: <UserCog className="w-5 h-5" />,
           adminOnly: true, // This item is admin-only
+        },
+        {
+          name: "Documentation",
+          path: "/docs",
+          icon: <BookOpen className="w-5 h-5" />,
+          adminOnly: false,
         },
       ],
     },

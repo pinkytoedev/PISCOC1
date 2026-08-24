@@ -19,6 +19,7 @@ import ImgBBPage from "@/pages/integrations/imgbb-page";
 import ContributorUploadPage from "@/pages/contributor-upload";
 import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
+import DocsPage from "@/pages/docs-page";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -34,6 +35,9 @@ function Router() {
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
       <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
       <AdminProtectedRoute path="/keys" component={KeysPage} />
+
+      {/* Public: readable signed out, and makes no authenticated request. */}
+      <Route path="/docs" component={DocsPage} />
 
       {/* Contributor routes - authorized by the link, not by a session */}
       <Route path="/upload/:token" component={ContributorUploadPage} />

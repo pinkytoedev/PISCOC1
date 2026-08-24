@@ -57,3 +57,4 @@ replit.nix
 postgres_data/piscoc_backup.sql
 .vercelignore
 .vercel
+.playwright-mcp/
