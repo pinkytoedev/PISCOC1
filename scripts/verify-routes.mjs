@@ -51,10 +51,7 @@ for (const p of [
 
 console.log('\n=== must stay reachable without a session ===');
 await expect('pub', '/api/health', 200, { auth: false });
-await expect('pub', '/api/config/facebook', [200, 503], { auth: false });
-// Meta's hub verification: no session, no CSRF. A 401/403 here means the
-// integration is broken.
-await expect('pub', '/api/instagram/webhooks/callback?hub.mode=subscribe&hub.verify_token=x&hub.challenge=1', [200, 400, 403], { auth: false });
+await expect('pub', '/api/public/team-upload-status', 200, { auth: false });
 
 console.log('\n=== must be rejected without a session (expect 401) ===');
 for (const p of [

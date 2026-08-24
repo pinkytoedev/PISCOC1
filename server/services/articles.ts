@@ -2,8 +2,8 @@
  * Article domain operations.
  *
  * Updating an article is not just a database write: depending on how its
- * publication state changes, it may also need to be pushed to Airtable, posted
- * to Instagram, and announced to the live site so caches drop the old copy.
+ * publication state changes, it may also need to be pushed to Airtable and
+ * announced to the live site so caches drop the old copy.
  *
  * All of that used to sit inline in `PUT /api/articles/:id`, roughly 160 lines
  * of nested conditionals and try/catch inside the route handler. That is why
@@ -20,7 +20,6 @@ import { recordActivity } from './activity';
 import { notifyArticleChanged } from './siteRefresh';
 import { getAirtableConfig } from '../lib/airtableClient';
 import { deleteAirtableRecord, pushArticleToAirtable } from '../integrations/airtable';
-import { postArticleToInstagram } from '../integrations/instagram';
 
 const log = createLogger('articles');
 
@@ -30,8 +29,6 @@ interface PublicationEffects {
   pushToAirtable: boolean;
   /** Tell the live site to drop its cached copy. */
   refreshSite: boolean;
-  /** Announce a newly published article on Instagram. */
-  postToInstagram: boolean;
 }
 
 /**
@@ -48,7 +45,6 @@ export function publicationEffects(
   const wasPublished = previous.status === 'published';
   const isPublished = next.status === 'published';
 
-  const becamePublished = isPublished && !wasPublished;
   const becameUnpublished = wasPublished && !isPublished;
 
   return {
@@ -56,30 +52,21 @@ export function publicationEffects(
     // before the next sync runs — otherwise the sync reverts it.
     pushToAirtable: isPublished || becameUnpublished || forceRefresh,
     refreshSite: isPublished || becameUnpublished || forceRefresh,
-    // Only on the transition, so re-saving a published article does not post
-    // to Instagram again.
-    postToInstagram: becamePublished,
   };
-}
-
-export interface InstagramOutcome {
-  posted: boolean;
-  mediaId?: string;
-  error?: string;
 }
 
 /**
  * Runs the effects of a publication change.
  *
  * Every step is best-effort: the article has already been written, so a failure
- * in Airtable, Instagram or the site webhook is logged rather than surfaced as
- * a failed request. The Instagram outcome is returned because the UI shows it.
+ * in Airtable or the site webhook is logged rather than surfaced as a failed
+ * request.
  */
 export async function applyPublicationEffects(
   article: Article,
   effects: PublicationEffects,
   userId?: number,
-): Promise<InstagramOutcome | undefined> {
+): Promise<void> {
   if (effects.pushToAirtable) {
     try {
       await pushArticleToAirtable(article.id, userId);
@@ -93,21 +80,6 @@ export async function applyPublicationEffects(
       article,
       article.status === 'published' ? 'article-published' : 'article-unpublished',
     );
-  }
-
-  if (!effects.postToInstagram) return undefined;
-
-  try {
-    const result = await postArticleToInstagram(article);
-    if (result.success) {
-      log.info('Posted article to Instagram', { articleId: article.id });
-      return { posted: true, mediaId: result.mediaId };
-    }
-    log.warn('Instagram post failed', { articleId: article.id, error: result.error });
-    return { posted: false, error: result.error };
-  } catch (error) {
-    log.error('Instagram post threw', { articleId: article.id, error });
-    return { posted: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 

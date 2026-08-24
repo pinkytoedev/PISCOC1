@@ -2,7 +2,7 @@
  * Article endpoints.
  *
  * Handlers stay thin: parse, delegate, respond. The publication side effects
- * (Airtable push, Instagram, site refresh) live in services/articles.ts, and
+ * (Airtable push, site refresh) live in services/articles.ts, and
  * re-upload sessions in services/reupload.ts.
  */
 
@@ -111,15 +111,13 @@ export function articlesRouter(): Router {
       });
 
       const force = req.body.forceWebhook === true || req.body.forceWebhook === 'true';
-      const instagram = await applyPublicationEffects(
+      await applyPublicationEffects(
         updated,
         publicationEffects(previous, updated, force),
         req.user?.id,
       );
 
-      // The client renders the Instagram outcome when there is one, so it is
-      // attached to the article rather than returned separately.
-      res.json(instagram ? { ...updated, _instagram: instagram } : updated);
+      res.json(updated);
     }),
   );
 

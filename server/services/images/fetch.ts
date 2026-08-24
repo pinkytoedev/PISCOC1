@@ -30,9 +30,6 @@ import { createLogger } from '../../lib/logger';
 
 const log = createLogger('images:fetch');
 
-/** Where `downloadImage` parks files that are then served from `/uploads`. */
-const INSTAGRAM_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'instagram');
-
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 /** Redirect chains longer than this are a loop or an attempt to wear down the guard. */
@@ -439,51 +436,3 @@ function extensionFromUrl(url: string): string | undefined {
   return undefined;
 }
 
-export interface DownloadedImage {
-  filePath: string;
-  /** Path the file is served from, assuming `/uploads` is mounted statically. */
-  fileUrl: string;
-}
-
-/**
- * Downloads an image and writes it under `uploads/instagram`.
- *
- * The directory is created on demand rather than at import time: the old module
- * ran `mkdirSync` as a side effect of being imported, which meant merely
- * touching the module wrote to disk, and did so synchronously during boot.
- */
-export async function downloadImage(imageUrl: string): Promise<DownloadedImage> {
-  const image = await fetchRemoteImage(imageUrl);
-
-  const extension =
-    EXTENSION_BY_CONTENT_TYPE[image.contentType] ?? extensionFromUrl(imageUrl) ?? '.jpg';
-
-  // The hash keeps the name deterministic per URL; the timestamp keeps repeat
-  // downloads of the same URL from clobbering a file that is still being served.
-  const urlHash = crypto.createHash('sha256').update(imageUrl).digest('hex').slice(0, 32);
-  const filename = `${urlHash}-${Date.now()}${extension}`;
-  const filePath = path.join(INSTAGRAM_UPLOAD_DIR, filename);
-
-  await fsp.mkdir(INSTAGRAM_UPLOAD_DIR, { recursive: true });
-  await fsp.writeFile(filePath, image.buffer);
-
-  log.info('Downloaded image to disk', { filePath, bytes: image.bytes });
-
-  return { filePath, fileUrl: `/uploads/instagram/${filename}` };
-}
-
-/**
- * Turns a site-relative path into an absolute URL.
- *
- * Reads the validated `env` rather than `process.env.HOST`, which was unset in
- * every deployment and silently produced `http://localhost:3001/...` links.
- */
-export function getFullImageUrl(relativeUrl: string): string {
-  if (/^https?:\/\//i.test(relativeUrl)) return relativeUrl;
-
-  const configured = env.baseUrl ?? (env.publicDomain ? `https://${env.publicDomain}` : undefined);
-  const origin = (configured ?? `http://localhost:${env.port ?? 3000}`).replace(/\/+$/, '');
-  const suffix = relativeUrl.startsWith('/') ? relativeUrl : `/${relativeUrl}`;
-
-  return `${origin}${suffix}`;
-}

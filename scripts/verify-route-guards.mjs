@@ -19,12 +19,8 @@ import { registerRoutes } from '../server/routes/index.ts';
 /** Routes that are unauthenticated on purpose, and why. */
 const INTENTIONALLY_PUBLIC = new Map([
   ['GET /api/health', 'platform health probe; reports booleans only'],
-  ['GET /api/config/facebook', 'app id is public and already ships in the client bundle'],
-  ['GET /auth/facebook/callback', 'OAuth redirect target; bounces back into the app'],
   ['POST /api/login', 'credential entry point'],
   ['POST /api/logout', 'must work even with an expired session'],
-  ['GET /api/instagram/webhooks/callback', 'Meta hub verification challenge'],
-  ['POST /api/instagram/webhooks/callback', 'Meta delivery; authenticated by signature, not session'],
   ['GET /api/public/team-upload-status', 'tells the public page whether to render'],
   ['GET /api/public/team-roles', 'gated at runtime by the team_upload_enabled setting'],
   ['GET /api/public/team-members-list', 'gated at runtime by the team_upload_enabled setting'],

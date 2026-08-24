@@ -1,9 +1,9 @@
 /**
  * Masks secret values in integration settings before they leave the server.
  *
- * `integration_settings` rows store Airtable and ImgBB API keys and the
- * Facebook access token as plaintext, and the settings endpoints returned those
- * rows verbatim to any signed-in user. The management UI only needs to know
+ * `integration_settings` rows store Airtable and ImgBB API keys as plaintext,
+ * and the settings endpoints returned those rows verbatim to any signed-in
+ * user. The management UI only needs to know
  * whether a credential is present and to recognise which one it is, so it gets
  * the last four characters and nothing more.
  */

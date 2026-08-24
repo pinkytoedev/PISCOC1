@@ -1,6 +1,5 @@
 /**
- * System endpoints: health, metrics, integration status, activity log, and the
- * two small public routes (the Facebook OAuth callback and the app id).
+ * System endpoints: health, metrics, integration status and the activity log.
  */
 
 import { Router } from 'express';
@@ -18,10 +17,7 @@ function noStore(res: Parameters<Parameters<Router['get']>[1]>[1]) {
   res.setHeader('Expires', '0');
 }
 
-/**
- * Routes that must stay reachable without a session: the platform health probe
- * and the OAuth callback.
- */
+/** The platform health probe is the only route that must answer without a session. */
 export function publicSystemRouter(): Router {
   const router = Router();
 
@@ -36,27 +32,6 @@ export function publicSystemRouter(): Router {
     });
   });
 
-  // Facebook redirects here after login; the SDK completes the token exchange
-  // client-side, so this only needs to bounce the user back into the app.
-  router.get('/auth/facebook/callback', (_req, res) => {
-    res.redirect('/?auth=success');
-  });
-
-  // The app id is public by design — it ships in the client bundle either way.
-  router.get('/api/config/facebook', (_req, res) => {
-    const appId = process.env.FACEBOOK_APP_ID;
-
-    if (!appId) {
-      return res.status(503).json({
-        status: 'error',
-        message: 'Facebook integration is not configured',
-        code: 'FB_APP_ID_MISSING',
-      });
-    }
-
-    res.json({ status: 'success', appId });
-  });
-
   return router;
 }
 
@@ -64,10 +39,10 @@ export function publicSystemRouter(): Router {
  * Operational endpoints for signed-in users.
  *
  * The guard is attached per route rather than with `router.use`. This router is
- * mounted at `/api`, and a router-level middleware would run for every request
- * that passes through that prefix on its way to a later handler — including
- * `/api/instagram/webhooks/callback`, which Meta calls with no session and must
- * stay reachable.
+ * mounted at `/api`, so a router-level middleware would run for every request
+ * that merely passes through that prefix on its way to a later handler — which
+ * is how the public upload endpoints under `/api/public/` would end up behind a
+ * session they are not meant to require.
  */
 export function systemRouter(): Router {
   const router = Router();

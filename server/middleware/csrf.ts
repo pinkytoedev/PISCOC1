@@ -25,17 +25,14 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /**
  * Endpoints legitimately called by parties that have no session and no cookie.
  *
- * Matched exactly, never by prefix. `/api/instagram/webhooks/` and `/api/public/`
- * are not subtrees of unauthenticated routes — each also hosts session- and
- * admin-guarded mutations (`POST .../webhooks/subscribe`,
- * `DELETE .../webhooks/subscriptions/:id`, `POST /api/public/team-upload-status`).
- * Exempting the prefix left those forgeable, which matters because the session
- * cookie is issued `SameSite=None` in production specifically on the assumption
- * that CSRF tokens are the compensating control.
+ * Matched exactly, never by prefix. `/api/public/` is not a subtree of
+ * unauthenticated routes — it also hosts the admin-guarded
+ * `POST /api/public/team-upload-status`. Exempting the prefix left that
+ * forgeable, which matters because the session cookie is issued
+ * `SameSite=None` in production specifically on the assumption that CSRF
+ * tokens are the compensating control.
  */
 const EXEMPT_PATHS = new Set([
-  // Meta's delivery; authenticated by request signature, not by session.
-  '/api/instagram/webhooks/callback',
   // Public team-profile submission; gated at runtime by the team_upload setting.
   '/api/public/team-member-update',
 ]);

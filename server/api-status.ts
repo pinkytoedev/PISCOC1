@@ -10,8 +10,7 @@
 import axios from 'axios';
 import { pgPool } from './db';
 import { createLogger } from './lib/logger';
-import { graphRequest } from './integrations/instagram';
-import { getImgBBApiKey, getInstagramSettings, getSettingValue } from './services/settings';
+import { getImgBBApiKey, getSettingValue } from './services/settings';
 
 const log = createLogger('api-status');
 
@@ -92,33 +91,6 @@ function checkAirtable(): Promise<ApiStatus> {
 }
 
 /**
- * Instagram, through the Facebook Graph API.
- *
- * The token is read from the `facebook` service, which is where the OAuth
- * callback stores it. This probe used to look it up under `instagram`, a
- * service that holds only the discovered account id — so a fully working
- * integration permanently reported "Access token not configured".
- *
- * `graphRequest` sends the token as a bearer header; the old direct call put it
- * in the query string, where it reached request logs.
- */
-function checkInstagram(): Promise<ApiStatus> {
-  return probe('Instagram', async () => {
-    const settings = await getInstagramSettings();
-    if (!settings) return unconfigured('Instagram', 'Access token not configured');
-
-    await graphRequest<{ id: string }>('me', {
-      accessToken: settings.accessToken,
-      query: { fields: 'id' },
-      bucket: 'status',
-      timeoutMs: PROBE_TIMEOUT_MS,
-    });
-
-    return online('Instagram');
-  });
-}
-
-/**
  * ImgBB.
  *
  * There is no status endpoint, so the probe posts nothing to the upload URL and
@@ -163,7 +135,6 @@ function checkDatabase(): Promise<ApiStatus> {
 export async function getAllApiStatuses(): Promise<ApiStatusResponse> {
   const statuses = await Promise.all([
     checkAirtable(),
-    checkInstagram(),
     checkImgBB(),
     checkDatabase(),
   ]);

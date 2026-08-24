@@ -152,8 +152,6 @@ syncs Airtable and refreshes the site cache.
 | | Endpoint | Access |
 |---|---|---|
 | GET | `/api/health` | public |
-| GET | `/api/config/facebook` | public |
-| GET | `/auth/facebook/callback` | public |
 | GET | `/api/metrics` | auth |
 | GET | `/api/status` | auth |
 | GET | `/api/integration-status` | auth |
@@ -193,9 +191,7 @@ equivalent of the contributor upload routes, for editors working in the
 dashboard.
 
 Publishing an article (via `PUT`, the scheduler, or completing a re-upload)
-pushes to Airtable, refreshes the live site, and posts to Instagram on the
-transition to published. A successful Instagram post is reported back as
-`_instagram` on the article.
+pushes to Airtable and refreshes the live site.
 
 ### Team members, quotes, requests, assets
 
@@ -240,17 +236,14 @@ it is off.
 | POST | `/api/public/team-member-update` | public |
 | POST | `/api/public/team-upload-status` | admin (toggles the gate) |
 
-### Airtable, ImgBB, Instagram, GitHub
+### Airtable, ImgBB, GitHub
 
-39 integration endpoints under `/api/airtable/*`, `/api/imgbb/*`,
-`/api/instagram/*` and `/api/github/*`. All require authentication; anything
-touching credentials requires admin. Run `npm run routes` for the current list.
+Integration endpoints under `/api/airtable/*`, `/api/imgbb/*` and
+`/api/github/*`. All require authentication; anything touching credentials
+requires admin. Run `npm run routes` for the current list.
 
-Two are not session-authenticated:
+One is not session-authenticated:
 
-- `GET|POST /api/instagram/webhooks/callback` — Meta calls these. The GET is the
-  hub verification challenge; the POST is verified against the raw request body
-  using `FACEBOOK_APP_SECRET`.
 - `POST /api/webhooks/article-published` — triggers a full Airtable sync.
   Requires `x-webhook-secret` when `WEBHOOK_SECRET` is set. **Set it in
   production**, or anyone can force repeated syncs and exhaust the Airtable

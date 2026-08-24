@@ -2,7 +2,7 @@
  * Static File Serving Middleware
  * 
  * Configures Express to serve static files from various directories
- * Includes special configuration for Instagram image uploads
+ * Includes special configuration for uploaded article images
  */
 
 import express, { Express } from 'express';

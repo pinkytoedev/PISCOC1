@@ -1,6 +1,6 @@
 # PISCOC1 - Multi-Platform Integration Ecosystem
 
-A comprehensive platform for managing content across multiple social media and content management platforms including Airtable, Instagram, and more.
+A comprehensive platform for managing editorial content, backed by Airtable and ImgBB.
 
 ## 🚀 Quick Start
 
@@ -38,7 +38,7 @@ A comprehensive platform for managing content across multiple social media and c
    ```bash
    railway run npm run dev
    ```
-   The app will start on `http://localhost:3000` (auto-fallbacks to `3001`, `3002`, etc. if ports are busy). HTTPS for Facebook runs on `https://localhost:3001`.
+   The app will start on `http://localhost:3000` (auto-fallbacks to `3002`, `3003`, etc. if ports are busy). The optional HTTPS listener runs on `https://localhost:3001`, which HTTP never falls back onto.
 
 #### Option 2: Manual Setup (without Railway)
 
@@ -69,7 +69,7 @@ A comprehensive platform for managing content across multiple social media and c
    ```bash
    npm run dev
    ```
-   The app will start on `http://localhost:3000` (auto-fallbacks to `3001`, `3002`, etc. if ports are busy).
+   The app will start on `http://localhost:3000` (auto-fallbacks to `3002`, `3003`, etc. if ports are busy; `3001` is reserved for HTTPS).
 
 ### Production Build
 
@@ -85,7 +85,7 @@ A comprehensive platform for managing content across multiple social media and c
 
 ## 📊 Features
 
-- **Multi-Platform Integration**: Connect with Airtable, Instagram, and ImgBB
+- **Multi-Platform Integration**: Connect with Airtable and ImgBB
 - **Content Management**: Create, edit, and manage articles across platforms
 - **Team Collaboration**: Manage team members and permissions
 - **API Key Management**: Centralized configuration page for all integrations
@@ -104,13 +104,6 @@ This application integrates with multiple external services. You'll need to obta
 1. Go to [Airtable API](https://airtable.com/create/tokens)
 2. Create a personal access token
 3. Use the token for `AIRTABLE_API_KEY`
-
-#### Facebook/Instagram
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create a new app
-3. Add Instagram Basic Display product
-4. Copy App ID for `FACEBOOK_APP_ID`
-5. Copy App Secret for `FACEBOOK_APP_SECRET`
 
 #### ImgBB
 1. Go to [ImgBB](https://imgbb.com/)
@@ -155,7 +148,7 @@ The Keys page is accessible from the sidebar under "Integrations → API Keys" a
 │   │                       #   uploadTokens contributor links
 │   │                       #   siteRefresh  cache invalidation
 │   │                       #   images/    hosting + SSRF-guarded fetching
-│   ├── integrations/       # Third-party: airtable/, instagram/, imgbb,
+│   ├── integrations/       # Third-party: airtable/, imgbb,
 │   │                       # contributorUpload, directUpload, teamPublicUpload
 │   ├── routes/             # Thin Express routers, one per resource;
 │   │                       # index.ts is mount order and nothing else
@@ -173,7 +166,7 @@ respond; services own the domain rules; `lib` knows nothing about either.
 
 **Development**
 - `npm run dev` — development server (HTTP). With Railway env vars: `railway run npm run dev`.
-- `npm run dev:https` — HTTPS, required for Facebook Login
+- `npm run dev:https` — HTTPS, for testing behaviour that requires TLS
 - `npm run setup:https` — generate local certificates
 - `npm run check` — TypeScript type checking
 - `npm run db:push` — push schema changes
@@ -194,9 +187,10 @@ respond; services own the domain rules; `lib` knows nothing about either.
 - `npm run routes` — print all routes with their guards.
 
 
-### 🔒 HTTPS Setup for Facebook Integration
+### 🔒 Local HTTPS (optional)
 
-Facebook requires HTTPS for OAuth login. To enable this in development:
+Plain HTTP on `http://localhost:3000` is the normal way to develop. A TLS
+listener is available for the occasional case that needs one:
 
 1. **Generate HTTPS certificates**:
    ```bash
@@ -208,13 +202,9 @@ Facebook requires HTTPS for OAuth login. To enable this in development:
    npm run dev:https
    ```
 
-3. **Access your app**:
-   - **For development**: Use `http://localhost:3000` (Facebook SDK now works properly)
-   - **For Facebook testing**: Use `https://localhost:3001` (may show WebSocket warnings - these are safe to ignore)
+3. **Accept the security warning** when visiting `https://localhost:3001` (this is safe for localhost development)
 
-4. **Accept the security warning** when visiting `https://localhost:3001` (this is safe for localhost development)
-
-> **Note**: The WebSocket warnings in the console when using HTTPS are harmless and don't affect Facebook functionality. For regular development, use HTTP. Use HTTPS only when testing Facebook Login specifically.
+> **Note**: The WebSocket warnings in the console when using HTTPS are harmless. For regular development, use HTTP.
 
 ## 🔐 Authentication and security
 
@@ -286,7 +276,7 @@ The application serves both API and frontend from a single Express server using 
 - Optional checks: `npm run test:setup`, will see if everything is present to start dev server
   - With Railway env vars: `railway run npm run dev`
   - Manually: `npm run dev`
-- Visit `http://localhost:3000` (falls back to `3001`, `3002`, ... if busy). For Facebook login testing, use `https://localhost:3001`.
+- Visit `http://localhost:3000` (falls back to `3002`, `3003`, ... if busy; `3001` is reserved for HTTPS).
 
 ## 🤝 Contributing
 

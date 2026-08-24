@@ -1,7 +1,7 @@
 /**
  * Integration settings endpoints.
  *
- * These rows hold the Airtable, ImgBB, Instagram and GitHub credentials, so
+ * These rows hold the Airtable, ImgBB and GitHub credentials, so
  * everything here is admin-only and every response is redacted.
  */
 

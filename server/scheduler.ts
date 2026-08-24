@@ -6,7 +6,7 @@
  *
  * The interesting part is what publishing *means*. This loop used to write
  * `status = published` locally, PATCH a hand-built payload into Airtable and
- * post to Instagram — and nothing else. It never told the live site to drop its
+ * push to Airtable — and nothing else. It never told the live site to drop its
  * cached copy, so a scheduled article kept serving as a draft until something
  * else happened to refresh it. Publication side effects now come from
  * `services/articles`, the same code the editor's Publish button runs, so the
@@ -128,7 +128,7 @@ async function publishArticle(article: Article): Promise<void> {
   const externalId = await pushToAirtable(published);
   if (externalId) markRecentlyPublished(externalId);
 
-  // The remaining effects — refreshing the live site, announcing on Instagram —
+  // The remaining effects — refreshing the live site —
   // are decided by the same function the editor path uses. Airtable is excluded
   // because it has just been handled above.
   const effects = publicationEffects(article, published);

@@ -1,7 +1,7 @@
 /**
  * Integration settings access.
  *
- * Credentials for Airtable, ImgBB, Instagram and GitHub live in the
+ * Credentials for Airtable, ImgBB and GitHub live in the
  * `integration_settings` table. Before this module, 93 call sites read them
  * directly — typically three sequential `getIntegrationSettingByKey` awaits to
  * assemble one Airtable config, on every request. That is three round trips per
@@ -139,28 +139,6 @@ export async function getAirtableSettings(): Promise<AirtableSettings | null> {
 
 export async function getImgBBApiKey(): Promise<string | undefined> {
   return getSettingValue('imgbb', 'api_key');
-}
-
-export interface InstagramSettings {
-  accessToken: string;
-  accountId?: string;
-  verifyToken?: string;
-}
-
-export async function getInstagramSettings(): Promise<InstagramSettings | null> {
-  const values = await getSettingValues('facebook', [
-    'access_token',
-    'instagram_account_id',
-    'verify_token',
-  ]);
-
-  if (!values.access_token) return null;
-
-  return {
-    accessToken: values.access_token,
-    accountId: values.instagram_account_id,
-    verifyToken: values.verify_token,
-  };
 }
 
 export async function getGitHubToken(): Promise<string | undefined> {

@@ -19,7 +19,6 @@ import { createLogger } from '../../lib/logger';
 import {
   uploadFileToImgBB,
   uploadUrlToImgBB,
-  rehostRemoteImage,
   type ImgBBImage,
   type UploadedFileInfo,
 } from './host';
@@ -40,11 +39,9 @@ export {
   ImageFetchError,
   assertFetchableImageUrl,
   classifyAddress,
-  downloadImage,
   fetchRemoteImage,
-  getFullImageUrl,
 } from './fetch';
-export type { DownloadedImage, FetchedImage, FetchRemoteImageOptions } from './fetch';
+export type { FetchedImage, FetchRemoteImageOptions } from './fetch';
 
 export {
   AirtableWriteError,
@@ -83,15 +80,3 @@ export async function uploadImageUrlToImgBB(
   }
 }
 
-/**
- * Re-hosts a remote image on ImgBB and returns the direct URL.
- *
- * The Instagram flow needs a URL that Meta's servers can fetch, and throws on
- * failure so its caller can fall through to the next strategy — hence a
- * throwing signature here rather than the `null` convention above.
- */
-export async function uploadToImgBB(imageUrl: string): Promise<string> {
-  const hosted = await rehostRemoteImage(imageUrl);
-  log.info('Re-hosted remote image on ImgBB', { url: hosted.url });
-  return hosted.url;
-}

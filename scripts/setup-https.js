@@ -56,11 +56,6 @@ extendedKeyUsage=serverAuth`;
     console.log('  1. Run: npm run dev:https');
     console.log('  2. Visit: https://localhost:3001');
     console.log('  3. Accept the security warning (it\'s safe for localhost)');
-    console.log('  4. Facebook Login will now work with HTTPS!');
-    console.log('');
-    console.log('📝 Don\'t forget to add these redirect URIs to your Facebook app:');
-    console.log('  - https://localhost:3001/');
-    console.log('  - https://localhost:3001/auth/facebook/callback');
 
 } catch (error) {
     console.error('❌ Failed to generate HTTPS certificates:', error.message);

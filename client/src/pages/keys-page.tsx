@@ -25,15 +25,13 @@ import {
   Copy,
   Settings,
   Database,
-  Bot,
   Table,
-  Instagram,
   Image,
   Shield,
   Code2,
   HelpCircle
 } from "lucide-react";
-import { SiAirtable, SiFacebook, SiPostgresql } from "react-icons/si";
+import { SiAirtable, SiPostgresql } from "react-icons/si";
 import { useToast } from "@/hooks/use-toast";
 
 interface IntegrationStatus {
@@ -51,7 +49,7 @@ interface ApiKeyInfo {
   configured: boolean;
   setupUrl: string;
   icon: React.ReactNode;
-  category: 'database' | 'social' | 'storage' | 'security';
+  category: 'database' | 'storage' | 'security';
   instructions: string[];
 }
 
@@ -103,24 +101,6 @@ export default function KeysPage() {
         "Create a personal access token",
         "Grant necessary scopes for your bases",
         "Copy the token for AIRTABLE_API_KEY"
-      ]
-    },
-    {
-      name: "Facebook/Instagram",
-      envVar: "FACEBOOK_APP_ID",
-      description: "Facebook app credentials for Instagram integration",
-      required: false,
-      configured: integrations?.find(i => i.name === "instagram")?.configured ?? false,
-      setupUrl: "https://developers.facebook.com/",
-      icon: <SiFacebook className="h-5 w-5" />,
-      category: "social",
-      instructions: [
-        "Create a Facebook Developer account",
-        "Create a new app",
-        "Add Instagram Basic Display product",
-        "Copy App ID for FACEBOOK_APP_ID",
-        "Copy App Secret for FACEBOOK_APP_SECRET",
-        "Configure redirect URIs and permissions"
       ]
     },
     {
@@ -194,7 +174,6 @@ export default function KeysPage() {
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'database': return <Database className="h-4 w-4" />;
-      case 'social': return <Bot className="h-4 w-4" />;
       case 'storage': return <Table className="h-4 w-4" />;
       case 'security': return <Shield className="h-4 w-4" />;
       default: return <Key className="h-4 w-4" />;
@@ -203,7 +182,6 @@ export default function KeysPage() {
 
   const categorizedKeys = {
     database: apiKeys.filter(key => key.category === 'database'),
-    social: apiKeys.filter(key => key.category === 'social'),
     storage: apiKeys.filter(key => key.category === 'storage'),
     security: apiKeys.filter(key => key.category === 'security'),
   };
@@ -307,14 +285,10 @@ export default function KeysPage() {
 
             {/* API Keys by Category */}
             <Tabs defaultValue="database" className="w-full">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="database" className="flex items-center gap-2">
                   <Database className="h-4 w-4" />
                   Database
-                </TabsTrigger>
-                <TabsTrigger value="social" className="flex items-center gap-2">
-                  <Bot className="h-4 w-4" />
-                  Social
                 </TabsTrigger>
                 <TabsTrigger value="storage" className="flex items-center gap-2">
                   <Table className="h-4 w-4" />

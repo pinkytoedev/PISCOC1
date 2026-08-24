@@ -17,7 +17,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   SiAirtable,
-  SiInstagram,
   SiCloudinary, // Using Cloudinary's icon for ImgBB since there's no official ImgBB icon
 } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
@@ -114,12 +113,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           name: "Airtable",
           path: "/integrations/airtable",
           icon: <SiAirtable className="w-5 h-5" />,
-          adminOnly: true,
-        },
-        {
-          name: "Instagram",
-          path: "/integrations/instagram",
-          icon: <SiInstagram className="w-5 h-5" />,
           adminOnly: true,
         },
         {

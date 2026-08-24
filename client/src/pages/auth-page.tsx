@@ -8,8 +8,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { SiAirtable, SiInstagram } from "react-icons/si";
+import { CalendarClock, Loader2, Upload } from "lucide-react";
+import { SiAirtable } from "react-icons/si";
 
 const loginSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
@@ -116,33 +116,47 @@ export default function AuthPage() {
         <div className="hidden md:block">
           <div className="bg-primary rounded-xl p-8 text-white">
             <h1 className="text-3xl font-bold mb-6">
-              Insta, and Airtable
+              PISCOC
             </h1>
             <p className="text-lg mb-8">
-              This took so long to make like holy f**k
+              Content management for the Pinkytoe editorial workflow.
             </p>
 
-            <div className="flex items-start space-x-4">
-              <div className="bg-white/10 p-3 rounded-lg">
-                <SiAirtable className="h-6 w-6" />
+            <div className="space-y-6">
+              <div className="flex items-start space-x-4">
+                <div className="bg-white/10 p-3 rounded-lg">
+                  <SiAirtable className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Airtable Synchronization</h3>
+                  <p className="text-sm text-white/80">
+                    Bidirectional data flow with Airtable for structured content organization.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold">Airtable Synchronization</h3>
-                <p className="text-sm text-white/80">
-                  Bidirectional data flow with Airtable for structured content organization.
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-start space-x-4">
-              <div className="bg-white/10 p-3 rounded-lg">
-                <SiInstagram className="h-6 w-6" />
+              <div className="flex items-start space-x-4">
+                <div className="bg-white/10 p-3 rounded-lg">
+                  <CalendarClock className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Scheduled Publishing</h3>
+                  <p className="text-sm text-white/80">
+                    Plan articles on a calendar and let the scheduler take them live.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold">Instagram Publishing W.I.P</h3>
-                <p className="text-sm text-white/80">
-                  Sorry I can't hang I am busy learning Law so I can write a privacy policy my Meta overlords will appreciate
-                </p>
+
+              <div className="flex items-start space-x-4">
+                <div className="bg-white/10 p-3 rounded-lg">
+                  <Upload className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold">Contributor Uploads</h3>
+                  <p className="text-sm text-white/80">
+                    Share a single link so contributors can submit copy and images directly.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

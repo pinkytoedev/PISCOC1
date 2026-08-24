@@ -2,8 +2,8 @@
  * Route registration.
  *
  * This file is wiring only — mount order and nothing else. It replaced a
- * 1,249-line module in which 45 handlers, their validation, their Airtable and
- * Instagram side effects and their activity logging were interleaved.
+ * 1,249-line module in which 45 handlers, their validation, their Airtable side
+ * effects and their activity logging were interleaved.
  *
  * Mount order matters in two ways:
  *  - authentication is installed before anything that depends on a session
@@ -19,7 +19,6 @@ import { createLogger } from '../lib/logger';
 
 import { setupAuth } from '../auth';
 import { setupAirtableRoutes } from '../integrations/airtable';
-import { setupInstagramRoutes } from '../integrations/instagramRoutes';
 import { setupImgBBRoutes } from '../integrations/imgbb';
 import { setupDirectUploadRoutes } from '../integrations/directUpload';
 import { setupContributorUploadRoutes } from '../integrations/contributorUpload';
@@ -60,7 +59,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Third-party integrations register their own route trees.
   setupAirtableRoutes(app);
-  setupInstagramRoutes(app);
   setupImgBBRoutes(app);
 
   // Diagnostics write to real Airtable records, so they are not mounted in
