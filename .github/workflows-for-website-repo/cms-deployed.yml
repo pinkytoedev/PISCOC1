@@ -66,19 +66,42 @@ jobs:
       - name: Verify the Express layer and webhook router are mounted
         run: curl -fsS --max-time 10 "$SITE/api/webhooks/health"
 
-      # POST /api/cache/refresh has no auth on main today, so the header is
-      # added only when the secret exists. Once PR #16 (chore/code-review-refactor)
-      # merges, requireAdmin applies: without ADMIN_TOKEN this returns 503 in
-      # production, and with a wrong one, 401.
+      # POST /api/cache/refresh is gated by requireAdmin (server/middleware/auth.ts).
+      # ADMIN_TOKEN is a shared secret you choose, and it has to exist in TWO
+      # places with the same value: as a variable on this site's Railway service
+      # (what the server compares against) and as a GitHub secret on this repo
+      # (what this step presents). The gate exists because each refresh fans out
+      # to several full-table Airtable scans and bypasses the refresh throttle,
+      # so an open endpoint is a rate-limit exhaustion vector.
       - name: Force a full cache refresh
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          args=(-fsS --max-time 60 -X POST "$SITE/api/cache/refresh"
+          args=(-sS --max-time 60 -o /tmp/refresh.out -w '%{http_code}'
+                -X POST "$SITE/api/cache/refresh"
                 -H 'content-type: application/json' -d '{}')
           if [ -n "$ADMIN_TOKEN" ]; then
             args+=(-H "Authorization: Bearer $ADMIN_TOKEN")
           else
-            echo "::warning::ADMIN_TOKEN is not set - sending the refresh unauthenticated. This works only while /api/cache/refresh is open."
+            echo "::warning::ADMIN_TOKEN is not set as a GitHub secret on this repo; the refresh will be rejected in production."
           fi
-          curl "${args[@]}"
+
+          # Deliberately not `curl -f`: that turns every rejection into the same
+          # opaque "exit code 22", and 503 and 401 have completely different
+          # fixes. Read the status and say which.
+          code="$(curl "${args[@]}")"
+          body="$(head -c 300 /tmp/refresh.out 2>/dev/null || true)"
+
+          case "$code" in
+            2*)
+              echo "- cache refresh: \`$code\`" >> "$GITHUB_STEP_SUMMARY" ;;
+            503)
+              echo "::error::503 from /api/cache/refresh: ADMIN_TOKEN is not set on the SITE's Railway service, so requireAdmin is failing closed. Set it there (Variables tab), matching the GitHub secret of the same name."
+              exit 1 ;;
+            401)
+              echo "::error::401 from /api/cache/refresh: ADMIN_TOKEN is set on the Railway service but does not match the GitHub secret on this repo. They must be the same string."
+              exit 1 ;;
+            *)
+              echo "::error::Unexpected $code from /api/cache/refresh: $body"
+              exit 1 ;;
+          esac
