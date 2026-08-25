@@ -1,226 +1,178 @@
-# PISCOC1 - Multi-Platform Integration Ecosystem
+# PISCOC
 
-A comprehensive platform for managing content across multiple social media and content management platforms including Airtable, Instagram, and more.
+The content management system behind Pinkytoe. It holds articles, the team
+roster and carousel quotes, keeps them in step with Airtable, publishes articles
+on a schedule, and takes content submissions from people who do not have an
+account.
 
-## 🚀 Quick Start
+**Express + React + Postgres.** One server process serves both the API and the
+dashboard.
 
-### Prerequisites
+- **Using the app?** → [`docs/guide.md`](docs/guide.md), or `/docs` in a running
+  instance.
+- **Calling the API?** → [`docs/api.md`](docs/api.md), or `/docs?tab=api`.
+- **Setting it up?** → you are in the right place.
 
-- Node.js 20+ 
-- PostgreSQL 16+
-- npm or yarn
-- Railway CLI (optional, recommended for local env injection)
-   'npm i -g @railway/cli'
+## Quick start
 
-### Local Development Setup
+Requires **Node 20.19+ or 22.12+** (Vite 7 refuses to build on older) and a
+Postgres 16+ database.
 
-#### Option 1: Railway (Recommended)
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd <project-folder>
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Login and link Railway** (for local env variables)
-   ```bash
-   npm i -g @railway/cli
-   railway login
-   railway link
-   ```
-
-4. **Start development server with Railway env**
-   ```bash
-   railway run npm run dev
-   ```
-   The app will start on `http://localhost:3000` (auto-fallbacks to `3001`, `3002`, etc. if ports are busy). HTTPS for Facebook runs on `https://localhost:3001`.
-
-#### Option 2: Manual Setup (without Railway)
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd <project-folder>
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   Edit `.env` and configure your API keys and database connection. See [API Keys Setup](#api-keys-setup).
-
-4. **Set up PostgreSQL database**
-   ```bash
-   # Create database
-   createdb [Database name]
-
-   # Push database schema
-   npm run db:push
-   ```
-
-5. **Start development server**
-   ```bash
-   npm run dev
-   ```
-   The app will start on `http://localhost:3000` (auto-fallbacks to `3001`, `3002`, etc. if ports are busy).
-
-### Production Build
-
-1. **Build the application**
-   ```bash
-   npm run build
-   ```
-
-2. **Start production server**
-   ```bash
-   npm run start
-   ```
-
-## 📊 Features
-
-- **Multi-Platform Integration**: Connect with Airtable, Instagram, and ImgBB
-- **Content Management**: Create, edit, and manage articles across platforms
-- **Team Collaboration**: Manage team members and permissions
-- **API Key Management**: Centralized configuration page for all integrations
-- **Real-time Status Monitoring**: Check the health of all connected services
-- **Secure Authentication**: Session-based auth with role-based access control
-
-## 🔑 API Keys Setup
-
-This application integrates with multiple external services. You'll need to obtain API keys for each service you want to use:
-
-### Required Environment Variables (SEE .env.example)
-
-### Obtaining API Keys
-
-#### Airtable
-1. Go to [Airtable API](https://airtable.com/create/tokens)
-2. Create a personal access token
-3. Use the token for `AIRTABLE_API_KEY`
-
-#### Facebook/Instagram
-1. Go to [Facebook Developers](https://developers.facebook.com/)
-2. Create a new app
-3. Add Instagram Basic Display product
-4. Copy App ID for `FACEBOOK_APP_ID`
-5. Copy App Secret for `FACEBOOK_APP_SECRET`
-
-#### ImgBB
-1. Go to [ImgBB](https://imgbb.com/)
-2. Create an account and go to [API](https://api.imgbb.com/)
-3. Get your API key
-4. Copy API key for `IMGBB_API_KEY`
-
-### Managing API Keys
-
-Once your application is running, you can use the **API Keys** page (`/keys`) to:
-
-- View the configuration status of all integrations
-- Get step-by-step setup instructions for each service
-- Copy environment variable names
-- Access direct links to API registration pages
-- Monitor the health of all connected services
-
-The Keys page is accessible from the sidebar under "Integrations → API Keys" and requires admin privileges.
-
-## 🏗️ Project Structure
-
-```
-├── client/                 # React frontend
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Page components
-│   │   ├── hooks/          # Custom React hooks
-│   │   └── lib/            # Utility functions
-├── server/                 # Express backend
-│   ├── integrations/       # External service integrations
-│   ├── middleware/         # Express middleware
-│   ├── routes.ts           # API routes
-│   └── index.ts            # Server entry point
-├── shared/                 # Shared types and schemas
-└── dist/                   # Built application
+```bash
+git clone <repo-url> && cd PISCOC1
+npm install
+cp .env.example .env          # then set DATABASE_URL
 ```
 
-## 🔧 Available Scripts
+Create the schema. Apply the migrations **in order, once** — `0000` is
+Drizzle-generated and has no `IF NOT EXISTS`, so it fails if re-run:
 
-- `npm run dev` - Start development server (HTTP). When using Railway env vars locally, run `railway run npm run dev`.
-- `npm run dev:https` - Start development server with HTTPS (required for Facebook Login)
-- `npm run setup:https` - Generate HTTPS certificates for local development
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run check` - Run TypeScript type checking
-- `npm run db:push` - Push database schema changes
--`npm run test:setup` - Check if you are ready to start dev session
+```bash
+createdb piscoc
+for f in migrations/*.sql; do psql "$DATABASE_URL" -f "$f"; done
+```
 
+Create a login and start:
 
-### 🔒 HTTPS Setup for Facebook Integration
+```bash
+npm run seed:dev              # creates admin / password123
+npm run dev
+```
 
-Facebook requires HTTPS for OAuth login. To enable this in development:
+The dashboard is on <http://localhost:3000>.
 
-1. **Generate HTTPS certificates**:
-   ```bash
-   npm run setup:https
-   ```
+> `npm run db:push` is listed in `package.json` but **does not work** — the
+> pinned `drizzle-kit` (0.18.1) has no `push` command for Postgres. Use the
+> migration loop above.
 
-2. **Start HTTPS development server**:
-   ```bash
-   npm run dev:https
-   ```
+## Configuration
 
-3. **Access your app**:
-   - **For development**: Use `http://localhost:3000` (Facebook SDK now works properly)
-   - **For Facebook testing**: Use `https://localhost:3001` (may show WebSocket warnings - these are safe to ignore)
+Only two variables are read at boot, and the server validates them before doing
+anything else — a bad value is a startup failure listing every problem at once,
+not a surprise later.
 
-4. **Accept the security warning** when visiting `https://localhost:3001` (this is safe for localhost development)
+| Variable | Required | Effect |
+|---|---|---|
+| `DATABASE_URL` | **always** | Postgres connection string. The server will not start without it. |
+| `SESSION_SECRET` | **in production** | Signs session cookies. In development it falls back to a known insecure value and warns. |
 
-> **Note**: The WebSocket warnings in the console when using HTTPS are harmless and don't affect Facebook functionality. For regular development, use HTTP. Use HTTPS only when testing Facebook Login specifically.
+Everything else is optional:
 
-## 🔐 Authentication
+| Variable | Default | If unset |
+|---|---|---|
+| `PORT` | — | Set: bound authoritatively, failure is fatal. Unset in dev: tries 3000, 3002, 3003, 3004, 5000, 5001, 5002 (3001 is reserved for the HTTPS listener). |
+| `BASE_URL` / `RAILWAY_PUBLIC_DOMAIN` | — | Used to build contributor upload links. **Unset in production means every link points at localhost.** |
+| `PRODUCTION_WEBHOOK_URL` | — | Where to tell the live site to drop its cache. Unset, it falls back to this server; with no public domain either, refreshes are skipped and logged. |
+| `WEBHOOK_SECRET` | — | Leaves `/api/webhooks/article-published` **open** — a free full-Airtable-sync trigger. Set it in production. |
+| `DATABASE_CA_CERT` | — | Supply when your provider terminates TLS with a private CA. |
+| `ENABLE_DIAGNOSTIC_ROUTES` | on outside production | Mounts Airtable routes that **write to real records**. |
+| `SCHEDULER_INTERVAL_MS` | 60000 | Auto-publish check frequency. |
+| `UPLOAD_MAX_IMAGE_BYTES` | 10 MB | Per-image ceiling. |
+| `UPLOAD_MAX_ZIP_BYTES` | 50 MB | Per-archive ceiling. |
+| `UPLOAD_MAX_ZIP_EXPANDED_BYTES` | 200 MB | Zip-bomb guard. |
+| `UPLOAD_MAX_ZIP_ENTRIES` | 500 | Files per archive. |
+| `UPLOAD_MAX_ZIP_IMAGES` | 60 | Images per archive. |
+| `UPLOAD_TOKEN_TTL_DAYS` | 14 | Contributor link lifetime. |
 
-The application uses session-based authentication. Default administrator credentials are pulled securely from Airtable during first setup instead of being hard-coded in the repository.
+**Airtable and ImgBB credentials are not environment variables.** They live in
+the `integration_settings` table and are entered through the admin UI at
+`/integrations/airtable` and `/integrations/imgbb`. The app boots fine with no
+integrations configured; it simply cannot sync or host images until they are.
 
-1. Create an Airtable table (defaults to `AdminCredentials`) with a record that includes username and password fields (defaults to `Username` and `Password`).
-2. Configure environment variables so `scripts/createAdmin.js` can fetch the record:
-   - `AIRTABLE_API_KEY`
-   - `AIRTABLE_BASE_ID`
-   - `ADMIN_CREDENTIALS_RECORD_ID`
-   - Optional overrides: `ADMIN_CREDENTIALS_TABLE`, `ADMIN_CREDENTIALS_USERNAME_FIELD`, `ADMIN_CREDENTIALS_PASSWORD_FIELD`
-3. Run `node scripts/createAdmin.js` to create the admin account using the fetched credentials.
+> Pointing a development server at your production Airtable base will mutate it —
+> the diagnostic routes are on by default outside production and write real
+> records.
 
-Optionally set `VITE_DEFAULT_ADMIN_USERNAME` (to match the Airtable username) so the UI can remind you to rotate off the default account. After signing in, create a new administrator with a unique password, then disable or remove the default
+## Scripts
 
-## 📚 API Documentation
+```
+npm run dev              development server
+npm run build            client bundle + server bundle into dist/
+npm start                production server
+npm run check            TypeScript
+npm run seed:dev         create the admin / password123 login
+npm run test:setup       check the environment looks workable
+```
 
-See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for detailed API endpoint documentation.
+Verification — these exist because the properties they check are easy to break
+silently:
 
-## 🔧 Database
-Uses Postgres through Railway.
+```
+npm run verify:guards    asserts the unauthenticated route surface matches its allowlist
+npm run verify:uploads   upload validation; no server or database needed
+npm run routes           every route with its guard
+npx tsx scripts/generate-api-docs.mjs --check    docs/api.md matches the router
+```
 
-## 🚀 Development
+`npm run verify:security` and `npm run verify:routes` need a server on port
+**3999** specifically, and `verify:routes` additionally hardcodes a local
+database URL — they are developer tools, not general-purpose checks.
 
-The application serves both API and frontend from a single Express server using Vite middleware in development.
+`npm run dev:https` is currently identical to `npm run dev`. The HTTPS listener
+on port 3001 starts automatically in development whenever certificates exist;
+generate them with `npm run setup:https`. It is entirely optional.
 
-- Ensure you have Node.js 20+, PostgreSQL available, and required environment variables set (via `.env` or Railway).
-- Optional checks: `npm run test:setup`, will see if everything is present to start dev server
-  - With Railway env vars: `railway run npm run dev`
-  - Manually: `npm run dev`
-- Visit `http://localhost:3000` (falls back to `3001`, `3002`, ... if busy). For Facebook login testing, use `https://localhost:3001`.
+## Layout
 
-## 🤝 Contributing
+```
+client/src/
+  pages/           one file per route, incl. integrations/ and docs-page
+  components/      articles/ dashboard/ modals/ layout/ ui/
+  hooks/           data fetching and mutations
+  lib/             query client, route guards, markdown renderer
+server/
+  routes/          thin Express routers, one per resource — wiring only
+  services/        domain logic: articles, reupload, uploadTokens, siteRefresh,
+                   settings, activity, images/
+  integrations/    airtable/, imgbb, contributorUpload, directUpload,
+                   teamPublicUpload, airtableTest
+  middleware/      auth, csrf, rateLimit, upload, webhookAuth, staticMiddleware
+  lib/             env, logger, httpError, sanitizeHtml, redact, airtableClient
+  utils/           zipProcessor, airtableHelpers, apiCache, fileUpload, ...
+  scheduler.ts     the auto-publisher
+  storage.ts       every database query
+shared/schema.ts   Drizzle tables + Zod schemas, used by both sides
+docs/              guide.md and api.md - rendered at /docs and on GitHub
+migrations/        plain SQL, applied in order
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+Layering runs one way: routes → services → lib. Routes parse and respond;
+services decide; lib has no domain knowledge.
 
-## 📄 License
+## Security
 
-MIT License - see [LICENSE](./LICENSE) file for details.
+The unauthenticated surface is **7 endpoints**, and `npm run verify:guards`
+fails if it grows without being documented in the allowlist.
+
+- Session cookies are `HttpOnly`, `Secure` and `SameSite=None` in production,
+  which is what makes CSRF tokens load-bearing: every state-changing request
+  must echo the readable `csrf_token` cookie in an `x-csrf-token` header. Three
+  paths are exempt because their callers have no cookie — see `docs/api.md`.
+- Contributor links are 256-bit secrets stored only as SHA-256 hashes, scoped to
+  one article and one set of asset types, and expiring.
+- Uploads are verified from their leading bytes, not their filename. SVG is
+  refused. HTML is sanitized before storage. ZIP expansion is bounded before
+  anything is written to disk.
+- Anything that fetches a remote image is SSRF-hardened: every resolved address
+  must be public, and redirects are re-validated at each hop.
+- Integration credentials are masked on the way out; the full value is never
+  returned once stored.
+- Request logging records method, path, status and duration only. Response
+  bodies are never serialized — they used to carry password hashes and API keys
+  into the platform logs.
+
+## Deployment
+
+Railway, via nixpacks. `railway.toml` builds with `npm install && npm run build`,
+starts with `npm start`, and health-checks `/api/health` — which reports booleans
+only, never values.
+
+`railway run npm run dev` injects the deployed environment, including `PORT`, so
+the app binds that port rather than falling back to 3000.
+
+`npm run build` emits two bundles: `dist/index.js` (the normal server) and
+`dist/app.js`, a serverless export. **The serverless entry deliberately does not
+start the scheduler**, so a deployment using it has no auto-publishing.
+
+The scheduler holds no distributed lock — running more than one instance would
+publish twice. Rate limits are per-process for the same reason.

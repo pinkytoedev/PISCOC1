@@ -1,286 +1,198 @@
-import { storage } from "./storage";
-import { log } from "./vite";
-import { postArticleToInstagram } from "./integrations/instagram";
-import { markRecentlyPublished } from "./publishState";
-import type { Article } from "@shared/schema";
+/**
+ * Scheduled publication.
+ *
+ * A draft that carries a `Scheduled` date goes live on its own once that date
+ * passes. One pass per minute, drafts only, processed one at a time.
+ *
+ * The interesting part is what publishing *means*. This loop used to write
+ * `status = published` locally, PATCH a hand-built payload into Airtable and
+ * push to Airtable — and nothing else. It never told the live site to drop its
+ * cached copy, so a scheduled article kept serving as a draft until something
+ * else happened to refresh it. Publication side effects now come from
+ * `services/articles`, the same code the editor's Publish button runs, so the
+ * two paths cannot drift apart again.
+ */
 
+import type { Article } from '@shared/schema';
+import { storage } from './storage';
+import { createLogger } from './lib/logger';
+import { markRecentlyPublished } from './publishState';
+import { pushArticleToAirtable } from './integrations/airtable';
+import { applyPublicationEffects, publicationEffects } from './services/articles';
+import { recordActivity } from './services/activity';
+
+const log = createLogger('scheduler');
+
+/**
+ * How far back a pass will reach.
+ *
+ * Wide enough to catch up on anything missed during a deploy or an outage,
+ * narrow enough that a long-forgotten draft with a stale date is left alone.
+ */
+const CATCH_UP_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Lets boot finish before the first pass competes with it for the database. */
+const INITIAL_DELAY_MS = 5_000;
+
+/**
+ * Reentrancy guard. A pass can outlive its interval — each article costs at
+ * least one Airtable round trip — and two overlapping passes would publish the
+ * same article twice.
+ */
 let isRunning = false;
+
 let intervalHandle: NodeJS.Timeout | null = null;
 
+/**
+ * Reads the scheduled publication time.
+ *
+ * There is deliberately no fallback to `publishedAt`: a draft that was once
+ * published still carries that timestamp, and treating it as a schedule would
+ * silently re-publish drafts on the next pass.
+ */
 function parseScheduledDate(article: Article): Date | null {
-    try {
-        if (article.Scheduled) {
-            const d = new Date(article.Scheduled as unknown as string);
-            if (!isNaN(d.getTime())) return d;
-        }
-    } catch { }
-    // Removed fallback to publishedAt to prevent auto-publishing of drafts that were previously published
+  if (!article.Scheduled) return null;
+  // Airtable hands this over as free text, so an unparseable cell is expected
+  // rather than exceptional.
+  const when = new Date(article.Scheduled);
+  return Number.isNaN(when.getTime()) ? null : when;
+}
+
+/** Whether a draft is due to be published on this pass. */
+function isDue(article: Article, now: Date, cutoff: Date): boolean {
+  // The Republished flag marks an article that is deliberately held as a draft.
+  if (article.republished) return false;
+
+  // A set `publishedAt` means the article has been live before. This guards
+  // locally-edited articles: if a published article is reverted to draft
+  // through the UI, `publishedAt` survives and the scheduler leaves it alone.
+  // The guard does NOT cover Airtable-synced drafts — `syncArticlesFromAirtable`
+  // clears `publishedAt` for every unfinished record, so a previously published
+  // article that re-enters through a sync arrives here with `publishedAt` null.
+  // The `republished` flag above is what protects those.
+  if (article.publishedAt) return false;
+
+  // A re-upload session has intentionally taken the article offline while its
+  // content is replaced; publishing now would serve the half-updated version.
+  if (article.isReuploading) return false;
+
+  const when = parseScheduledDate(article);
+  return when !== null && when <= now && when >= cutoff;
+}
+
+/**
+ * Mirrors a freshly published article into Airtable and reports the record id.
+ *
+ * This is run here rather than left to `applyPublicationEffects` because the
+ * scheduler needs to know whether the write landed: only a confirmed
+ * `Finished = true` may mark the record as recently published, and that mark is
+ * what stops the next sync reading a stale `Finished = false` and reverting the
+ * article to draft. Failing to push and marking anyway would paper over the
+ * disagreement for five minutes and then revert regardless.
+ */
+async function pushToAirtable(article: Article): Promise<string | null> {
+  try {
+    // Creates the record when the article has no external id yet, so a
+    // locally-authored article still ends up in the base. The field mapping is
+    // `airtable/mappers`, shared with the editor push — the scheduler used to
+    // keep its own copy of it, which is how the two ended up sending different
+    // sets of fields.
+    const result = await pushArticleToAirtable(article.id);
+    return result.response.records[0]?.id ?? null;
+  } catch (error) {
+    // Best-effort: the article is already published locally, and a later manual
+    // push or sync can still reconcile the base.
+    log.error('Airtable push failed for scheduled article', {
+      articleId: article.id,
+      error,
+    });
     return null;
+  }
 }
 
-async function ensureArticleOnAirtable(article: Article): Promise<Article> {
-    try {
-        // Check Airtable settings
-        const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-        const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-        const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
-        if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-            log("Airtable not configured; skipping push for article " + article.id, "scheduler");
-            return article;
-        }
-
-        const fields: any = {
-            Name: article.title,
-            Description: article.description || "",
-            Body: article.content || "",
-            Featured: article.featured === "yes",
-            Finished: article.status === "published" || article.finished === true,
-            Hashtags: article.hashtags || "",
-        };
-
-        // Include image link URL fields if available so the Airtable draft has them immediately
-        if (article.imageUrl) {
-            (fields as any).MainImageLink = article.imageUrl;
-        }
-        if (article.instagramImageUrl) {
-            (fields as any).InstaPhotoLink = article.instagramImageUrl;
-        }
-
-        // Dates
-        const scheduledDate = parseScheduledDate(article) || new Date();
-        fields.Scheduled = scheduledDate.toISOString();
-        fields.Date = article.date || new Date().toISOString();
-
-        let res: Response;
-        let airtableId = article.externalId;
-
-        if (article.externalId) {
-            // Update existing record
-            const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}/${article.externalId}`;
-            const body = JSON.stringify({ fields });
-
-            res = await fetch(url, {
-                method: "PATCH",
-                headers: {
-                    "Authorization": `Bearer ${apiKeySetting.value}`,
-                    "Content-Type": "application/json",
-                },
-                body,
-            });
-        } else {
-            // Create new record
-            const url = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}`;
-            const body = JSON.stringify({ records: [{ fields }] });
-
-            res = await fetch(url, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${apiKeySetting.value}`,
-                    "Content-Type": "application/json",
-                },
-                body,
-            });
-        }
-
-        const text = await res.text();
-        if (!res.ok) {
-            log(`Airtable sync failed (${res.status}): ${text}`, "scheduler");
-            return article;
-        }
-
-        if (!article.externalId) {
-            const data = JSON.parse(text) as { records?: Array<{ id: string }> };
-            airtableId = data.records && data.records[0]?.id || null;
-            if (!airtableId) {
-                log("Airtable push returned no record id", "scheduler");
-                return article;
-            }
-
-            const updated = await storage.updateArticle(article.id, {
-                externalId: airtableId,
-                source: "airtable",
-            } as any);
-
-            if (updated) {
-                log(`Article ${article.id} pushed to Airtable with id ${airtableId}`, "scheduler");
-                if (fields.Finished) markRecentlyPublished(airtableId);
-                return updated as Article;
-            }
-        } else {
-            log(`Article ${article.id} updated in Airtable with id ${article.externalId}`, "scheduler");
-            if (fields.Finished) markRecentlyPublished(article.externalId);
-            return article;
-        }
-    } catch (err) {
-        log(`Error ensuring Airtable push for article ${article.id}: ${String(err)}`, "scheduler");
-    }
-    return article;
-}
-
-async function moveImageLinksToAirtable(article: Article): Promise<void> {
-    try {
-        // Require an existing Airtable record
-        if (!article.externalId) {
-            return;
-        }
-
-        // Gather link fields from the local article
-        const fieldsToUpdate: Record<string, string> = {};
-        if (article.imageUrl) {
-            fieldsToUpdate["MainImageLink"] = article.imageUrl;
-        }
-        if (article.instagramImageUrl) {
-            fieldsToUpdate["InstaPhotoLink"] = article.instagramImageUrl;
-        }
-
-        // Nothing to move
-        if (Object.keys(fieldsToUpdate).length === 0) {
-            return;
-        }
-
-        // Read Airtable config
-        const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-        const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-        const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-
-        if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-            log("Airtable not configured; skipping moving links for article " + article.id, "scheduler");
-            return;
-        }
-
-        const airtableUrl = `https://api.airtable.com/v0/${baseIdSetting.value}/${encodeURIComponent(tableNameSetting.value)}/${article.externalId}`;
-        const body = JSON.stringify({ fields: fieldsToUpdate });
-
-        const res = await fetch(airtableUrl, {
-            method: "PATCH",
-            headers: {
-                "Authorization": `Bearer ${apiKeySetting.value}`,
-                "Content-Type": "application/json",
-            },
-            body,
-        });
-
-        const text = await res.text();
-        if (!res.ok) {
-            // Common error when a field does not exist in Airtable
-            log(`Failed to move links to Airtable for article ${article.id} (${res.status}): ${text}`, "scheduler");
-            return;
-        }
-
-        log(`Moved image links to Airtable for article ${article.id}`, "scheduler");
-    } catch (err) {
-        log(`Error moving links to Airtable for article ${article.id}: ${String(err)}`, "scheduler");
-    }
-}
-
+/** Publishes one due article and runs the effects that implies. */
 async function publishArticle(article: Article): Promise<void> {
-    // Mark as published in DB
-    const now = new Date();
-    const updated = await storage.updateArticle(article.id, {
-        status: "published",
-        finished: true,
-        publishedAt: article.publishedAt || now,
-    } as any);
+  const published = await storage.updateArticle(article.id, {
+    status: 'published',
+    finished: true,
+    // `isDue` has already established that `publishedAt` is unset; the
+    // coalesce keeps an existing timestamp authoritative if that ever changes.
+    publishedAt: article.publishedAt ?? new Date(),
+  });
 
-    if (!updated) {
-        log(`Failed to update article ${article.id} to published`, "scheduler");
-        return;
-    }
+  if (!published) {
+    log.error('Failed to mark article published', { articleId: article.id });
+    return;
+  }
 
-    log(`Published article ${article.id}: ${article.title}`, "scheduler");
+  const externalId = await pushToAirtable(published);
+  if (externalId) markRecentlyPublished(externalId);
 
-    // Move image links over to Airtable record (if present)
-    await moveImageLinksToAirtable(updated as unknown as Article);
+  // The remaining effects — refreshing the live site —
+  // are decided by the same function the editor path uses. Airtable is excluded
+  // because it has just been handled above.
+  const effects = publicationEffects(article, published);
+  await applyPublicationEffects(published, { ...effects, pushToAirtable: false });
 
-    // Try Instagram post (best-effort)
-    try {
-        const result = await postArticleToInstagram(updated as unknown as Article);
-        if (result.success) {
-            log(`Instagram post succeeded for article ${article.id}`, "scheduler");
-        } else {
-            log(`Instagram post failed for article ${article.id}: ${result.error}`, "scheduler");
-        }
-    } catch (e) {
-        log(`Instagram post error for article ${article.id}: ${String(e)}`, "scheduler");
-    }
+  await recordActivity({
+    action: 'publish',
+    resource: 'article',
+    resourceId: published.id,
+    details: { via: 'scheduler', scheduledFor: article.Scheduled ?? undefined },
+  });
+
+  log.info('Published scheduled article', { articleId: published.id, externalId });
 }
 
 async function checkAndPublishDueArticles(): Promise<void> {
-    if (isRunning) return;
-    isRunning = true;
-    const startedAt = new Date();
-    try {
-        // Get drafts to minimize scan size
-        const drafts = await storage.getArticlesByStatus("draft");
-        const candidates = [...drafts];
+  if (isRunning) return;
+  isRunning = true;
 
-        if (candidates.length === 0) return;
+  const startedAt = Date.now();
 
-        const now = new Date();
-        // Limit auto-publish to articles scheduled within the last 24 hours
-        // to catch up after downtime while avoiding re-publishing old drafts.
-        const cutoffTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  try {
+    // Only drafts can become due, so the scan stays small on a large base.
+    const drafts = await storage.getArticlesByStatus('draft');
+    if (drafts.length === 0) return;
 
-        const due = candidates.filter(a => {
-            // Skip if the Republished flag is set; these are explicitly held as drafts
-            if (a.republished) return false;
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - CATCH_UP_WINDOW_MS);
+    const due = drafts.filter((article) => isDue(article, now, cutoff));
 
-            // Skip if the article was previously published (publishedAt is set).
-            // This guards locally-edited articles: if a published article is reverted
-            // to draft via the UI, publishedAt remains set and the scheduler leaves it alone.
-            // Note: this guard does NOT apply to Airtable-synced drafts — syncArticlesFromAirtable
-            // sets publishedAt to null for all non-finished records (publishedAtValue is null when
-            // finishedFlag is false), so a previously-published article that re-enters via sync
-            // will have publishedAt === null here. The republished flag is the mechanism that
-            // protects those articles from accidental auto-publish.
-            if (a.publishedAt) return false;
+    if (due.length === 0) return;
 
-            const when = parseScheduledDate(a);
-            // Rule 1: Scheduled time must be in the past (<= now)
-            // Rule 2: Scheduled time must be recent (<= 24 hours ago)
-            return when !== null && when <= now && when >= cutoffTime;
-        });
+    log.info('Publishing due articles', { count: due.length });
 
-        if (due.length === 0) return;
-
-        // Process sequentially to avoid rate limits
-        for (const article of due) {
-            try {
-                log(`Auto-publish candidate ${article.id}: ${article.title}`, "scheduler");
-                const ensured = await ensureArticleOnAirtable(article);
-                await publishArticle(ensured);
-                // Push Finished=true back to Airtable now that the article is published.
-                // Without this, the next Airtable sync would see Finished=false and revert to draft.
-                await ensureArticleOnAirtable({ ...ensured, status: "published", finished: true });
-            } catch (err) {
-                log(`Error auto-publishing article ${article.id}: ${String(err)}`, "scheduler");
-            }
-        }
-    } catch (err) {
-        log(`Scheduler error: ${String(err)}`, "scheduler");
-    } finally {
-        isRunning = false;
-        const ms = Date.now() - startedAt.getTime();
-        log(`Scheduler cycle completed in ${ms}ms`, "scheduler");
+    // Sequential on purpose. Each article costs several Airtable calls and the
+    // base's rate limit (5 requests/second) is shared with the sync routines.
+    for (const article of due) {
+      try {
+        await publishArticle(article);
+      } catch (error) {
+        // One bad article must not strand the rest of the batch.
+        log.error('Auto-publish failed', { articleId: article.id, error });
+      }
     }
+  } catch (error) {
+    log.error('Scheduler pass failed', { error });
+  } finally {
+    isRunning = false;
+    log.debug('Scheduler pass complete', { durationMs: Date.now() - startedAt });
+  }
 }
 
 export function startPublishScheduler(intervalMs: number = 60000) {
-    if (intervalHandle) return; // already started
-    log(`Starting publish scheduler (interval ${intervalMs}ms)`, "scheduler");
-    // Kick off soon after boot
-    setTimeout(() => void checkAndPublishDueArticles(), 5000);
-    intervalHandle = setInterval(() => {
-        void checkAndPublishDueArticles();
-    }, intervalMs);
+  if (intervalHandle) return; // already started
+
+  log.info('Starting publish scheduler', { intervalMs });
+
+  setTimeout(() => void checkAndPublishDueArticles(), INITIAL_DELAY_MS);
+  intervalHandle = setInterval(() => void checkAndPublishDueArticles(), intervalMs);
 }
 
 export function stopPublishScheduler() {
-    if (intervalHandle) {
-        clearInterval(intervalHandle);
-        intervalHandle = null;
-    }
+  if (intervalHandle) {
+    clearInterval(intervalHandle);
+    intervalHandle = null;
+  }
 }
-
-

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Article } from "@shared/schema";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -7,6 +6,7 @@ import { Calendar, User, Tag, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { marked } from 'marked';
+import DOMPurify from "dompurify";
 
 interface ViewArticleModalProps {
   isOpen: boolean;
@@ -51,21 +51,24 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
   const renderContent = (content: string | null, format: string | null) => {
     if (!content) return <p className="text-gray-500 italic">No content available</p>;
 
-    console.log('Rendering content with format:', format, 'content length:', content?.length || 0);
-
     if (format === 'html') {
-      return <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: content }} />;
+      // Article bodies originate from contributor-supplied ZIP archives. The
+      // server sanitizes on write, but rows stored before that existed are
+      // still in the database, so the render path sanitizes too — this modal is
+      // viewed in an authenticated editor session, which is exactly the context
+      // an injected script would want.
+      return (
+        <div
+          className="prose max-w-none"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
+        />
+      );
     } else if (format === 'plaintext' || format === 'txt') {
-      // For plain text, we offer two display options:
-      // 1. Convert to HTML using marked library (for better display)
-      // 2. Preserve original formatting (for viewing raw content)
-
-      console.log('Converting plaintext to HTML using marked');
-
+      // Plain text is rendered through marked so lists and emphasis show up,
+      // with the untouched source kept one click away.
       try {
         // Convert plaintext to HTML using marked
-        const htmlContent = marked.parse(content || '');
-        console.log('HTML conversion successful');
+        const htmlContent = DOMPurify.sanitize(marked.parse(content || '') as string);
 
         return (
           <>
@@ -81,8 +84,7 @@ export function ViewArticleModal({ isOpen, onClose, article }: ViewArticleModalP
             </details>
           </>
         );
-      } catch (error) {
-        console.error('Error converting plaintext to HTML:', error);
+      } catch {
         // Fallback to plain display if markdown parsing fails
         return (
           <div className="whitespace-pre-wrap border-l-4 border-gray-200 pl-4 font-mono text-sm">

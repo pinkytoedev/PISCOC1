@@ -1,14 +1,9 @@
-import { useState } from "react";
-import { Link } from "wouter";
-import { Bell, ChevronDown, Link as LinkIcon, Menu } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { ChevronDown, Link as LinkIcon, Menu } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
@@ -19,8 +14,7 @@ interface HeaderProps {
 
 export function Header({ title = "Airtable Integration", onMobileMenuToggle }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
-  const [notifications] = useState<any[]>([]);
-  
+
   const handleMobileMenuToggle = () => {
     if (onMobileMenuToggle) {
       setTimeout(() => {
@@ -47,9 +41,8 @@ export function Header({ title = "Airtable Integration", onMobileMenuToggle }: H
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              console.log("Menu button clicked");
               handleMobileMenuToggle();
-            }} 
+            }}
             className="md:hidden mr-2 touch-manipulation p-3 bg-primary hover:bg-primary/80 active:bg-primary/90 text-white rounded-md"
             aria-label="Toggle mobile menu"
             type="button"
@@ -69,48 +62,6 @@ export function Header({ title = "Airtable Integration", onMobileMenuToggle }: H
         <div className="flex items-center space-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-3 text-[#FF69B4] hover:text-[#CC3F85] relative touch-manipulation" type="button" aria-label="Notifications">
-                <Bell className="h-5 w-5" />
-                {notifications.length > 0 && (
-                  <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <h5 className="font-semibold text-sm">Notifications</h5>
-              </div>
-              
-              {notifications.length === 0 ? (
-                <div className="px-4 py-8 text-center">
-                  <p className="text-sm text-gray-500">No new notifications</p>
-                </div>
-              ) : (
-                notifications.map((notification, index) => (
-                  <DropdownMenuItem key={index} className="px-4 py-3 hover:bg-gray-50 border-b border-gray-100 touch-manipulation cursor-pointer">
-                    <div className="w-full">
-                      <div className="flex justify-between">
-                        <span className="text-sm font-medium">{notification.title}</span>
-                        <span className="text-xs text-gray-500">{notification.time}</span>
-                      </div>
-                      <p className="text-xs text-gray-600">{notification.description}</p>
-                    </div>
-                  </DropdownMenuItem>
-                ))
-              )}
-              
-              <div className="px-4 py-3 text-center text-xs">
-                <Link href="/notifications" className="text-[#FF69B4] hover:underline block py-2 touch-manipulation">
-                  View all notifications
-                </Link>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          <Separator orientation="vertical" className="h-8 bg-[#FFCAE3]" />
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
               <button className="flex items-center space-x-2 p-2 rounded-md hover:bg-[#FFCAE3]/50 touch-manipulation" type="button" aria-label="User menu">
                 <div className="h-8 w-8 rounded-full bg-[#FF69B4] flex items-center justify-center shadow-pink">
                   <span className="text-sm font-medium text-white">{userInitials}</span>
@@ -120,13 +71,12 @@ export function Header({ title = "Airtable Integration", onMobileMenuToggle }: H
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[200px]">
-              <DropdownMenuItem className="py-3 cursor-pointer touch-manipulation">
-                <Link href="/profile" className="w-full">Profile</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="py-3 cursor-pointer touch-manipulation">
-                <Link href="/settings" className="w-full">Settings</Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              <div className="px-2 py-2 text-sm">
+                <p className="font-medium text-gray-800">{user?.username}</p>
+                <p className="text-xs text-gray-500">
+                  {user?.isAdmin ? "Administrator" : "Member"}
+                </p>
+              </div>
               <DropdownMenuItem onClick={handleLogout} className="py-3 cursor-pointer touch-manipulation">
                 Sign out
               </DropdownMenuItem>

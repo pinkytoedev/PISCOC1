@@ -4,23 +4,24 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { IntegrationSetting } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Save, Lock, Image, AlertCircle } from "lucide-react";
+import { Loader2, Save, Image, AlertCircle } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
+import { isConfigured, isRedacted, type MaybeRedactedSetting } from "./redacted-setting";
 
-// Schema for validation
+// Schema for validation. The key may be left blank once one is stored, which
+// keeps the existing key rather than clearing it.
 const imgbbSettingSchema = z.object({
-  api_key: z.string().min(1, "API Key is required"),
+  api_key: z.string(),
   enabled: z.boolean().default(true)
 });
 
@@ -32,43 +33,36 @@ export default function ImgBBPage() {
   const queryClient = useQueryClient();
   
   // Fetch current ImgBB settings
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading } = useQuery<MaybeRedactedSetting[]>({
     queryKey: ['/api/imgbb/settings'],
-    queryFn: async () => {
-      const response = await fetch('/api/imgbb/settings', {
-        credentials: 'include'
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch ImgBB settings');
-      }
-      
-      return response.json() as Promise<IntegrationSetting[]>;
-    }
   });
-  
+
   // Find settings if they exist
   const apiKeySetting = settings?.find(s => s.key === 'api_key');
-  
+  const keyConfigured = isConfigured(apiKeySetting);
+  // The stored key comes back masked, so the field starts empty and a blank
+  // submit is read as "keep the current key" rather than as the key itself.
+  const maskedKey = isRedacted(apiKeySetting) ? apiKeySetting?.value ?? '' : '';
+
   // Form setup
   const form = useForm<ImgBBSettingFormValues>({
     resolver: zodResolver(imgbbSettingSchema),
     defaultValues: {
-      api_key: apiKeySetting?.value || '',
+      api_key: '',
       enabled: apiKeySetting?.enabled === false ? false : true
     }
   });
-  
+
   // Reset form when settings change
   React.useEffect(() => {
     if (settings) {
       form.reset({
-        api_key: apiKeySetting?.value || '',
+        api_key: '',
         enabled: apiKeySetting?.enabled === false ? false : true
       });
     }
   }, [settings]);
-  
+
   // Update setting mutation
   const updateSettingMutation = useMutation({
     mutationFn: async (data: {key: string; value: string; enabled?: boolean}) => {
@@ -88,16 +82,29 @@ export default function ImgBBPage() {
   
   // Handle form submission
   const onSubmit = async (data: ImgBBSettingFormValues) => {
+    // The stored key is never sent to the browser, so there is nothing to
+    // resend. Saving a blank or masked value would wipe a working key.
+    if (!data.api_key) {
+      toast({
+        title: 'Enter your ImgBB API key',
+        description: keyConfigured
+          ? 'The saved key cannot be read back, so re-enter it to change these settings.'
+          : 'An API key is required to enable the ImgBB integration.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     try {
       setIsSubmitting(true);
-      
+
       // Update API key setting
       await updateSettingMutation.mutateAsync({
         key: 'api_key',
         value: data.api_key,
         enabled: data.enabled
       });
-      
+
       toast({
         title: 'ImgBB settings updated',
         description: 'Your ImgBB integration settings have been saved successfully'
@@ -131,17 +138,29 @@ export default function ImgBBPage() {
             </div>
             
             {/* Status Banner */}
-            <div className={`mb-8 p-4 rounded-lg ${apiKeySetting?.value ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+            <div className={`mb-8 p-4 rounded-lg ${isLoading ? 'bg-gray-50 border border-gray-200' : keyConfigured ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
               <div className="flex items-center gap-3">
-                {apiKeySetting?.value ? (
+                {/* Until the settings land, `keyConfigured` is false — which
+                    rendered "Not Configured" over a perfectly good integration
+                    on every first paint, and permanently if the request failed. */}
+                {isLoading ? (
+                  <>
+                    <div className="bg-gray-100 p-2 rounded-full">
+                      <Loader2 className="h-6 w-6 text-gray-500 animate-spin" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-medium text-gray-800">Checking ImgBB integration status…</h2>
+                    </div>
+                  </>
+                ) : keyConfigured ? (
                   <>
                     <div className="bg-green-100 p-2 rounded-full">
                       <Image className="h-6 w-6 text-green-600" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-medium text-green-800">ImgBB Integration Status: {apiKeySetting.enabled ? 'Enabled' : 'Configured but Disabled'}</h2>
+                      <h2 className="text-lg font-medium text-green-800">ImgBB Integration Status: {apiKeySetting?.enabled ? 'Enabled' : 'Configured but Disabled'}</h2>
                       <p className="text-green-700 text-sm mt-1">
-                        {apiKeySetting.enabled 
+                        {apiKeySetting?.enabled
                           ? 'Images will be uploaded through ImgBB before being sent to Airtable.' 
                           : 'Integration is configured but currently disabled. Enable it below to use ImgBB for image uploads.'}
                       </p>
@@ -182,11 +201,21 @@ export default function ImgBBPage() {
                           <FormLabel>ImgBB API Key</FormLabel>
                           <FormControl>
                             <div className="flex items-center gap-2">
-                              <Input placeholder="Enter your ImgBB API key" {...field} />
+                              <Input
+                                type="password"
+                                placeholder={
+                                  keyConfigured
+                                    ? `Saved (${maskedKey}) — enter a key to replace it`
+                                    : "Enter your ImgBB API key"
+                                }
+                                {...field}
+                              />
                             </div>
                           </FormControl>
                           <FormDescription>
-                            You can get your API key from the ImgBB website after signing up
+                            {keyConfigured
+                              ? "A key is stored. Only its last four characters are shown, so re-enter the key to change these settings."
+                              : "You can get your API key from the ImgBB website after signing up"}
                           </FormDescription>
                           <FormMessage />
                         </FormItem>

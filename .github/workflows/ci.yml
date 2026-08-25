@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs; let a main run finish so its result is not
+  # ambiguous next to the Railway deploy it shares a commit with.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Typecheck, build, static verifiers.
+  #
+  # Deliberately no `name:`. The check-run context is "CI / <job id>", so a
+  # `name:` here would publish "CI / Typecheck, build, static verifiers" and any
+  # later reword would silently break branch protection, which matches on the
+  # literal string and shows an unsatisfiable "Expected" check forever.
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # server/lib/env.ts throws at import time if DATABASE_URL is absent.
+      # verify:guards and verify:uploads import server code but never open a
+      # connection (pg.Pool is lazy), so a syntactically valid placeholder is
+      # enough. With this value both exit 0; with it unset both exit 1 on
+      # "Invalid environment configuration: - DATABASE_URL is required".
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci_placeholder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # .nvmrc is also read by nixpacks, so Railway and CI stay pinned together.
+          node-version-file: .nvmrc
+          # Caches ~/.npm, not node_modules. npm ci therefore rebuilds a fresh
+          # tree every run, so tsc's incremental tsbuildinfo (which lives in
+          # node_modules/typescript/) can never go stale and pass spuriously.
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      # Also the only thing that proves server/index.ts still bundles, and it
+      # produces the dist/public/ that the e2e job's serveStatic requires.
+      - name: Build
+        run: npm run build
+
+      - name: Verify route guards
+        run: npm run verify:guards
+
+      - name: Verify upload type checks
+        run: npm run verify:uploads
+
+      # scripts/list-routes.mjs ends in an unconditional process.exit(0) and
+      # asserts nothing, so it is a report, not a gate. verify:guards above is
+      # its assertive twin. Not marked continue-on-error, which would falsely
+      # imply it can fail.
+      - name: Route surface (informational)
+        if: always()
+        run: |
+          {
+            echo '### Route surface'
+            echo '```'
+            npm run --silent routes
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # End-to-end security regression. No `name:` — see the note on `static`.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A type error should not burn three minutes of Postgres time.
+    needs: static
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: piscoc_ci
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ['5432:5432']
+    env:
+      # Throwaway service container that dies with the job. verify:security
+      # seeds a known-password admin, so it must never point at a shared database.
+      DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/piscoc_ci
+      SESSION_SECRET: ci-throwaway-session-secret-not-a-real-credential
+      VERIFY_BASE_URL: http://127.0.0.1:3999
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Replaces `npm run db:push`, which is dead: drizzle-kit is pinned at
+      # 0.18.1, whose CLI has no `push` command at all.
+      - name: Apply migrations
+        run: |
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client; }
+          for f in migrations/*.sql; do
+            echo "--- applying $f"
+            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Build
+        run: npm run build
+
+      # DO NOT change this to `npm start`. That sets NODE_ENV=production, which
+      # breaks the job in two independent, verified ways:
+      #
+      #   1. server/db.ts hard-codes `ssl: { rejectUnauthorized: true }` when
+      #      env.isProduction, with no escape hatch. The postgres:16 service
+      #      container ships with `ssl = off`, so every query throws "The server
+      #      does not support SSL connections". /api/health still answers 200 —
+      #      it never touches the pool — so the wait step below passes and the
+      #      failure only surfaces as a 500 on POST /api/login.
+      #      (`?sslmode=disable` does NOT help: pg.Pool's explicit `ssl` option
+      #      overrides the connection string.)
+      #   2. server/auth.ts sets cookie.secure = env.isProduction, and
+      #      express-session silently drops Set-Cookie when a secure cookie
+      #      would go over a plain-HTTP connection. Both verify scripts drive a
+      #      hand-rolled cookie jar, so they would never hold a session and
+      #      every authenticated assertion would 401.
+      #
+      # Production parity would need a TLS-enabled Postgres image plus
+      # DATABASE_CA_CERT, and a terminating proxy in front of the server. The
+      # `static` job already proves the production bundle builds; this job is
+      # about behaviour, and scripts/verify-security.mjs was written against
+      # `npm run dev`. Running dist/index.js keeps the built artifact under test.
+      - name: Start server
+        run: |
+          NODE_ENV=development node dist/index.js > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+        env:
+          PORT: '3999'
+
+      # Without this the verify scripts crash on an unhandled fetch rejection
+      # with a stack that hides the real cause.
+      - name: Wait for /api/health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null "$VERIFY_BASE_URL/api/health"; then
+              echo "server up after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::server did not answer /api/health within 60s"
+          cat /tmp/server.log
+          exit 1
+
+      # Both scripts read VERIFY_BASE_URL and DATABASE_URL from the job env
+      # above. They seed their own admin (`verifier`, fixed password) into
+      # whatever DATABASE_URL points at, which is why it must stay a throwaway
+      # service container.
+      - name: Verify security and re-upload regressions
+        run: npm run verify:security
+
+      - name: Verify authenticated route surface
+        run: npm run verify:routes
+
+      # Printed inline, never uploaded as an artifact: artifacts are downloadable
+      # by anyone with repo read access and outlive the run. The log can only
+      # contain the throwaway values set above.
+      - name: Server log
+        if: always()
+        run: |
+          echo "::group::server.log"
+          cat /tmp/server.log || true
+          echo "::endgroup::"
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat /tmp/server.pid)" 2>/dev/null || true

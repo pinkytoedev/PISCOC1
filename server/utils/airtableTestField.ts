@@ -1,201 +1,106 @@
+/**
+ * Diagnostics for the attachment-field → link-field migration.
+ *
+ * Airtable stopped accepting third-party URLs in attachment fields. Before
+ * switching the real columns over, an image URL is written to a scratch text
+ * column called "Test" to confirm the token, base and table are right and that
+ * the URL survives the round trip.
+ */
+
+import type { Article } from '@shared/schema';
 import { storage } from '../storage';
-import fetch from 'node-fetch';
+import { createLogger } from '../lib/logger';
+import { tryUpdateRecord } from '../lib/airtableClient';
+
+const log = createLogger('airtable:test-field');
+
+/** The scratch column every check writes to. */
+const TEST_FIELD = 'Test';
 
 /**
- * Utilities for migrating from Airtable attachment fields to link fields
- * These functions help solve the issue where Airtable no longer accepts Imgur links
- * in attachment fields by using simple text/link fields instead.
+ * Writes an image URL to the scratch column of one record.
+ *
+ * Returns false rather than throwing: every caller is a diagnostic that wants
+ * to report the outcome, not abort.
  */
 export async function uploadLinkToAirtableTestField(
   imageUrl: string,
   recordId: string,
-  filename: string = "test-image.jpg"
+  // Accepted but unused: "Test" is a text column, so only the URL is written.
+  // Callers pass a filename because the attachment-based original needed one.
+  _filename = 'test-image.jpg',
 ): Promise<boolean> {
-  try {
-    // Get Airtable API settings
-    const apiKeySetting = await storage.getIntegrationSettingByKey("airtable", "api_key");
-    const baseIdSetting = await storage.getIntegrationSettingByKey("airtable", "base_id");
-    const tableNameSetting = await storage.getIntegrationSettingByKey("airtable", "articles_table");
-    
-    if (!apiKeySetting?.value || !baseIdSetting?.value || !tableNameSetting?.value) {
-      throw new Error("Airtable settings are not fully configured");
-    }
-    
-    if (!apiKeySetting.enabled || !baseIdSetting.enabled || !tableNameSetting.enabled) {
-      throw new Error("Some Airtable settings are disabled");
-    }
-    
-    const apiKey = apiKeySetting.value;
-    const baseId = baseIdSetting.value;
-    const tableName = tableNameSetting.value;
-    
-    // Debug log to help identify configuration issues
-    console.log("Airtable Link Test Upload Config:", {
-      baseId,
-      tableName,
-      recordId
-    });
-    
-    // Make sure table name is URL encoded for special characters
-    const encodedTableName = encodeURIComponent(tableName);
-    
-    // Create the URL for the API request
-    const url = `https://api.airtable.com/v0/${baseId}/${encodedTableName}/${recordId}`;
-    
-    // Create the payload - we're using "Test" as the field name
-    // This is a simple text field, not an attachment field
-    const payload = {
-      fields: {
-        Test: imageUrl // Using a direct URL string, not an attachment object
-      }
-    };
-    
-    console.log("Using Airtable Test Link payload:", JSON.stringify(payload));
-    
-    // Send PATCH request to update the record with the link
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorDetails = {};
-      
-      try {
-        // Try to parse the error response as JSON for more structured info
-        errorDetails = JSON.parse(errorText);
-      } catch (e) {
-        // If it's not JSON, use the raw text
-        errorDetails = { error: errorText };
-      }
-      
-      console.error("Airtable API Error Response:", {
-        status: response.status, 
-        statusText: response.statusText,
-        response: errorText,
-        url,
-        encodedTableName,
-        originalTableName: tableName,
-        recordId,
-        method: 'PATCH',
-        payloadSize: JSON.stringify(payload).length,
-        errorDetails
-      });
-      
-      throw new Error(`Airtable API error: ${response.status} - ${errorText}`);
-    }
-    
-    const result = await response.json() as { fields?: { Test?: string } };
-    console.log("Airtable Test Link Update Result:", JSON.stringify(result.fields?.Test || 'No Test field in response'));
-    
-    // If we get here, we successfully updated the record
-    return true;
-  } catch (error) {
-    console.error('Error uploading link to Airtable Test field:', error);
-    return false;
-  }
+  return tryUpdateRecord(recordId, { [TEST_FIELD]: imageUrl }, `airtable test field for ${recordId}`);
+}
+
+export interface MigrationOutcome {
+  success: boolean;
+  migrated: number;
+  failed: number;
 }
 
 /**
- * Helper function to migrate existing articles with attachments to use the link field approach
- * This can be used to migrate all articles or just test a single article
+ * Runs the check over one article or the whole library.
+ *
+ * `testOnly` stops after the first article's main image, which is the point of
+ * the endpoints that call it: prove the write works without touching the rest
+ * of the base.
  */
 export async function migrateArticleImagesToLinks(
-  articleId?: number, 
-  testOnly: boolean = true
-): Promise<{ success: boolean; migrated: number; failed: number; }> {
+  articleId?: number,
+  testOnly = true,
+): Promise<MigrationOutcome> {
   try {
-    // Get all articles, or just the specific article if an ID is provided
-    const articles = articleId 
-      ? [await storage.getArticle(articleId)].filter(Boolean) as any[]
-      : await storage.getArticles();
-    
-    // Filter to only include Airtable articles with images
-    const airtableArticles = articles.filter(article => 
-      article && 
-      article.source === 'airtable' && 
-      article.externalId && 
-      (article.imageUrl || article.instagramImageUrl)
-    ) as {
-      id: number;
-      title: string;
-      externalId: string;
-      imageUrl?: string;
-      instagramImageUrl?: string;
-      source: string;
-    }[];
-    
-    console.log(`Found ${airtableArticles.length} Airtable articles with images to process`);
-    
+    const candidates = await loadCandidates(articleId);
+    log.info('Checking Airtable link migration', { articles: candidates.length, testOnly });
+
     let migrated = 0;
     let failed = 0;
-    
-    // Process each article
-    for (const article of airtableArticles) {
-      try {
-        console.log(`Processing article: ${article.id} - ${article.title}`);
-        
-        // Check for main image
-        if (article.imageUrl && article.externalId) {
-          const mainImageSuccess = await uploadLinkToAirtableTestField(
-            article.imageUrl,
-            article.externalId,
-            `main-image-${article.id}.jpg`
-          );
-          
-          if (mainImageSuccess) {
-            console.log(`Successfully updated Test field with main image for article ${article.id}`);
-            migrated++;
-          } else {
-            console.error(`Failed to update Test field with main image for article ${article.id}`);
-            failed++;
-          }
-          
-          // If testing only, just process one article to avoid overloading
-          if (testOnly) {
-            break;
-          }
-        }
-        
-        // Check for Instagram image
-        if (!testOnly && article.instagramImageUrl && article.externalId) {
-          const instaImageSuccess = await uploadLinkToAirtableTestField(
-            article.instagramImageUrl,
-            article.externalId,
-            `insta-image-${article.id}.jpg`
-          );
-          
-          if (instaImageSuccess) {
-            console.log(`Successfully updated Test field with Instagram image for article ${article.id}`);
-            migrated++;
-          } else {
-            console.error(`Failed to update Test field with Instagram image for article ${article.id}`);
-            failed++;
-          }
-        }
-        
-      } catch (error) {
-        console.error(`Error processing article ${article.id}:`, error);
-        failed++;
+
+    for (const article of candidates) {
+      const externalId = article.externalId as string;
+
+      if (article.imageUrl) {
+        const ok = await uploadLinkToAirtableTestField(
+          article.imageUrl,
+          externalId,
+          `main-image-${article.id}.jpg`,
+        );
+        if (ok) migrated++;
+        else failed++;
+
+        // One article is enough to prove the path works.
+        if (testOnly) break;
+      }
+
+      if (!testOnly && article.instagramImageUrl) {
+        const ok = await uploadLinkToAirtableTestField(
+          article.instagramImageUrl,
+          externalId,
+          `insta-image-${article.id}.jpg`,
+        );
+        if (ok) migrated++;
+        else failed++;
       }
     }
-    
-    return {
-      success: migrated > 0 && failed === 0,
-      migrated,
-      failed
-    };
+
+    return { success: migrated > 0 && failed === 0, migrated, failed };
   } catch (error) {
-    console.error('Error in migrateArticleImagesToLinks:', error);
-    return {
-      success: false,
-      migrated: 0,
-      failed: 1
-    };
+    log.error('Airtable link migration check failed', { articleId, error });
+    return { success: false, migrated: 0, failed: 1 };
   }
+}
+
+async function loadCandidates(articleId?: number): Promise<Article[]> {
+  const articles = articleId
+    ? [await storage.getArticle(articleId)]
+    : await storage.getArticles();
+
+  return articles.filter(
+    (article): article is Article =>
+      Boolean(article)
+      && article!.source === 'airtable'
+      && Boolean(article!.externalId)
+      && Boolean(article!.imageUrl || article!.instagramImageUrl),
+  );
 }

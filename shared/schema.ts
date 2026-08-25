@@ -61,21 +61,46 @@ export const articles = pgTable("articles", {
   hashtags: text("hashtags"),
   externalId: text("external_id"), // For Airtable ID reference
   source: text("source").default("manual"), // Could be 'airtable', 'instagram', or 'manual'
+
+  // --- Re-upload session ---
+  // A published article can be reopened so a contributor can replace its
+  // assets. While the session is open the article sits as a draft and the
+  // auto-publisher leaves it alone; completing the session republishes it.
+  isReuploading: boolean("is_reuploading").default(false),
+  reuploadStartedAt: timestamp("reupload_started_at"),
+  reuploadStartedBy: integer("reupload_started_by").references(() => users.id),
+  // Status the article held before the session, so completion can restore it.
+  reuploadPreviousStatus: text("reupload_previous_status"),
 });
+
+/**
+ * Nullable timestamp accepted as an ISO string, a Date, or null.
+ * Airtable sends strings; internal callers pass Dates; clearing a value sends null.
+ */
+const nullableTimestamp = z
+  .union([z.string().transform((val) => new Date(val)), z.date(), z.null()])
+  .optional();
+
+/**
+ * Boolean columns declared with a DB default are `boolean | null` when read
+ * back, so the write schema has to accept null as well as undefined. Declaring
+ * them as `z.boolean().optional()` made every round trip of a full article row
+ * a type error — the mismatch that has kept `npm run check` red.
+ */
+const nullableFlag = z.boolean().nullable().optional();
 
 // Custom schema for article insert/update with publishedAt handling
 export const insertArticleSchema = createInsertSchema(articles).omit({
   id: true,
   createdAt: true,
 }).extend({
-  // Override the publishedAt field to handle string or Date values
-  publishedAt: z.union([
-    z.string().transform((val) => new Date(val)),
-    z.date(),
-    z.null()
-  ]).optional(),
-  // Make republished optional so callers can omit it and rely on the DB default
-  republished: z.boolean().optional(),
+  publishedAt: nullableTimestamp,
+  republished: nullableFlag,
+  finished: nullableFlag,
+  isReuploading: nullableFlag,
+  reuploadStartedAt: nullableTimestamp,
+  reuploadStartedBy: z.number().int().nullable().optional(),
+  reuploadPreviousStatus: z.string().nullable().optional(),
 });
 
 // Carousel quotes table
@@ -224,6 +249,7 @@ export const articleSchema = z.object({
   status: z.string().optional(),
   createdAt: z.date().optional(),
   hashtags: z.string().optional(),
+  isReuploading: z.boolean().optional(),
 });
 
 export const carouselQuoteSchema = z.object({
@@ -246,20 +272,27 @@ export const adminSchema = z.object({
 // Public upload tokens table
 export const uploadTokens = pgTable("upload_tokens", {
   id: serial("id").primaryKey(),
-  token: varchar("token", { length: 64 }).notNull().unique(),
+  // Only the SHA-256 of the token is stored. The plaintext exists once, in the
+  // link handed to the contributor; a database leak therefore does not yield
+  // usable upload credentials.
+  tokenHash: varchar("token_hash", { length: 64 }).notNull().unique(),
   articleId: integer("article_id").notNull().references(() => articles.id, { onDelete: 'cascade' }),
   uploadTypes: jsonb("upload_types").notNull(), // Array of enabled upload types: ['image', 'instagram-image', 'html-zip']
-  createdById: integer("created_by_id").references(() => users.id),
+  // Null out rather than block: deleting a user must not be prevented by a
+  // link they once issued, and the link's own expiry still governs its life.
+  createdById: integer("created_by_id").references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
-  maxUses: integer("max_uses").default(1),
+  // 0 means "unlimited within the expiry window" — the default for contributor
+  // links, so one link covers an entire multi-asset submission.
+  maxUses: integer("max_uses").default(0),
   uses: integer("uses").default(0),
   active: boolean("active").default(true),
   name: varchar("name", { length: 255 }),
   notes: text("notes"),
 }, (table) => {
   return {
-    tokenIdx: uniqueIndex('token_idx').on(table.token),
+    tokenHashIdx: uniqueIndex('upload_tokens_token_hash_idx').on(table.tokenHash),
   }
 });
 
@@ -267,6 +300,9 @@ export const insertUploadTokenSchema = createInsertSchema(uploadTokens).omit({
   id: true,
   createdAt: true,
   uses: true,
+  // Derived from the generated secret inside the storage layer; never supplied
+  // by a caller.
+  tokenHash: true,
 }).extend({
   expiresAt: z.union([
     z.string().transform((val) => new Date(val)),

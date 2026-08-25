@@ -1,144 +1,253 @@
-import 'dotenv/config';
+import { env } from "./lib/env";
 import express, { type Request, Response, NextFunction } from "express";
-import path from "path";
+import cookieParser from "cookie-parser";
+import type { Server } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupStaticServing } from "./middleware/staticMiddleware";
 import { setupHTTPS } from "./https-dev";
-import { startPublishScheduler } from "./scheduler";
+import { startPublishScheduler, stopPublishScheduler } from "./scheduler";
+import { issueCsrfToken, verifyCsrfToken } from "./middleware/csrf";
+import { HttpError } from "./lib/httpError";
+import { ZodError } from "zod";
+import { closeDatabase } from "./db";
 
 const app = express();
 export { app };
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
-// #region agent log — H4: Process-level safety nets to prevent crash on unhandled errors
-process.on('uncaughtException', (err) => {
-  console.error(`[process] Uncaught exception (kept alive): ${err.message}`, err.stack);
-  fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:uncaughtException',message:'Uncaught exception',data:{error:err.message,stack:err.stack?.slice(0,500)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
-});
+/**
+ * Captures the exact request bytes alongside the parsed body.
+ *
+ * Meta signs the raw payload of a webhook delivery. Verifying against
+ * `JSON.stringify(req.body)` cannot be correct — re-serializing normalizes key
+ * order, whitespace and unicode escaping, so the reconstructed string is not
+ * the string that was signed. Only routes that verify a signature read this.
+ */
+app.use(
+  express.json({
+    limit: "2mb",
+    verify: (req, _res, buf) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  }),
+);
+app.use(express.urlencoded({ extended: false, limit: "2mb" }));
+app.use(cookieParser());
 
-process.on('unhandledRejection', (reason) => {
-  console.error(`[process] Unhandled rejection (kept alive):`, reason);
-  fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/index.ts:unhandledRejection',message:'Unhandled rejection',data:{reason:String(reason)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
-});
-// #endregion
+// CSRF: hand out the cookie on every request, require the matching header on
+// anything that changes state.
+app.use(issueCsrfToken);
+app.use(verifyCsrfToken);
 
-// Set up enhanced static file serving with proper headers
 setupStaticServing(app);
 
+/**
+ * Request log. Deliberately records only method, path, status and duration —
+ * the previous version serialized the response body, which meant password
+ * hashes and integration API keys were written to the logs.
+ */
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+  const requestPath = req.path;
 
   res.on("finish", () => {
+    if (!requestPath.startsWith("/api")) return;
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
+    log(`${req.method} ${requestPath} ${res.statusCode} in ${duration}ms`);
   });
 
   next();
 });
 
+/**
+ * Central error handler.
+ *
+ * Every route reports failures by throwing, so this is the only place that
+ * decides status codes and response shape. Express identifies an error handler
+ * by its four-parameter signature and only reaches it via `next(err)` from
+ * middleware registered *before* it — so it is mounted last, after the routes,
+ * the API 404 and the static handlers.
+ */
+function errorHandler() {
+  return (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    if (res.headersSent) return;
+
+    if (err instanceof HttpError) {
+      return res.status(err.status).json({
+        message: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      });
+    }
+
+    // Schema violations are the caller's fault; report the offending fields.
+    if (err instanceof ZodError) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: err.errors.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      });
+    }
+
+    // Multer signals oversized uploads with this code rather than an HttpError.
+    if (typeof err === "object" && err && (err as { code?: string }).code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ message: "File is too large" });
+    }
+
+    const message = err instanceof Error ? err.message : String(err);
+
+    // body-parser and other Express middleware attach a status to client-side
+    // faults such as malformed JSON. Honouring it keeps those as 4xx instead of
+    // reporting a caller's bad request as a server failure.
+    const status = (err as { status?: number; statusCode?: number })?.status
+      ?? (err as { statusCode?: number })?.statusCode;
+
+    if (typeof status === "number" && status >= 400 && status < 500) {
+      return res.status(status).json({ message });
+    }
+
+    console.error("[error]", message, err instanceof Error ? err.stack : undefined);
+
+    // Internal details stay in the logs; the client gets a generic message.
+    res.status(500).json({ message: "Internal server error" });
+  };
+}
+
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'A',
-        location: 'server/index.ts:error-middleware',
-        message: 'Express error middleware triggered',
-        data: { status, message, name: err?.name, stack: err?.stack?.slice(0, 500) },
-        timestamp: Date.now()
-      })
-    }).catch(() => {});
-    // #endregion
-    res.status(status).json({ message });
-    throw err;
+  // Unmatched API paths must 404 as JSON.
+  //
+  // Both the Vite dev middleware and the production static handler end in a
+  // catch-all that returns index.html with a 200. Without this, a typo'd or
+  // removed endpoint answers "200 text/html" and the caller sees a JSON parse
+  // error instead of a clear 404 — which is exactly how a deleted route can
+  // look like it still exists.
+  app.use("/api", (_req, _res, next) => {
+    next(HttpError.notFound("Unknown API endpoint"));
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (env.isDevelopment) {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // Try different ports with fallback system
-  // Start with 3000, then try 3001, 3002, etc. if ports are occupied
-  const tryPorts = [3000, 3001, 3002, 3003, 3004, 5000, 5001, 5002];
-  let serverStarted = false;
+  // Last, so it can catch errors raised by everything above.
+  app.use(errorHandler());
 
-  const startServer = (portIndex: number = 0): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (portIndex >= tryPorts.length) {
-        reject(new Error('No available ports found'));
-        return;
+  const listening = await startServer(server);
+
+  if (env.isDevelopment) {
+    setupHTTPS(app, 3001);
+  }
+
+  startPublishScheduler(env.scheduler.intervalMs);
+
+  installShutdownHandlers(listening);
+})().catch((error) => {
+  console.error("[boot] Failed to start server:", error);
+  process.exit(1);
+});
+
+/**
+ * Binds the server.
+ *
+ * When PORT is set (Railway, Docker) that port is authoritative and a failure
+ * to bind is fatal — silently listening somewhere else would make the service
+ * unreachable. Only local development falls back through candidate ports.
+ */
+async function startServer(server: Server): Promise<Server> {
+  if (env.port !== undefined) {
+    await listen(server, env.port);
+    log(`🚀 Server listening on port ${env.port}`);
+    return server;
+  }
+
+  const candidates = [3000, 3001, 3002, 3003, 3004, 5000, 5001, 5002];
+
+  for (const port of candidates) {
+    try {
+      await listen(server, port);
+      log(`🚀 Server listening on port ${port}`);
+      log(`📱 http://localhost:${port}`);
+      return server;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "EADDRINUSE") {
+        log(`Port ${port} in use, trying the next one...`);
+        continue;
       }
+      throw error;
+    }
+  }
 
-      const port = process.env.PORT ? parseInt(process.env.PORT) : tryPorts[portIndex];
+  throw new Error(`No available port among ${candidates.join(", ")}`);
+}
 
-      const serverInstance = server.listen({
-        port,
-        host: "0.0.0.0",
-        reusePort: false,
-      }, () => {
-        serverStarted = true;
-        log(`🚀 Server successfully started on port ${port}`);
-        log(`📱 Access your app at: http://localhost:${port}`);
-        resolve();
-      });
+function listen(server: Server, port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.removeListener("listening", onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.removeListener("error", onError);
+      resolve();
+    };
 
-      serverInstance.on('error', (err: any) => {
-        if (err.code === 'EADDRINUSE') {
-          log(`Port ${port} is already in use, trying next port...`);
-          startServer(portIndex + 1).then(resolve).catch(reject);
-        } else {
-          reject(err);
-        }
-      });
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen({ port, host: "0.0.0.0" });
+  });
+}
+
+/**
+ * Graceful shutdown and last-resort crash handlers.
+ *
+ * Railway sends SIGTERM on redeploy; without this, in-flight requests are cut
+ * off and the scheduler can be interrupted mid-publish.
+ */
+function installShutdownHandlers(server: Server) {
+  let shuttingDown = false;
+
+  const shutdown = async (signal: string, exitCode = 0) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    log(`Received ${signal}, shutting down...`);
+
+    stopPublishScheduler();
+
+    const forceExit = setTimeout(() => {
+      console.error("[shutdown] Timed out waiting for connections; exiting.");
+      process.exit(exitCode || 1);
+    }, 10_000);
+    forceExit.unref();
+
+    server.close(async () => {
+      try {
+        await closeDatabase();
+      } catch (error) {
+        console.error("[shutdown] Error closing database:", error);
+      }
+      clearTimeout(forceExit);
+      process.exit(exitCode);
     });
   };
 
-  try {
-    await startServer();
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 
-    // Also setup HTTPS for Facebook SDK in development
-    if (app.get("env") === "development") {
-      setupHTTPS(app, 3001);
-    }
+  // After an uncaught exception the process is in an undefined state. Log it,
+  // then exit so the platform restarts a clean instance — keeping it alive, as
+  // the previous handler did, only lets the corruption spread.
+  process.on("uncaughtException", (error) => {
+    console.error("[process] Uncaught exception:", error);
+    void shutdown("uncaughtException", 1);
+  });
 
-    // Start background scheduler for auto-publishing
-    startPublishScheduler(60000); // every 60s
-  } catch (error) {
-    log('❌ Failed to start server on any available port');
-    process.exit(1);
-  }
-})();
+  process.on("unhandledRejection", (reason) => {
+    console.error("[process] Unhandled rejection:", reason);
+    void shutdown("unhandledRejection", 1);
+  });
+}

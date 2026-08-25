@@ -1,0 +1,54 @@
+name: Dependency audit
+
+# Schedule-only, never a PR gate. `npm audit --audit-level=high` exits 1 today
+# and cannot be made green by upgrading — extract-zip is marked "No fix
+# available" and is a real direct dependency (server/utils/zipProcessor.ts).
+# A permanently-red gate on unrelated PRs trains everyone to ignore the X.
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Report advisories, fail only on CRITICAL
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # A report, not a gate. --omit=dev because a devDependency advisory
+      # cannot reach the deployed container.
+      - name: Advisory report (non-blocking)
+        continue-on-error: true
+        run: |
+          {
+            echo '### npm audit (production deps)'
+            echo '```'
+            npm audit --omit=dev --audit-level=high || true
+            echo '```'
+            echo '### Outdated'
+            echo '```'
+            npm outdated || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The one hard gate here: verified exit 0 today (critical: 0), so it is
+      # honest, and it only fires on genuinely severe news. Because this
+      # workflow is schedule-only, a failure blocks no PR.
+      - name: Fail on CRITICAL advisories
+        run: npm audit --omit=dev --audit-level=critical

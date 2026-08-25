@@ -1,58 +1,17 @@
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import crypto from 'crypto';
-import { Request } from 'express';
+/**
+ * Compatibility shim for the two callers that still import `upload` from here:
+ * the team member image route in server/routes.ts and the Airtable attachment
+ * route in server/integrations/airtable.ts.
+ *
+ * This file used to declare a fourth multer instance of its own, writing into a
+ * `./uploads` directory created at import time and accepting anything whose
+ * declared MIME type began with `image/` — SVG included, which ImgBB then hosts
+ * as a script-bearing document. Both callers now get the shared configuration
+ * from server/middleware/upload: temp-directory storage with a sanitized random
+ * filename, a real allow-list, and the limits from `env.uploads`.
+ *
+ * Prefer importing `imageUpload` from '../middleware/upload' directly; this
+ * alias exists only so the existing import sites keep working.
+ */
 
-// Create uploads directory if it doesn't exist
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Configure multer for storage
-const storage = multer.diskStorage({
-  destination: (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
-    cb(null, uploadDir);
-  },
-  filename: (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
-    // Generate a unique filename to prevent collisions
-    const uniqueSuffix = crypto.randomBytes(16).toString('hex');
-    const fileExt = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${fileExt}`);
-  }
-});
-
-// Create a filter to only allow image files
-const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  // Accept only image files
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('File type not supported. Only images are allowed.'));
-  }
-};
-
-// Create and export the multer middleware
-export const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB max file size
-  },
-  fileFilter: fileFilter
-});
-
-// Function to get MIME type based on file extension
-export function getMimeType(filename: string): string {
-  const ext = path.extname(filename).toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml'
-  };
-  
-  return mimeTypes[ext] || 'application/octet-stream';
-}
+export { imageUpload as upload } from '../middleware/upload';

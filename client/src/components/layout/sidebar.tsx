@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import {
+  BookOpen,
+  LayoutDashboard,
   Newspaper,
   Users,
   Quote,
@@ -9,17 +11,13 @@ import {
   Headphones,
   ChevronLeft,
   ChevronRight,
-  Shield,
   X,
   CalendarDays,
-  Upload,
-  Bug,
   Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   SiAirtable,
-  SiInstagram,
   SiCloudinary, // Using Cloudinary's icon for ImgBB since there's no official ImgBB icon
 } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,6 +60,17 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
 
   // Define all navigation items
   const allNavItems: NavSection[] = [
+    {
+      section: "Overview",
+      items: [
+        {
+          name: "Dashboard",
+          path: "/",
+          icon: <LayoutDashboard className="w-5 h-5" />,
+          adminOnly: false,
+        },
+      ],
+    },
     {
       section: "Content",
       items: [
@@ -108,12 +117,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           adminOnly: true,
         },
         {
-          name: "Instagram",
-          path: "/integrations/instagram",
-          icon: <SiInstagram className="w-5 h-5" />,
-          adminOnly: true,
-        },
-        {
           name: "ImgBB",
           path: "/integrations/imgbb",
           icon: <SiCloudinary className="w-5 h-5" />,
@@ -131,16 +134,9 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           adminOnly: true, // This item is admin-only
         },
         {
-          name: "Debug Center",
-          path: "/debug-center",
-          icon: <Bug className="w-5 h-5" />,
-          adminOnly: false, // Available to all users
-        },
-
-        {
-          name: "Privacy Policy",
-          path: "/privacy-policy",
-          icon: <Shield className="w-5 h-5" />,
+          name: "Documentation",
+          path: "/docs",
+          icon: <BookOpen className="w-5 h-5" />,
           adminOnly: false,
         },
       ],
@@ -300,7 +296,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
               e.preventDefault(); // Prevent other events from firing
               e.stopPropagation(); // Stop event from bubbling up
               closeMobileMenu();
-              console.log("Mobile sidebar overlay clicked, closing sidebar");
             }
           }}
         >
@@ -356,7 +351,6 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
                                 // On mobile, close the sidebar when a link is clicked
                                 if (resolvedMobileOpen) {
                                   closeMobileMenu();
-                                  console.log("Mobile sidebar link clicked, closing sidebar");
                                 }
                               }}
                             >

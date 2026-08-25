@@ -212,9 +212,7 @@ function checkEnvironmentVariables() {
         { name: 'DATABASE_URL', description: 'PostgreSQL connection string' },
         { name: 'SESSION_SECRET', description: 'Session encryption secret' },
         { name: 'AIRTABLE_API_KEY', description: 'Airtable API authentication' },
-        { name: 'AIRTABLE_BASE_ID', description: 'Airtable base identifier' },
-        { name: 'FACEBOOK_APP_ID', description: 'Facebook app ID for Instagram' },
-        { name: 'FACEBOOK_APP_SECRET', description: 'Facebook app secret' }
+        { name: 'AIRTABLE_BASE_ID', description: 'Airtable base identifier' }
     ];
 
     let missingRequired = 0;
@@ -235,8 +233,7 @@ function checkEnvironmentVariables() {
     // Optional environment variables
     const optionalVars = [
         'IMGBB_API_KEY',
-        'INSTAGRAM_ACCESS_TOKEN',
-        'INSTAGRAM_ACCOUNT_ID',
+        'WEBHOOK_SECRET',
         'BASE_URL'
     ];
 
@@ -287,8 +284,7 @@ function checkFilePermissions() {
     const dirsToCheck = [
         'uploads',
         'temp',
-        'certs',
-        'uploads/instagram'
+        'certs'
     ];
 
     for (const dir of dirsToCheck) {

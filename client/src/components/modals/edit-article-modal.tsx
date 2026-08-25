@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { useSaveArticle } from "@/hooks/use-article-mutations";
 import { Article, InsertArticle, TeamMember } from "@shared/schema";
 import { Loader2, X } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -84,16 +84,8 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
     }
   };
 
-  // Update article mutation
-  const updateArticleMutation = useMutation({
-    mutationFn: async (articleData: InsertArticle) => {
-      if (!article?.id) throw new Error("No article ID provided");
-      
-      const res = await apiRequest("PUT", `/api/articles/${article.id}`, articleData);
-      return await res.json();
-    },
+  const updateArticleMutation = useSaveArticle({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/articles'] });
       toast({
         title: "Article updated",
         description: "The article has been updated successfully.",
@@ -112,6 +104,7 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!article?.id) return;
     if (!formData.title) {
       toast({
         title: "Missing required fields",
@@ -121,7 +114,15 @@ export function EditArticleModal({ isOpen, onClose, article }: EditArticleModalP
       return;
     }
 
-    updateArticleMutation.mutate(formData as InsertArticle);
+    // "none" is a display sentinel for the author Select, not a value. It is
+    // only mapped back on change, so an editor who never touches the dropdown
+    // would otherwise persist the literal string — unlike `photo`, nothing
+    // downstream treats it as empty, so it reaches the Author column and the
+    // Airtable team-member lookup verbatim.
+    updateArticleMutation.mutate({
+      id: article.id,
+      data: { ...formData, author: formData.author === "none" ? "" : formData.author },
+    });
   };
 
   if (!article) return null;

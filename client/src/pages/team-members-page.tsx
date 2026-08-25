@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -8,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAirtableSync } from "@/hooks/use-airtable-sync";
+import { apiRequest, apiUpload, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload, Copy, Check, ExternalLink } from "lucide-react";
@@ -119,51 +121,12 @@ export default function TeamMembersPage() {
     },
   });
 
-  // Pull from Airtable (sync team members from Airtable to our application)
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/airtable/sync/team-members");
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/team-members'] });
-      const results = data?.results || { created: 0, updated: 0 };
-      toast({
-        title: "Team members pulled from Airtable",
-        description: `Successfully synced team members: ${results.created} created, ${results.updated} updated`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error pulling from Airtable",
-        description: error.message || "Failed to sync team members from Airtable. Please check your connection settings.",
-        variant: "destructive",
-      });
-    },
+  const { syncMutation, pushMutation } = useAirtableSync({
+    resource: "team-members",
+    queryKey: "/api/team-members",
+    label: "team members",
   });
 
-  // Push all team members to Airtable (batch update)
-  const pushMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/airtable/push/team-members");
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/team-members'] });
-      toast({
-        title: "Team members pushed to Airtable",
-        description: `Successfully pushed ${data.results?.updated || 0} team members to Airtable.`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error pushing to Airtable",
-        description: error.message || "Failed to push team members to Airtable. Please check your connection settings.",
-        variant: "destructive",
-      });
-    },
-  });
-  
   const handleCreateClick = () => {
     setEditMember(null);
     setFormData({
@@ -242,18 +205,9 @@ export default function TeamMembersPage() {
     setIsUploadingImage(true);
 
     try {
-      const response = await fetch("/api/team-members/upload-image", {
-        method: "POST",
-        body: formDataUpload,
-        credentials: "include",
-      });
-
+      // apiUpload attaches the CSRF header; a bare fetch is rejected with 403.
+      const response = await apiUpload("/api/team-members/upload-image", formDataUpload);
       const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        const message = data?.message || "Failed to upload image";
-        throw new Error(message);
-      }
 
       const newImageUrl = typeof data?.imageUrl === "string" ? data.imageUrl : "";
 
@@ -336,7 +290,7 @@ export default function TeamMembersPage() {
             <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
               <ol className="flex items-center space-x-2">
                 <li>
-                  <a href="/" className="text-gray-500 hover:text-gray-700">Dashboard</a>
+                  <Link href="/" className="text-gray-500 hover:text-gray-700">Dashboard</Link>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

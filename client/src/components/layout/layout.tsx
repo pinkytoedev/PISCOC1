@@ -13,7 +13,6 @@ export function Layout({ children, title = "Content Management System" }: Layout
   
   const toggleMobileMenu = () => {
     setMobileMenuOpen(prevState => !prevState);
-    console.log("Mobile menu toggled, new state:", !mobileMenuOpen);
   };
   
   return (

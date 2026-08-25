@@ -8,5 +8,8 @@ healthcheckPath = "/api/health"
 healthcheckTimeout = 100
 restartPolicyType = "on_failure"
 
-[service]
-internalPort = 3001
+# No port is configured here. railway.toml only supports [build], [deploy] and
+# [services.<name>]; there is no [service] table and no internalPort key, so the
+# `internalPort = 3001` that used to sit here was silently ignored rather than
+# doing anything. Railway injects PORT and server/index.ts binds it, treating a
+# failure to bind as fatal — see the comment on startServer().

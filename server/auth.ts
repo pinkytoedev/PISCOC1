@@ -4,8 +4,14 @@ import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { z } from "zod";
 import { storage } from "./storage";
-import { User as SelectUser, InsertUser } from "@shared/schema";
+import { User as SelectUser } from "@shared/schema";
+import { env } from "./lib/env";
+import { HttpError, asyncHandler, parseId } from "./lib/httpError";
+import { toPublicUser, toPublicUsers } from "./lib/publicUser";
+import { isAdmin, isAuthenticated } from "./middleware/auth";
+import { loginRateLimit } from "./middleware/rateLimit";
 
 declare global {
   namespace Express {
@@ -15,36 +21,67 @@ declare global {
 
 const scryptAsync = promisify(scrypt);
 
-async function hashPassword(password: string) {
+const KEY_LENGTH = 64;
+
+async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
-  const buf = (await scryptAsync(password, salt, 64)) as Buffer;
+  const buf = (await scryptAsync(password, salt, KEY_LENGTH)) as Buffer;
   return `${buf.toString("hex")}.${salt}`;
 }
 
-async function comparePasswords(supplied: string, stored: string) {
+/**
+ * Compares a supplied password against a stored `hash.salt` value.
+ *
+ * Returns false for malformed stored values instead of throwing. The previous
+ * version fed `undefined` to scrypt and let `timingSafeEqual` reject mismatched
+ * buffer lengths, turning a bad row into a 500 that distinguished it from an
+ * ordinary wrong password.
+ */
+async function comparePasswords(supplied: string, stored: string): Promise<boolean> {
   const [hashed, salt] = stored.split(".");
-  const hashedBuf = Buffer.from(hashed, "hex");
-  const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-  return timingSafeEqual(hashedBuf, suppliedBuf);
+  if (!hashed || !salt) return false;
+
+  const storedBuf = Buffer.from(hashed, "hex");
+  if (storedBuf.length !== KEY_LENGTH) return false;
+
+  const suppliedBuf = (await scryptAsync(supplied, salt, KEY_LENGTH)) as Buffer;
+  return timingSafeEqual(storedBuf, suppliedBuf);
 }
 
+/**
+ * Explicit input contracts. These replace `{ ...req.body }` being spread into
+ * the storage layer, which let a caller write any column on the users table.
+ */
+const createUserSchema = z.object({
+  username: z.string().trim().min(3).max(64),
+  password: z.string().min(8).max(256),
+  isAdmin: z.boolean().optional().default(false),
+});
+
+const updateUserSchema = z
+  .object({
+    username: z.string().trim().min(3).max(64).optional(),
+    password: z.string().min(8).max(256).optional(),
+    isAdmin: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "No updatable fields provided",
+  });
+
 export function setupAuth(app: Express) {
-  const sessionSecret = process.env.SESSION_SECRET || "discord_airtable_integration_secret";
-
-  // Use memory store for serverless environments, PostgreSQL store for local dev
-  const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
-
   const sessionSettings: session.SessionOptions = {
-    secret: sessionSecret,
+    secret: env.sessionSecret,
     resave: false,
     saveUninitialized: false,
-    store: isServerless ? undefined : storage.sessionStore, // Use default memory store in serverless
+    store: storage.sessionStore,
     cookie: {
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // Required for cross-site cookies in production
-      httpOnly: true
-    }
+      secure: env.isProduction,
+      maxAge: 24 * 60 * 60 * 1000,
+      // SameSite=None permits the CMS to be used cross-origin; CSRF tokens
+      // (see middleware/csrf.ts) are what make that safe.
+      sameSite: env.isProduction ? "none" : "lax",
+      httpOnly: true,
+    },
   };
 
   app.set("trust proxy", 1);
@@ -56,13 +93,17 @@ export function setupAuth(app: Express) {
     new LocalStrategy(async (username, password, done) => {
       try {
         const user = await storage.getUserByUsername(username);
-        if (!user || !(await comparePasswords(password, user.password))) {
+        // Compare unconditionally against a dummy hash when the user is absent
+        // so response time does not reveal whether a username exists.
+        if (!user) {
+          await comparePasswords(password, `${"0".repeat(KEY_LENGTH * 2)}.salt`);
           return done(null, false);
-        } else {
-          // Update last login time
-          await storage.updateUserLastLogin(user.id);
-          return done(null, user);
         }
+        if (!(await comparePasswords(password, user.password))) {
+          return done(null, false);
+        }
+        await storage.updateUserLastLogin(user.id);
+        return done(null, user);
       } catch (error) {
         return done(error);
       }
@@ -74,212 +115,172 @@ export function setupAuth(app: Express) {
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
-      done(null, user);
+      // `storage.getUser` returns undefined for a row that no longer exists,
+      // but Passport only recognises null/false as "this user is gone". Given
+      // undefined it falls off the end of the deserializer stack and synthesises
+      // "Failed to deserialize user out of session", which the error handler
+      // turns into a 500 on every request the stale cookie makes — including
+      // logout, so the session can never be cleared. `false` makes the session
+      // strategy drop the stale id and fall through to a clean 401.
+      done(null, user ?? false);
     } catch (error) {
       done(error);
     }
   });
 
-  // Secure register route - Only authenticated admin users can create new accounts
-  app.post("/api/register", async (req, res, next) => {
-    // Check if user is authenticated
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Authentication required to create new users" });
-    }
+  app.post(
+    "/api/register",
+    isAdmin,
+    asyncHandler(async (req, res) => {
+      const data = createUserSchema.parse(req.body);
 
-    // Only allow admin users to create new accounts
-    if (!req.user?.isAdmin) {
-      return res.status(403).json({ message: "Admin privileges required to create new users" });
-    }
-
-    try {
-      // Check if the username already exists
-      const existingUser = await storage.getUserByUsername(req.body.username);
-      if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
+      if (await storage.getUserByUsername(data.username)) {
+        throw HttpError.conflict("Username already exists");
       }
 
-      // Create the new user
       const newUser = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
+        username: data.username,
+        password: await hashPassword(data.password),
+        isAdmin: data.isAdmin,
       });
 
-      // Log the registration activity
       await storage.createActivityLog({
-        userId: req.user.id, // Log the admin who created this user
+        userId: req.user!.id,
         action: "create_user",
         resourceType: "user",
         resourceId: newUser.id.toString(),
-        details: { username: newUser.username, createdBy: req.user.username }
+        details: { username: newUser.username, createdBy: req.user!.username },
       });
 
-      res.status(201).json(newUser);
-    } catch (error) {
-      next(error);
-    }
-  });
+      res.status(201).json(toPublicUser(newUser));
+    }),
+  );
 
-  app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: any, info: any) => {
-      if (err) {
-        console.error("Login error:", err);
-        return res.status(500).json({ message: "Internal server error during authentication" });
-      }
+  app.post("/api/login", loginRateLimit, (req, res, next) => {
+    passport.authenticate("local", (err: unknown, user: SelectUser | false) => {
+      if (err) return next(err);
+      if (!user) return next(HttpError.unauthorized("Invalid username or password"));
 
-      if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
-      }
+      req.logIn(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
 
-      req.logIn(user, (err) => {
-        if (err) {
-          console.error("Session login error:", err);
-          return res.status(500).json({ message: "Failed to establish session" });
-        }
+        // Logging must not be able to fail the sign-in.
+        storage
+          .createActivityLog({
+            userId: user.id,
+            action: "login",
+            resourceType: "user",
+            resourceId: user.id.toString(),
+            details: { username: user.username },
+          })
+          .catch((error) => console.error("[auth] Failed to log login:", error));
 
-        // Log the login activity
-        storage.createActivityLog({
-          userId: user.id,
-          action: "login",
-          resourceType: "user",
-          resourceId: user.id.toString(),
-          details: { username: user.username }
-        }).catch(console.error); // Don't block login on logging failure
-
-        res.status(200).json(user);
+        res.status(200).json(toPublicUser(user));
       });
     })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
-    // Log the logout activity
-    if (req.user) {
-      storage.createActivityLog({
-        userId: req.user.id,
-        action: "logout",
-        resourceType: "user",
-        resourceId: req.user.id.toString(),
-        details: { username: req.user.username }
-      });
-    }
+    const user = req.user;
 
     req.logout((err) => {
       if (err) return next(err);
+
+      if (user) {
+        storage
+          .createActivityLog({
+            userId: user.id,
+            action: "logout",
+            resourceType: "user",
+            resourceId: user.id.toString(),
+            details: { username: user.username },
+          })
+          .catch((error) => console.error("[auth] Failed to log logout:", error));
+      }
+
       res.sendStatus(200);
     });
   });
 
-  app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-    res.json(req.user);
+  app.get("/api/user", isAuthenticated, (req, res) => {
+    res.json(toPublicUser(req.user!));
   });
 
-  // Get all users - Only for admins
-  app.get("/api/users", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
+  app.get(
+    "/api/users",
+    isAdmin,
+    asyncHandler(async (_req, res) => {
+      res.json(toPublicUsers(await storage.getAllUsers()));
+    }),
+  );
 
-    if (!req.user?.isAdmin) {
-      return res.status(403).json({ message: "Admin privileges required to view all users" });
-    }
+  app.put(
+    "/api/users/:id",
+    isAdmin,
+    asyncHandler(async (req, res) => {
+      const userId = parseId(req.params.id);
+      const data = updateUserSchema.parse(req.body);
 
-    try {
-      const users = await storage.getAllUsers();
-      res.json(users);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
-
-  // Update a user - Only for admins
-  app.put("/api/users/:id", async (req, res, next) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-
-    if (!req.user?.isAdmin) {
-      return res.status(403).json({ message: "Admin privileges required to update users" });
-    }
-
-    const userId = parseInt(req.params.id);
-
-    try {
-      // Check if the user exists
       const existingUser = await storage.getUser(userId);
-      if (!existingUser) {
-        return res.status(404).json({ message: "User not found" });
+      if (!existingUser) throw HttpError.notFound("User not found");
+
+      // Removing your own admin rights locks you out of this very endpoint.
+      if (userId === req.user!.id && data.isAdmin === false) {
+        throw HttpError.badRequest("You cannot revoke your own admin privileges");
       }
 
-      // Handle password changes separately - hash the password
-      let updateData: Partial<InsertUser> = { ...req.body };
-
-      if (updateData.password) {
-        updateData.password = await hashPassword(updateData.password);
+      if (data.username && data.username !== existingUser.username) {
+        const clash = await storage.getUserByUsername(data.username);
+        if (clash) throw HttpError.conflict("Username already exists");
       }
 
-      const updatedUser = await storage.updateUser(userId, updateData);
+      const updatedUser = await storage.updateUser(userId, {
+        ...(data.username ? { username: data.username } : {}),
+        ...(data.password ? { password: await hashPassword(data.password) } : {}),
+        ...(data.isAdmin === undefined ? {} : { isAdmin: data.isAdmin }),
+      });
 
-      // Log the update activity
+      if (!updatedUser) throw HttpError.notFound("User not found");
+
       await storage.createActivityLog({
-        userId: req.user.id,
+        userId: req.user!.id,
         action: "update_user",
         resourceType: "user",
         resourceId: userId.toString(),
-        details: { updatedBy: req.user.username }
+        // Record which fields changed, never the values.
+        details: { updatedBy: req.user!.username, fields: Object.keys(data) },
       });
 
-      res.json(updatedUser);
-    } catch (error) {
-      next(error);
-    }
-  });
+      res.json(toPublicUser(updatedUser));
+    }),
+  );
 
-  // Delete a user - Only for admins
-  app.delete("/api/users/:id", async (req, res, next) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
+  app.delete(
+    "/api/users/:id",
+    isAdmin,
+    asyncHandler(async (req, res) => {
+      const userId = parseId(req.params.id);
 
-    if (!req.user?.isAdmin) {
-      return res.status(403).json({ message: "Admin privileges required to delete users" });
-    }
+      if (userId === req.user!.id) {
+        throw HttpError.badRequest("You cannot delete your own account");
+      }
 
-    const userId = parseInt(req.params.id);
-
-    // Prevent admins from deleting themselves
-    if (userId === req.user.id) {
-      return res.status(400).json({ message: "You cannot delete your own account" });
-    }
-
-    try {
-      // Check if the user exists
       const existingUser = await storage.getUser(userId);
-      if (!existingUser) {
-        return res.status(404).json({ message: "User not found" });
+      if (!existingUser) throw HttpError.notFound("User not found");
+
+      if (!(await storage.deleteUser(userId))) {
+        throw HttpError.internal("Failed to delete user");
       }
 
-      const deleted = await storage.deleteUser(userId);
+      await storage.createActivityLog({
+        userId: req.user!.id,
+        action: "delete_user",
+        resourceType: "user",
+        resourceId: userId.toString(),
+        details: { username: existingUser.username, deletedBy: req.user!.username },
+      });
 
-      if (deleted) {
-        // Log the delete activity
-        await storage.createActivityLog({
-          userId: req.user.id,
-          action: "delete_user",
-          resourceType: "user",
-          resourceId: userId.toString(),
-          details: { username: existingUser.username, deletedBy: req.user.username }
-        });
-
-        res.status(200).json({ message: "User deleted successfully" });
-      } else {
-        res.status(500).json({ message: "Failed to delete user" });
-      }
-    } catch (error) {
-      next(error);
-    }
-  });
+      res.status(200).json({ message: "User deleted successfully" });
+    }),
+  );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
@@ -9,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAirtableSync } from "@/hooks/use-airtable-sync";
 import { CarouselQuote, InsertCarouselQuote } from "@shared/schema";
 import { Plus, Edit, Trash2, Loader2, Quote, CloudUpload, RefreshCw, Upload, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,51 +79,10 @@ export default function CarouselQuotesPage() {
     },
   });
 
-  // New mutation to update quotes directly in Airtable
-  // Pull from Airtable (sync quotes from Airtable to our application)
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/airtable/sync/carousel-quotes");
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
-      const results = data?.results || { created: 0, updated: 0 };
-      toast({
-        title: "Quotes pulled from Airtable",
-        description: `Successfully synced quotes: ${results.created} created, ${results.updated} updated`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error pulling from Airtable",
-        description: error.message || "Failed to sync quotes from Airtable. Please check your connection settings.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Push all quotes to Airtable (batch update)
-  const pushMutation = useMutation({
-    mutationFn: async () => {
-      // We'll create an endpoint for this
-      const res = await apiRequest("POST", "/api/airtable/push/carousel-quotes");
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
-      toast({
-        title: "Quotes pushed to Airtable",
-        description: `Successfully pushed ${data.updated || 0} quotes to Airtable.`,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error pushing to Airtable",
-        description: error.message || "Failed to push quotes to Airtable. Please check your connection settings.",
-        variant: "destructive",
-      });
-    },
+  const { syncMutation, pushMutation } = useAirtableSync({
+    resource: "carousel-quotes",
+    queryKey: "/api/carousel-quotes",
+    label: "quotes",
   });
 
   // Update a single quote in Airtable
@@ -274,7 +235,7 @@ export default function CarouselQuotesPage() {
             <nav className="text-sm font-medium mb-6" aria-label="Breadcrumb">
               <ol className="flex items-center space-x-2">
                 <li>
-                  <a href="/" className="text-gray-500 hover:text-gray-700">Dashboard</a>
+                  <Link href="/" className="text-gray-500 hover:text-gray-700">Dashboard</Link>
                 </li>
                 <li className="flex items-center">
                   <svg className="h-4 w-4 text-gray-400 mx-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -360,6 +321,23 @@ export default function CarouselQuotesPage() {
                                   >
                                     <Edit className="h-4 w-4" />
                                   </Button>
+                                  {/* Only meaningful for a quote that is linked
+                                      to an Airtable record. */}
+                                  {quote.externalId && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => handleUpdateAirtable(quote)}
+                                      disabled={updateAirtableMutation.isPending}
+                                      title="Push this quote to Airtable"
+                                    >
+                                      {updateAirtableMutation.isPending ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <CloudUpload className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="ghost"

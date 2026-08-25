@@ -1,168 +1,163 @@
 /**
- * Utility for tracking and reporting Airtable migration progress
+ * Airtable image-migration progress.
+ *
+ * The one-off migration scripts each append their state to a JSON file in the
+ * working directory. This reads whichever of those files exist and folds them
+ * into the single summary the dashboard shows.
+ *
+ * Reads are synchronous on purpose: `routes/system.ts` calls this from inside a
+ * response body (`res.json(getMigrationProgress())`), so the signature cannot
+ * become a promise without changing a file this refactor does not own. The
+ * files are a few kilobytes and usually absent, which is why it is tolerable.
  */
+
 import fs from 'fs';
 import path from 'path';
+import { createLogger } from '../lib/logger';
 
-// Progress files for different migration types
+const log = createLogger('migration-progress');
+
+/** Progress files, one per migration script that was run. */
 const PROGRESS_FILES = [
-  './migration-with-progress-bar.json',
-  './migration-with-improved-rate-limits.json',
-  // './migration-main-progress.json', // Temporarily excluded due to format incompatibility
-  './migration-small-batch.json',
-  './migration-single-image.json',
-  './migration-continuous.json' // New continuous migration process
+  'migration-with-progress-bar.json',
+  'migration-with-improved-rate-limits.json',
+  // 'migration-main-progress.json' is excluded: its format is incompatible.
+  'migration-small-batch.json',
+  'migration-single-image.json',
+  'migration-continuous.json',
 ];
 
-/**
- * Interface for migration progress data
- */
+export interface MigrationError {
+  recordId: string;
+  title: string;
+  error: string;
+}
+
+/** The shape the migration scripts write. */
 export interface MigrationProgress {
   processedRecords: string[];
   totalRecords: number;
   uploadTimestamps?: number[];
-  errors?: Array<{
-    recordId: string;
-    title: string;
-    error: string;
-  }>;
+  errors?: MigrationError[];
 }
 
-/**
- * Get the combined migration progress from all progress files
- */
-export function getMigrationProgress(): {
+export interface MigrationProgressSummary {
   totalRecords: number;
   processedRecords: number;
   percentage: number;
   recentUploads: number;
   lastUploadTime: string | null;
-  errors: Array<{
-    recordId: string;
-    title: string;
-    error: string;
-  }>;
-} {
-  const NO_CACHE = Date.now(); // Add timestamp to avoid caching {
-  // Default return if no files exist
-  const defaultResult = {
-    totalRecords: 0,
-    processedRecords: 0,
-    percentage: 0,
-    recentUploads: 0,
-    lastUploadTime: null,
-    errors: []
-  };
-  
-  // Try to find any progress files
-  const existingFiles = PROGRESS_FILES.filter(file => fs.existsSync(file));
-  if (existingFiles.length === 0) {
-    return defaultResult;
+  errors: MigrationError[];
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A progress file as it may actually be on disk.
+ *
+ * The scripts disagree about how they record what has been done: an array of
+ * record ids, an object keyed by record id, or just a count.
+ */
+interface RawProgressFile {
+  processedRecords?: unknown;
+  recordsProcessed?: unknown;
+  totalRecords?: unknown;
+  uploadTimestamps?: unknown;
+  errors?: unknown;
+}
+
+function readProgressFile(file: string): RawProgressFile | null {
+  try {
+    // Read straight away rather than checking existence first: the extra stat
+    // races with a running migration and tells us nothing the read does not.
+    const contents = fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
+    const parsed: unknown = JSON.parse(contents);
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      log.warn('Ignoring progress file that is not a JSON object', { file });
+      return null;
+    }
+    return parsed as RawProgressFile;
+  } catch (error) {
+    // A missing file is the normal case — no migration of that kind was run.
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      log.warn('Could not read progress file', { file, error });
+    }
+    return null;
   }
-  
-  // Collect data from all progress files to get a complete picture
-  let combinedProgress: MigrationProgress = {
-    processedRecords: [],
-    totalRecords: 0,
-    uploadTimestamps: [],
-    errors: []
-  };
-  
-  // Read all progress files and combine their data
-  for (const file of existingFiles) {
-    try {
-      const fileData = JSON.parse(fs.readFileSync(file, 'utf8'));
-      
-      // Skip files that don't match our expected format
-      if (!fileData || typeof fileData !== 'object') {
-        console.warn(`Skipping invalid progress file ${file}: Not a valid JSON object`);
-        continue;
+}
+
+/** Collects the record ids a file reports, whichever way it records them. */
+function collectRecordIds(data: RawProgressFile, into: Set<string>): void {
+  if (Array.isArray(data.processedRecords)) {
+    for (const id of data.processedRecords) {
+      if (typeof id === 'string') into.add(id);
+    }
+    return;
+  }
+
+  if (data.recordsProcessed && typeof data.recordsProcessed === 'object') {
+    for (const id of Object.keys(data.recordsProcessed)) into.add(id);
+    return;
+  }
+
+  // A bare count carries no ids, so it cannot be merged without double-counting
+  // records another file already reported.
+  if (typeof data.processedRecords === 'number') {
+    log.debug('Progress file reports a count with no record ids', {
+      processed: data.processedRecords,
+    });
+  }
+}
+
+function isMigrationError(value: unknown): value is MigrationError {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<MigrationError>;
+  return typeof candidate.recordId === 'string' && typeof candidate.error === 'string';
+}
+
+export function getMigrationProgress(): MigrationProgressSummary {
+  const processed = new Set<string>();
+  const timestamps: number[] = [];
+  const errors: MigrationError[] = [];
+  let totalRecords = 0;
+
+  for (const file of PROGRESS_FILES) {
+    const data = readProgressFile(file);
+    if (!data) continue;
+
+    collectRecordIds(data, processed);
+
+    // Guarded: `Math.max(n, undefined)` is NaN, and a single file without a
+    // total used to poison the count and every percentage derived from it.
+    if (typeof data.totalRecords === 'number' && Number.isFinite(data.totalRecords)) {
+      totalRecords = Math.max(totalRecords, data.totalRecords);
+    }
+
+    if (Array.isArray(data.uploadTimestamps)) {
+      for (const ts of data.uploadTimestamps) {
+        if (typeof ts === 'number' && Number.isFinite(ts)) timestamps.push(ts);
       }
-      
-      // Handle different formats of processed records
-      try {
-        // Format 1: Array of record IDs
-        if (fileData.processedRecords && Array.isArray(fileData.processedRecords)) {
-          const uniqueRecords = new Set<string>();
-          // Add existing records
-          combinedProgress.processedRecords.forEach(id => uniqueRecords.add(id));
-          // Add new records
-          fileData.processedRecords.forEach((id: string) => uniqueRecords.add(id)); 
-          combinedProgress.processedRecords = Array.from(uniqueRecords);
-        } 
-        // Format 2: Object with record IDs as keys
-        else if (fileData.recordsProcessed && typeof fileData.recordsProcessed === 'object') {
-          const uniqueRecords = new Set<string>();
-          // Add existing records
-          combinedProgress.processedRecords.forEach(id => uniqueRecords.add(id));
-          // Add new records
-          Object.keys(fileData.recordsProcessed).forEach(id => uniqueRecords.add(id));
-          combinedProgress.processedRecords = Array.from(uniqueRecords);
-        }
-        // Format 3: Just a count (we can't merge specific IDs in this case)
-        else if (fileData.processedRecords && typeof fileData.processedRecords === 'number') {
-          // Just keep track that we found records, but can't merge specific IDs
-          console.log(`File ${file} has ${fileData.processedRecords} processed records (numeric format)`);
-        }
-      } catch (innerError) {
-        console.error(`Error processing records from file ${file}:`, innerError);
+    }
+
+    if (Array.isArray(data.errors)) {
+      for (const entry of data.errors) {
+        if (isMigrationError(entry)) errors.push(entry);
       }
-      
-      // Use the largest total value
-      combinedProgress.totalRecords = Math.max(combinedProgress.totalRecords, fileData.totalRecords);
-      
-      // Merge timestamps if available
-      if (fileData.uploadTimestamps && Array.isArray(fileData.uploadTimestamps)) {
-        combinedProgress.uploadTimestamps = [
-          ...(combinedProgress.uploadTimestamps || []),
-          ...fileData.uploadTimestamps
-        ];
-      }
-      
-      // Merge errors if available
-      if (fileData.errors && Array.isArray(fileData.errors)) {
-        combinedProgress.errors = [
-          ...(combinedProgress.errors || []),
-          ...fileData.errors
-        ];
-      }
-    } catch (error) {
-      console.error(`Error reading migration file ${file}:`, error);
     }
   }
-  
-  // Sort timestamps
-  if (combinedProgress.uploadTimestamps && combinedProgress.uploadTimestamps.length > 0) {
-    combinedProgress.uploadTimestamps.sort((a, b) => b - a);
-  }
-  
-  try {
-    // Calculate percentage based on combined progress
-    const percentage = combinedProgress.totalRecords > 0 
-      ? Math.round((combinedProgress.processedRecords.length / combinedProgress.totalRecords) * 100) 
-      : 0;
-    
-    // Get recent uploads (in the last 24 hours)
-    const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
-    const recentUploads = combinedProgress.uploadTimestamps
-      ? combinedProgress.uploadTimestamps.filter(timestamp => timestamp > oneDayAgo).length
-      : 0;
-    
-    // Get last upload time
-    const lastUploadTime = combinedProgress.uploadTimestamps && combinedProgress.uploadTimestamps.length > 0
-      ? new Date(Math.max(...combinedProgress.uploadTimestamps)).toISOString()
-      : null;
-    
-    return {
-      totalRecords: combinedProgress.totalRecords,
-      processedRecords: combinedProgress.processedRecords.length,
-      percentage,
-      recentUploads,
-      lastUploadTime,
-      errors: combinedProgress.errors || []
-    };
-  } catch (error) {
-    console.error('Error reading migration progress file:', error);
-    return defaultResult;
-  }
+
+  // Most recent first, so the head is the last upload.
+  timestamps.sort((a, b) => b - a);
+
+  const oneDayAgo = Date.now() - DAY_MS;
+
+  return {
+    totalRecords,
+    processedRecords: processed.size,
+    percentage: totalRecords > 0 ? Math.round((processed.size / totalRecords) * 100) : 0,
+    recentUploads: timestamps.filter((ts) => ts > oneDayAgo).length,
+    lastUploadTime: timestamps.length > 0 ? new Date(timestamps[0]).toISOString() : null,
+    errors,
+  };
 }

@@ -1,89 +1,56 @@
 /**
- * Helper functions for processing Airtable data
- * Specifically focused on handling both old attachment fields and new link fields
+ * Image extraction from Airtable article records.
+ *
+ * Airtable stopped accepting third-party URLs in attachment fields, so the base
+ * gained plain link fields (`MainImageLink`, `InstaPhotoLink`) alongside the
+ * original attachments. Records written before that change still only have the
+ * attachment, so both have to be read — link field first, since it is the one
+ * the application now writes.
  */
 
-// Interface for attachment objects from Airtable (response format)
-interface Attachment {
-  id: string;
-  url: string;
-  filename: string;
-  size: number;
-  type: string;
-  width?: number;
-  height?: number;
-  thumbnails?: {
-    small: { url: string; width: number; height: number };
-    large: { url: string; width: number; height: number };
-    full: { url: string; width: number; height: number };
-  };
+import type { AirtableAttachment } from '../integrations/airtable/types';
+
+/** Fields of an Airtable record, as far as image lookup is concerned. */
+type ImageFields = Record<string, unknown>;
+
+function attachmentUrl(attachment: AirtableAttachment): string | null {
+  if (attachment.url) return attachment.url;
+
+  // Thumbnails are the fallback for attachments whose original has expired.
+  const thumbnails = attachment.thumbnails;
+  return thumbnails?.full?.url ?? thumbnails?.large?.url ?? thumbnails?.small?.url ?? null;
 }
 
 /**
- * Get the best image URL from an Airtable record, checking both attachment and link fields
- * @param fields - The fields from an Airtable record
- * @param attachmentFieldName - The name of the attachment field (e.g., 'MainImage')
- * @param linkFieldName - The name of the link field (e.g., 'MainImageLink')
- * @returns The best image URL available, or null if none found
+ * Best available URL for one logical image, or null when the record has none.
  */
 export function getBestImageUrl(
-  fields: any, 
-  attachmentFieldName: string, 
-  linkFieldName: string
+  fields: ImageFields,
+  attachmentFieldName: string,
+  linkFieldName: string,
 ): string | null {
-  // First check if we have the link field, as this is preferred
-  if (fields[linkFieldName] && typeof fields[linkFieldName] === 'string') {
-    return fields[linkFieldName];
-  }
-  
-  // Then check if we have an attachment field
-  if (fields[attachmentFieldName] && 
-      Array.isArray(fields[attachmentFieldName]) && 
-      fields[attachmentFieldName].length > 0) {
-    
-    // Get the first attachment
-    const attachment = fields[attachmentFieldName][0] as Attachment;
-    
-    // Return the URL from the attachment
-    if (attachment.url) {
-      return attachment.url;
-    }
-    
-    // Try the thumbnails if the direct URL is not available
-    if (attachment.thumbnails) {
-      if (attachment.thumbnails.full) {
-        return attachment.thumbnails.full.url;
-      } else if (attachment.thumbnails.large) {
-        return attachment.thumbnails.large.url;
-      } else if (attachment.thumbnails.small) {
-        return attachment.thumbnails.small.url;
-      }
-    }
-  }
-  
-  // No image found
-  return null;
+  const link = fields[linkFieldName];
+  if (typeof link === 'string' && link) return link;
+
+  const attachments = fields[attachmentFieldName];
+  if (!Array.isArray(attachments) || attachments.length === 0) return null;
+
+  return attachmentUrl(attachments[0] as AirtableAttachment);
+}
+
+export interface ArticleImages {
+  main: string | null;
+  instagram: string | null;
 }
 
 /**
- * Updates an article with the best image URL from Airtable record fields
- * @param article - The article object to update
- * @param fields - The fields from an Airtable record
- * @returns The updated article
+ * Both of an article record's images.
+ *
+ * The Instagram image doubles as the main image when the record has no main
+ * one, which is how Instagram-sourced articles end up with a cover.
  */
-export function updateArticleWithBestImages(article: any, fields: any): any {
-  // Process main image
-  const mainImageUrl = getBestImageUrl(fields, 'MainImage', 'MainImageLink');
-  if (mainImageUrl) {
-    article.imageUrl = mainImageUrl;
-    article.imageType = 'url';
-  }
-  
-  // Process Instagram photo
-  const instaPhotoUrl = getBestImageUrl(fields, 'instaPhoto', 'InstaPhotoLink');
-  if (instaPhotoUrl) {
-    article.instagramImageUrl = instaPhotoUrl;
-  }
-  
-  return article;
+export function getArticleImages(fields: ImageFields): ArticleImages {
+  const instagram = getBestImageUrl(fields, 'instaPhoto', 'InstaPhotoLink');
+  const main = getBestImageUrl(fields, 'MainImage', 'MainImageLink') ?? instagram;
+  return { main, instagram };
 }

@@ -1,33 +1,42 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { env } from "node:process";
 import pg from 'pg';
+import { env } from './lib/env';
 
-// Initialize Postgres connection
-const connectionString = env.DATABASE_URL;
-
-if (!connectionString) {
-    throw new Error("DATABASE_URL environment variable is required");
-}
-
-// Configure connection pool with Railway-friendly settings
+/**
+ * Postgres connection pool.
+ *
+ * `max` is deliberately small: Railway's managed Postgres allows a modest
+ * connection count and several replicas may share it.
+ */
 export const pgPool = new pg.Pool({
-    connectionString,
+    connectionString: env.databaseUrl,
     max: 5,
-    idleTimeoutMillis: 20000,
-    connectionTimeoutMillis: 5000,
+    idleTimeoutMillis: 20_000,
+    connectionTimeoutMillis: 5_000,
     allowExitOnIdle: true,
-    ssl: env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+    ssl: env.isProduction
+        ? {
+            // Verify the server certificate. Providers that terminate TLS with a
+            // private CA supply it via DATABASE_CA_CERT; disabling verification
+            // outright would leave the connection open to interception.
+            rejectUnauthorized: true,
+            ca: env.databaseCa,
+        }
+        : false,
 });
 
-// #region agent log — H1: Pool error handler (CRITICAL: prevents crash on idle connection reset)
+/**
+ * A pooled connection can be dropped by the network or the server while idle.
+ * Without a listener that arrives as an unhandled 'error' event and takes down
+ * the process; pg discards the client and the next query opens a fresh one.
+ */
 pgPool.on('error', (err: Error) => {
-    console.error(`[db] Pool background error (non-fatal): ${err.message}`);
-    fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/db.ts:pool-error-handler',message:'Pool idle client error caught',data:{error:err.message,code:(err as any).code},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+    console.error(`[db] Idle client error (recovered): ${err.message}`);
 });
-// #endregion
-
-// #region agent log — H2/H3: Log pool creation settings
-fetch('http://127.0.0.1:7242/ingest/24cff41f-8e01-42f2-95fa-5253479615ef',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server/db.ts:pool-init',message:'Pool initialized',data:{max:5,idleTimeout:20000,ssl:env.NODE_ENV==="production"},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-// #endregion
 
 export const db = drizzle(pgPool);
+
+/** Closes the pool during shutdown so in-flight queries can finish. */
+export async function closeDatabase(): Promise<void> {
+    await pgPool.end();
+}

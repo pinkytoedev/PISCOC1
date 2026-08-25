@@ -13,7 +13,7 @@ import type {
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { db } from "./db";
-import { eq, and, lt, gt } from "drizzle-orm";
+import { eq, and, lt, sql } from "drizzle-orm";
 import { pgPool } from './db';
 
 const PostgresSessionStore = connectPg(session);
@@ -67,12 +67,13 @@ export interface IStorage {
   // Upload token operations
   getUploadTokens(): Promise<UploadToken[]>;
   getUploadToken(id: number): Promise<UploadToken | undefined>;
-  getUploadTokenByToken(token: string): Promise<UploadToken | undefined>;
+  getUploadTokenByHash(tokenHash: string): Promise<UploadToken | undefined>;
   getUploadTokensByArticle(articleId: number): Promise<UploadToken[]>;
-  createUploadToken(token: InsertUploadToken): Promise<UploadToken>;
+  createUploadToken(token: InsertUploadToken & { tokenHash: string }): Promise<UploadToken>;
   updateUploadToken(id: number, token: Partial<InsertUploadToken>): Promise<UploadToken | undefined>;
   incrementUploadTokenUses(id: number): Promise<UploadToken | undefined>;
   deleteUploadToken(id: number): Promise<boolean>;
+  deleteUploadTokensForArticle(articleId: number): Promise<number>;
   inactivateExpiredTokens(): Promise<number>; // Returns count of inactivated tokens
 
   // Image asset operations
@@ -478,11 +479,11 @@ export class DatabaseStorage implements IStorage {
     return token;
   }
 
-  async getUploadTokenByToken(token: string): Promise<UploadToken | undefined> {
+  async getUploadTokenByHash(tokenHash: string): Promise<UploadToken | undefined> {
     const [uploadToken] = await db
       .select()
       .from(uploadTokens)
-      .where(eq(uploadTokens.token, token));
+      .where(eq(uploadTokens.tokenHash, tokenHash));
     return uploadToken;
   }
 
@@ -493,7 +494,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(uploadTokens.articleId, articleId));
   }
 
-  async createUploadToken(token: InsertUploadToken): Promise<UploadToken> {
+  async createUploadToken(token: InsertUploadToken & { tokenHash: string }): Promise<UploadToken> {
     const [newToken] = await db
       .insert(uploadTokens)
       .values({
@@ -513,24 +514,37 @@ export class DatabaseStorage implements IStorage {
     return updatedToken;
   }
 
+  /**
+   * Increments the use counter in a single statement.
+   *
+   * The previous implementation read the row, added one in JavaScript and wrote
+   * it back. Two concurrent uploads could both read `uses = 0` and both write
+   * `1`, so a single-use token could be redeemed twice. Computing the new value
+   * inside SQL makes the update atomic; `max_uses = 0` means unlimited.
+   */
   async incrementUploadTokenUses(id: number): Promise<UploadToken | undefined> {
-    const token = await this.getUploadToken(id);
-    if (!token) return undefined;
-
-    // Handle null values safely
-    const currentUses = token.uses ?? 0;
-    const maxUses = token.maxUses ?? 0;
-
     const [updatedToken] = await db
       .update(uploadTokens)
       .set({
-        uses: currentUses + 1,
-        active: maxUses > 0 ? currentUses + 1 < maxUses : true
+        uses: sql`${uploadTokens.uses} + 1`,
+        active: sql`CASE
+          WHEN ${uploadTokens.maxUses} > 0 AND ${uploadTokens.uses} + 1 >= ${uploadTokens.maxUses}
+          THEN false
+          ELSE ${uploadTokens.active}
+        END`,
       })
       .where(eq(uploadTokens.id, id))
       .returning();
 
     return updatedToken;
+  }
+
+  async deleteUploadTokensForArticle(articleId: number): Promise<number> {
+    const deleted = await db
+      .delete(uploadTokens)
+      .where(eq(uploadTokens.articleId, articleId))
+      .returning();
+    return deleted.length;
   }
 
   async deleteUploadToken(id: number): Promise<boolean> {
