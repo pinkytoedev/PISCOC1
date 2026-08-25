@@ -26,6 +26,17 @@ export function publicSystemRouter(): Router {
       status: 'ok',
       timestamp: new Date().toISOString(),
       environment: env.isProduction ? 'production' : 'development',
+      /**
+       * The commit this container was built from.
+       *
+       * This is the only field that distinguishes a new deployment from the one
+       * it replaced — `status`, `database` and `sessionSecret` all stay true
+       * against the previous build — so the post-deploy smoke test in
+       * .github/workflows/post-deploy.yml asserts on it to prove the rollout
+       * actually landed. Railway injects RAILWAY_GIT_COMMIT_SHA automatically
+       * for GitHub-connected services; null elsewhere (local, tests).
+       */
+      commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? null,
       // Booleans only — never echo the values themselves.
       database: Boolean(env.databaseUrl),
       sessionSecret: Boolean(process.env.SESSION_SECRET),

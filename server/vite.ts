@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 import { type Server } from "http";
 import viteConfig from "../vite.config";
-import { nanoid } from "nanoid";
+import { randomUUID } from "crypto";
 
 const viteLogger = createLogger();
 
@@ -58,9 +58,13 @@ export async function setupVite(app: Express, server: Server) {
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      // Cache-buster only. Uses the crypto builtin rather than nanoid, which
+      // was never declared in package.json and resolved only by hoisting from
+      // postcss — and this module is reachable from the production bundle, so
+      // a change in npm's hoisting would have broken `npm start`, not just dev.
       template = template.replace(
         `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
+        `src="/src/main.tsx?v=${randomUUID()}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);

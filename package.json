@@ -12,7 +12,6 @@
     "db:push": "drizzle-kit push",
     "setup:https": "node scripts/setup-https.js",
     "test:setup": "node scripts/test-setup.js",
-    "test:neon": "node scripts/test-neon.js",
     "verify:security": "node scripts/verify-security.mjs",
     "verify:routes": "node scripts/verify-routes.mjs",
     "verify:uploads": "tsx scripts/verify-uploads.mjs",
@@ -136,7 +135,7 @@
     "vite": "^7.1.6"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.12.0"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

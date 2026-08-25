@@ -24,7 +24,8 @@ import pg from 'pg';
 
 const scryptAsync = promisify(crypto.scrypt);
 
-const BASE = 'http://localhost:3999';
+// Overridable so this can run in CI against a different port.
+const BASE = process.env.VERIFY_BASE_URL ?? 'http://localhost:3999';
 let cookies = {};
 let csrf = null;
 

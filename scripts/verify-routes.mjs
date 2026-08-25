@@ -3,9 +3,18 @@ import { promisify } from 'util';
 import pg from 'pg';
 
 const scrypt = promisify(crypto.scrypt);
-const BASE = 'http://localhost:3999';
 
-const pool = new pg.Pool({ connectionString: 'postgresql://jawednur@localhost:5432/piscoc_verify' });
+// Both are overridable so this can run in CI. The defaults are the local
+// `npm run dev` setup; DATABASE_URL must point at the SAME database the server
+// under test is using, because this script seeds the admin it then logs in as.
+const BASE = process.env.VERIFY_BASE_URL ?? 'http://localhost:3999';
+
+if (!process.env.DATABASE_URL) {
+  console.error('verify:routes requires DATABASE_URL (the database the server under test is using).');
+  process.exit(1);
+}
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const salt = crypto.randomBytes(16).toString('hex');
 const buf = await scrypt('verify-password-123', salt, 64);
 await pool.query(

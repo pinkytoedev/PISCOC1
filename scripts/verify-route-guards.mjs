@@ -101,4 +101,8 @@ if (!unexpected.length && !stale.length) {
   console.log('\nPublic surface matches the allowlist exactly.');
 }
 
-process.exit(unexpected.length ? 1 : 0);
+// Stale entries fail too. CI runs this as a hard gate, and an allowlist that
+// only ever grows stops describing the real public surface — at which point a
+// genuinely new public route can hide behind an entry left over from a route
+// that was guarded or deleted years earlier.
+process.exit(unexpected.length || stale.length ? 1 : 0);
