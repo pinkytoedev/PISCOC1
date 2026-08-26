@@ -15,13 +15,13 @@ import { storage } from '../../storage';
 import { HttpError } from '../../lib/httpError';
 import { createLogger } from '../../lib/logger';
 import { recordActivity } from '../../services/activity';
-import { isSettingEnabled } from '../../services/settings';
 import {
   cleanupUploadedFile,
   uploadImageToAirtable,
   uploadImageUrlAsLinkField,
 } from '../../utils/imageUploader';
 import { uploadImageToImgBB, uploadImageUrlToImgBB } from '../../utils/imgbbUploader';
+import { isImgBBConfigured } from '../../services/images';
 
 const log = createLogger('airtable:images');
 
@@ -113,7 +113,7 @@ export async function uploadArticleImageFile(
   const recordId = article.externalId as string;
 
   try {
-    if (await isSettingEnabled('imgbb', 'api_key')) {
+    if (isImgBBConfigured()) {
       const imgbb = await uploadImageToImgBB(file);
       if (!imgbb) throw HttpError.internal('Failed to upload image to ImgBB');
 
@@ -185,7 +185,7 @@ export async function uploadArticleImageUrl(
   const recordId = article.externalId as string;
   const targetField = LINK_FIELD[field];
 
-  if (await isSettingEnabled('imgbb', 'api_key')) {
+  if (isImgBBConfigured()) {
     const imgbb = await uploadImageUrlToImgBB(imageUrl, filename);
     if (!imgbb) throw HttpError.internal('Failed to upload image URL to ImgBB');
 

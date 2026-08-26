@@ -73,15 +73,87 @@ Everything else is optional:
 | `UPLOAD_MAX_ZIP_ENTRIES` | 500 | Files per archive. |
 | `UPLOAD_MAX_ZIP_IMAGES` | 60 | Images per archive. |
 | `UPLOAD_TOKEN_TTL_DAYS` | 14 | Contributor link lifetime. |
+| `IMGBB_API_KEY` | — | Image uploads answer 400. This is the **only** source for the key — see below. |
 
-**Airtable and ImgBB credentials are not environment variables.** They live in
-the `integration_settings` table and are entered through the admin UI at
-`/integrations/airtable` and `/integrations/imgbb`. The app boots fine with no
-integrations configured; it simply cannot sync or host images until they are.
+**ImgBB's key is environment-only.** `IMGBB_API_KEY` is read once at boot and is
+the sole source. It used to also be editable in the CMS and stored in
+`integration_settings`, where the stored copy took precedence — so a key saved
+once and later rotated kept overriding the deployment's own variable, and
+uploads failed with nothing to show why. That page and those endpoints are gone;
+set the variable on the host (Railway, `.env` locally) and restart.
+
+An install that used the old page still has the key sitting in
+`integration_settings` as plaintext. Nothing reads it, but it should not be
+there:
+
+```bash
+npm run cleanup:imgbb             # list the leftover rows (masked)
+npm run cleanup:imgbb -- --confirm # delete them
+```
+
+Dry run by default, safe to re-run, and it touches nothing but the `imgbb` rows.
+It cleans whatever `DATABASE_URL` points at, so read the Railway section below
+before running it with `--confirm`.
+
+**Airtable credentials are not environment variables.** They live in the
+`integration_settings` table and are entered through the admin UI at
+`/integrations/airtable`. The app boots fine with no integrations configured; it
+simply cannot sync until they are.
 
 > Pointing a development server at your production Airtable base will mutate it —
 > the diagnostic routes are on by default outside production and write real
 > records.
+
+### Railway
+
+The deployment's variables live in Railway, and that is where they should stay.
+Use the CLI to inject them into local commands rather than copying secrets into
+your own `.env` — a key that is never written to disk cannot be committed, and
+there is one copy to rotate instead of one per laptop.
+
+Turning it on, once per machine:
+
+```bash
+brew install railway          # or: bash <(curl -fsSL railway.com/install.sh)
+railway login
+railway link                  # choose workspace → project → service
+railway status                # confirm what you just linked
+```
+
+Then prefix commands with `railway run`:
+
+```bash
+railway run npm run dev
+railway variables             # what the linked environment provides
+railway variables --kv        # same, as KEY=value
+```
+
+`railway variables` is also how you confirm `IMGBB_API_KEY` is set, and
+`railway variables --set "IMGBB_API_KEY=..."` is how you rotate it. Redeploy or
+restart afterwards: the value is read once at boot.
+
+**`railway run` gives you production config.** `railway status` prints the linked
+environment, and a fresh `railway link` lands on `production`. This project's
+`DATABASE_URL` is the public proxy rather than an internal address, so it is
+reachable from a laptop — `railway run npm run dev` runs your local server
+against **the live database**, with the scheduler auto-publishing real articles
+and the Airtable diagnostic routes on (`npm run dev` sets
+`NODE_ENV=development`, which is exactly what enables them). `railway run npm run
+cleanup:imgbb -- --confirm` deletes from production.
+
+So: **check `railway status` before any command that writes.** If you want the
+Railway workflow for day-to-day development, give development its own
+environment first:
+
+```bash
+railway environment new development
+railway environment development                         # link it
+railway variables --set "DATABASE_URL=<a dev database>" # and any other overrides
+```
+
+`railway environment production` switches back when you need to inspect the
+deploy. Reading — `railway status`, `railway variables`, `railway logs` — is safe
+against production; running the app or a cleanup script is not.
 
 ## Scripts
 

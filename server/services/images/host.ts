@@ -12,7 +12,7 @@
  */
 
 import fsp from 'fs/promises';
-import { getImgBBApiKey, isSettingEnabled } from '../settings';
+import { env } from '../../lib/env';
 import { createLogger } from '../../lib/logger';
 import { fetchRemoteImage } from './fetch';
 
@@ -87,35 +87,21 @@ export class ImageHostError extends Error {
 /**
  * Resolves the API key.
  *
- * A key stored in settings but explicitly disabled means "stop using ImgBB", so
- * it must not silently fall back to the environment variable — that fallback
- * only applies when nothing is configured in the database at all.
+ * `IMGBB_API_KEY` is the only source. The key used to be editable in the CMS
+ * and stored in `integration_settings`, and that copy won whenever it was
+ * present — so a key saved once and since rotated kept overriding the value the
+ * deployment actually sets, and uploads failed with no indication of why.
  */
-async function resolveApiKey(): Promise<string> {
-  const configured = await getImgBBApiKey();
-
-  if (configured) {
-    if (!(await isSettingEnabled('imgbb', 'api_key'))) {
-      throw new ImageHostError('ImgBB integration is disabled');
-    }
-    return configured;
+function resolveApiKey(): string {
+  if (!env.imgbbApiKey) {
+    throw new ImageHostError('ImgBB API key is not configured (set IMGBB_API_KEY)');
   }
-
-  // Not in `lib/env` because ImgBB is optional: the server must boot without it.
-  const fromEnvironment = process.env.IMGBB_API_KEY;
-  if (fromEnvironment) return fromEnvironment;
-
-  throw new ImageHostError('ImgBB API key is not configured');
+  return env.imgbbApiKey;
 }
 
 /** Whether ImgBB is usable at all, without attempting an upload. */
-export async function isImgBBConfigured(): Promise<boolean> {
-  try {
-    await resolveApiKey();
-    return true;
-  } catch {
-    return false;
-  }
+export function isImgBBConfigured(): boolean {
+  return Boolean(env.imgbbApiKey);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -190,7 +176,7 @@ async function postToImgBB(image: string, filename: string | undefined, apiKey: 
 
 /** The single retry policy: bounded attempts, exponential backoff, transient errors only. */
 async function uploadWithRetry(image: string, filename: string | undefined, context: string): Promise<ImgBBImage> {
-  const apiKey = await resolveApiKey();
+  const apiKey = resolveApiKey();
 
   let lastError: ImageHostError | undefined;
 

@@ -15,7 +15,6 @@ import TeamMembersPage from "@/pages/team-members-page";
 import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
-import ImgBBPage from "@/pages/integrations/imgbb-page";
 import ContributorUploadPage from "@/pages/contributor-upload";
 import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
@@ -33,7 +32,6 @@ function Router() {
       <ProtectedRoute path="/carousel-quotes" component={CarouselQuotesPage} />
       <AdminProtectedRoute path="/users" component={UserManagementPage} />
       <AdminProtectedRoute path="/integrations/airtable" component={AirtablePage} />
-      <AdminProtectedRoute path="/integrations/imgbb" component={ImgBBPage} />
       <AdminProtectedRoute path="/keys" component={KeysPage} />
 
       {/* Public: readable signed out, and makes no authenticated request. */}

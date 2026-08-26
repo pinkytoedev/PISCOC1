@@ -37,6 +37,8 @@ import { useToast } from "@/hooks/use-toast";
 interface IntegrationStatus {
   name: string;
   configured: boolean;
+  /** Credentials exist *and* the service answered. False means one is broken. */
+  reachable?: boolean;
   lastChecked?: string;
   error?: string;
 }
@@ -47,6 +49,10 @@ interface ApiKeyInfo {
   description: string;
   required: boolean;
   configured: boolean;
+  /** Undefined for anything not probed, e.g. the session secret. */
+  reachable?: boolean;
+  /** Why the probe failed, when it did. */
+  error?: string;
   setupUrl: string;
   icon: React.ReactNode;
   category: 'database' | 'storage' | 'security';
@@ -77,6 +83,8 @@ export default function KeysPage() {
       description: "Primary database connection for storing all application data",
       required: true,
       configured: integrations?.find(i => i.name === "database")?.configured ?? false,
+      reachable: integrations?.find(i => i.name === "database")?.reachable,
+      error: integrations?.find(i => i.name === "database")?.error,
       setupUrl: "https://www.postgresql.org/download/",
       icon: <SiPostgresql className="h-5 w-5" />,
       category: "database",
@@ -93,6 +101,8 @@ export default function KeysPage() {
       description: "API key for Airtable database integration and content management",
       required: false,
       configured: integrations?.find(i => i.name === "airtable")?.configured ?? false,
+      reachable: integrations?.find(i => i.name === "airtable")?.reachable,
+      error: integrations?.find(i => i.name === "airtable")?.error,
       setupUrl: "https://airtable.com/create/tokens",
       icon: <SiAirtable className="h-5 w-5" />,
       category: "storage",
@@ -109,6 +119,8 @@ export default function KeysPage() {
       description: "ImgBB API credentials for image hosting and management",
       required: false,
       configured: integrations?.find(i => i.name === "imgbb")?.configured ?? false,
+      reachable: integrations?.find(i => i.name === "imgbb")?.reachable,
+      error: integrations?.find(i => i.name === "imgbb")?.error,
       setupUrl: "https://api.imgbb.com/",
       icon: <Image className="h-5 w-5" />,
       category: "storage",
@@ -155,21 +167,37 @@ export default function KeysPage() {
     }
   };
 
-  const getStatusBadge = (configured: boolean) => (
-    <Badge variant={configured ? "default" : "destructive"} className="ml-2">
-      {configured ? (
-        <>
-          <CheckCircle className="h-3 w-3 mr-1" />
-          Configured
-        </>
-      ) : (
-        <>
+  /**
+   * Three states, not two. A credential that exists but is rejected — a revoked
+   * token, a wrong key — is neither "configured" nor "missing", and showing it
+   * as a green tick sends the operator looking anywhere but at the credential.
+   */
+  const getStatusBadge = (key: ApiKeyInfo) => {
+    if (!key.configured) {
+      return (
+        <Badge variant="destructive" className="ml-2">
           <AlertCircle className="h-3 w-3 mr-1" />
           Not Configured
-        </>
-      )}
-    </Badge>
-  );
+        </Badge>
+      );
+    }
+
+    if (key.reachable === false) {
+      return (
+        <Badge variant="secondary" className="ml-2" title={key.error}>
+          <AlertCircle className="h-3 w-3 mr-1" />
+          Set, but not responding
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="default" className="ml-2">
+        <CheckCircle className="h-3 w-3 mr-1" />
+        Configured
+      </Badge>
+    );
+  };
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -311,7 +339,7 @@ export default function KeysPage() {
                             <div>
                               <CardTitle className="text-xl flex items-center">
                                 {key.name}
-                                {getStatusBadge(key.configured)}
+                                {getStatusBadge(key)}
                                 {key.required && (
                                   <Badge variant="outline" className="ml-2">Required</Badge>
                                 )}

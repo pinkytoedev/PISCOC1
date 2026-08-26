@@ -16,7 +16,8 @@
     "verify:routes": "node scripts/verify-routes.mjs",
     "verify:uploads": "tsx scripts/verify-uploads.mjs",
     "verify:guards": "tsx scripts/verify-route-guards.mjs",
-    "routes": "tsx scripts/list-routes.mjs"
+    "routes": "tsx scripts/list-routes.mjs",
+    "cleanup:imgbb": "tsx scripts/cleanup-imgbb-settings.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.17",

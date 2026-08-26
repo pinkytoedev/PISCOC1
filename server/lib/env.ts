@@ -96,6 +96,17 @@ export const env = {
   webhookSecret: process.env.WEBHOOK_SECRET,
 
   /**
+   * ImgBB API key, used to host images before linking them into Airtable.
+   *
+   * Optional, so it is read rather than required — the server boots without it
+   * and the image upload routes answer 400 instead. It used to be editable in
+   * the CMS and stored in `integration_settings`, where a stale row silently
+   * took precedence over the deployment's own variable; the settings copy is
+   * gone and this is now the only source.
+   */
+  imgbbApiKey: process.env.IMGBB_API_KEY,
+
+  /**
    * Registers the Airtable diagnostic routes.
    *
    * They write to real Airtable records to prove the integration can write at

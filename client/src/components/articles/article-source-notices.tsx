@@ -46,7 +46,7 @@ export function ImgbbStatusNotice({ enabled }: { enabled: boolean }) {
       <p className={`text-sm mt-1 ${enabled ? "text-green-600" : "text-gray-600"}`}>
         {enabled
           ? "Images will be uploaded to ImgBB first, then the URL will be sent to Airtable."
-          : "Images will be uploaded directly to Airtable. To enable ImgBB integration, visit the ImgBB settings page."}
+          : "Images will be uploaded directly to Airtable. ImgBB hosting turns on once IMGBB_API_KEY is set on the server."}
       </p>
       {enabled && (
         <div className="mt-2 text-xs text-green-600">
