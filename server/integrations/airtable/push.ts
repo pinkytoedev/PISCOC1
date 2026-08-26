@@ -6,7 +6,7 @@
  * write at ten records and a partial failure must not abort the rest of the run.
  */
 
-import type { Article } from '@shared/schema';
+import type { Article, CarouselQuote } from '@shared/schema';
 import { storage } from '../../storage';
 import { HttpError } from '../../lib/httpError';
 import { createLogger } from '../../lib/logger';
@@ -14,6 +14,9 @@ import { recordActivity } from '../../services/activity';
 import {
   batched,
   createRecord,
+  deleteRecords,
+  listRecords,
+  optionalConfig,
   requireConfig,
   updateRecord,
   writeRecords,
@@ -159,7 +162,19 @@ export async function pushTeamMembersToAirtable(
   return results;
 }
 
-/** Pushes every carousel quote, creating the ones Airtable has never seen. */
+/**
+ * Makes the Airtable quotes table match the CMS exactly.
+ *
+ * This is a mirror, not a merge. Every local quote is written over its Airtable
+ * record, quotes Airtable has never seen are created, and records with no local
+ * quote behind them are deleted. Anything less left the live site showing
+ * quotes an editor had already removed here, because the site reads Airtable
+ * and nothing ever took the row out of it.
+ *
+ * The table is read first so a stale `externalId` — a record deleted in
+ * Airtable directly — becomes a create rather than a PATCH that 404s and takes
+ * its whole batch of nine innocent records down with it.
+ */
 export async function pushCarouselQuotesToAirtable(
   config: AirtableConfig,
   userId?: number,
@@ -167,8 +182,11 @@ export async function pushCarouselQuotesToAirtable(
   const quotes = await storage.getCarouselQuotes();
   const results = emptyResults();
 
-  const toUpdate = quotes.filter((quote) => quote.externalId);
-  const toCreate = quotes.filter((quote) => !quote.externalId);
+  const remote = await listRecords<AirtableCarouselQuoteFields>(config);
+  const remoteIds = new Set(remote.records.map((record) => record.id));
+
+  const toUpdate = quotes.filter((quote) => quote.externalId && remoteIds.has(quote.externalId));
+  const toCreate = quotes.filter((quote) => !quote.externalId || !remoteIds.has(quote.externalId));
 
   await runBatches(
     config,
@@ -194,6 +212,31 @@ export async function pushCarouselQuotesToAirtable(
     if (externalId) await storage.updateCarouselQuote(toCreate[i].id, { externalId });
   }
 
+  // Whatever is still in Airtable that no local quote claims — including rows
+  // orphaned by an earlier delete — goes. `toUpdate` is the only set that
+  // reuses an existing record; the created ones have brand new ids.
+  //
+  // An empty local table is never treated as "delete everything". That reads as
+  // an intentional wipe but is far more often a fresh or wrong database, and
+  // Airtable has no undo for a batch delete.
+  if (quotes.length === 0) {
+    if (remote.records.length > 0) {
+      results.details.push(
+        `Skipped removing ${remote.records.length} Airtable quotes: there are no quotes in the CMS to mirror. Delete them in Airtable directly if that is intended.`,
+      );
+      log.warn('Refused to empty the Airtable quotes table', {
+        remote: remote.records.length,
+      });
+    }
+  } else {
+    const claimed = new Set(toUpdate.map((quote) => quote.externalId as string));
+    const orphaned = remote.records
+      .map((record) => record.id)
+      .filter((id) => !claimed.has(id));
+
+    await deleteBatches(config, orphaned, results, 'quotes');
+  }
+
   await recordActivity({
     userId,
     action: 'push',
@@ -203,11 +246,138 @@ export async function pushCarouselQuotesToAirtable(
       destination: 'airtable',
       created: results.created,
       updated: results.updated,
+      deleted: results.deleted,
       errors: results.errors,
     },
   });
 
   return results;
+}
+
+export interface QuoteSyncResult {
+  /** The stored quote, carrying a freshly assigned `externalId` if one was created. */
+  quote: CarouselQuote;
+  /** Whether Airtable — and so the live site — now reflects this quote. */
+  syncedToAirtable: boolean;
+}
+
+/**
+ * Mirrors one quote into Airtable, creating its record if it has none.
+ *
+ * Called on every save, because the public site reads Airtable: without this a
+ * saved edit sat in the CMS looking applied while the live page kept the old
+ * text until somebody remembered to press Push.
+ *
+ * Best-effort, like the delete path. The row is already written locally and
+ * failing the request would tell the editor their edit was lost when it was
+ * not; the flag is how they learn the live site has not caught up.
+ */
+export async function syncCarouselQuoteToAirtable(quote: CarouselQuote): Promise<QuoteSyncResult> {
+  const config = await optionalConfig('quotes');
+  if (!config) {
+    log.warn('Skipped Airtable quote sync: integration not configured', { quoteId: quote.id });
+    return { quote, syncedToAirtable: false };
+  }
+
+  const fields = convertCarouselQuoteToAirtableFormat(quote);
+
+  try {
+    if (quote.externalId) {
+      try {
+        await writeRecords<AirtableCarouselQuoteFields>(config, 'PATCH', [
+          { id: quote.externalId, fields },
+        ]);
+        return { quote, syncedToAirtable: true };
+      } catch (error) {
+        if (!(await recordIsAlreadyGone(config, error))) throw error;
+        // Deleted in Airtable directly. Recreate rather than give up, or the
+        // quote would stay invisible to the site no matter how often it is saved.
+        log.info('Airtable quote record is gone; recreating it', { quoteId: quote.id });
+      }
+    }
+
+    const externalId = await createRecord(config, fields);
+
+    // Airtable already has the record, so this is reported as synced whatever
+    // happens next — but the local write is what stops the *next* save creating
+    // a second copy, so a failure here is logged with the id it could not
+    // store, which is the only way back from the orphan.
+    try {
+      const stored = await storage.updateCarouselQuote(quote.id, { externalId });
+      return { quote: stored ?? { ...quote, externalId }, syncedToAirtable: true };
+    } catch (error) {
+      log.error('Created an Airtable quote but could not store its id locally', {
+        quoteId: quote.id,
+        externalId,
+        error,
+      });
+      return { quote: { ...quote, externalId }, syncedToAirtable: true };
+    }
+  } catch (error) {
+    log.error('Failed to sync quote to Airtable', { quoteId: quote.id, error });
+    return { quote, syncedToAirtable: false };
+  }
+}
+
+/**
+ * Removes one quote's Airtable record.
+ *
+ * Best-effort by contract: the caller is deleting the quote locally either way,
+ * and reports what happened rather than failing the request. Returns whether
+ * Airtable was actually cleared, so the caller can say so.
+ */
+export async function deleteCarouselQuoteFromAirtable(externalId: string): Promise<boolean> {
+  const config = await optionalConfig('quotes');
+  if (!config) {
+    log.warn('Skipped Airtable quote delete: integration not configured', { externalId });
+    return false;
+  }
+
+  try {
+    const response = await deleteRecords(config, [externalId]);
+    // Airtable answers 200 with a per-record flag; trust the flag, not the
+    // status, before telling an editor the live site is clean.
+    if (response.records?.[0]?.deleted === true) {
+      log.info('Deleted Airtable quote record', { externalId });
+      return true;
+    }
+    log.warn('Airtable did not confirm the quote delete', { externalId, response });
+    return false;
+  } catch (error) {
+    if (await recordIsAlreadyGone(config, error)) {
+      log.info('Airtable quote record was already gone', { externalId });
+      return true;
+    }
+    log.error('Airtable quote delete failed', { externalId, error });
+    return false;
+  }
+}
+
+/**
+ * Whether a failed delete means "that record does not exist" rather than "we
+ * could not ask".
+ *
+ * A record deleted in Airtable directly is an ordinary case — the editor is
+ * tidying up the same quote in both places — and reporting it as a failure
+ * would send them chasing a problem that is already solved. But a renamed
+ * table answers 404 too, and that one must not be read as success.
+ *
+ * Airtable's record-level error codes are not dependable enough to tell the two
+ * apart from the message, so the table is probed instead: if it still reads,
+ * the 404 was about the record.
+ */
+async function recordIsAlreadyGone(config: AirtableConfig, error: unknown): Promise<boolean> {
+  if (!(error instanceof Error) || !/Airtable API error: 404\b/.test(error.message)) {
+    return false;
+  }
+
+  try {
+    await listRecords(config, { maxRecords: 1 });
+    return true;
+  } catch (probeError) {
+    log.warn('Airtable quotes table is unreachable', { error: probeError });
+    return false;
+  }
 }
 
 /** Updates a single quote and mirrors the change locally. */
@@ -232,6 +402,34 @@ export async function updateCarouselQuoteInAirtable(
   }
 
   return response;
+}
+
+/**
+ * Deletes records in Airtable-sized batches, counting each batch's outcome.
+ *
+ * Mirrors `runBatches`' failure handling: a batch that fails is recorded and
+ * the run carries on, because a delete that cannot happen must not strand the
+ * writes that already did.
+ */
+async function deleteBatches(
+  config: AirtableConfig,
+  recordIds: string[],
+  results: SyncResults,
+  label: string,
+): Promise<void> {
+  for (const [index, batch] of batched(recordIds).entries()) {
+    try {
+      const response = await deleteRecords(config, batch);
+      // Count what Airtable says it removed, not what we asked it to.
+      const removed = (response.records ?? []).filter((record) => record.deleted).length;
+      results.deleted += removed;
+      results.details.push(`Deleted ${removed} ${label} in batch ${index + 1}`);
+    } catch (error) {
+      results.errors += batch.length;
+      results.details.push(`Error deleting batch ${index + 1}: ${String(error)}`);
+      log.error('Airtable batch delete failed', { label, batch: index + 1, error });
+    }
+  }
 }
 
 /**

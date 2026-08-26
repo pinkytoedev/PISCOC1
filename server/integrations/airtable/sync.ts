@@ -267,9 +267,14 @@ export async function syncCarouselQuotesFromAirtable(
       const main = record.fields.main || 'default';
       const philo = record.fields.philo || 'Quote information not available.';
 
+      // All four columns, not just `carousel`/`quote`. The push mapper prefers
+      // `main`/`philo`, so leaving those holding pre-pull values meant the next
+      // save pushed the stale text straight back over the edit just pulled in.
       const quoteData: InsertCarouselQuote = {
         carousel: main,
         quote: philo,
+        main,
+        philo,
         externalId: record.id,
       };
 

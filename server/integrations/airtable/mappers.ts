@@ -112,13 +112,17 @@ export type CarouselQuoteInput = Partial<
 /**
  * Local quotes keep the Airtable column names (`main`/`philo`) alongside their
  * own (`carousel`/`quote`); rows created before that split only have the latter.
+ *
+ * Both columns are always emitted, empty string included. A PATCH ignores keys
+ * it is not given, so returning `undefined` for a value the editor cleared left
+ * the old text sitting in Airtable and the two stores disagreeing.
  */
 export function convertCarouselQuoteToAirtableFormat(
   quote: CarouselQuoteInput,
 ): AirtableCarouselQuoteFields {
   return {
-    main: quote.main || quote.carousel || undefined,
-    philo: quote.philo || quote.quote || undefined,
+    main: quote.main || quote.carousel || '',
+    philo: quote.philo || quote.quote || '',
   };
 }
 

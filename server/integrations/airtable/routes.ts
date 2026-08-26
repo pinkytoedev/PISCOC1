@@ -316,6 +316,13 @@ export function setupAirtableRoutes(app: Express) {
       if (typeof externalId !== 'string' || !externalId) {
         throw HttpError.badRequest('External ID (Airtable record ID) is required');
       }
+      // Both columns are written on every push, so a missing one would blank
+      // the value in Airtable rather than leave it alone. Say so instead.
+      if (typeof main !== 'string' || typeof philo !== 'string') {
+        throw HttpError.badRequest(
+          'Both main and philo must be sent; this endpoint overwrites the record',
+        );
+      }
 
       const response = await updateCarouselQuoteInAirtable(quoteId, externalId, { main, philo });
 
@@ -350,8 +357,12 @@ export function setupAirtableRoutes(app: Express) {
         message: 'Carousel quotes pushed to Airtable',
         updated: results.updated,
         created: results.created,
+        deleted: results.deleted,
         errors: results.errors,
         details: results.details,
+        // `results` too, so clients that read the nested shape the other sync
+        // endpoints return get the same numbers.
+        results,
       });
     }),
   );
