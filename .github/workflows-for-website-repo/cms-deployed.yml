@@ -77,11 +77,23 @@ jobs:
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
         run: |
+          # A GitHub secret keeps whatever whitespace was pasted into it, and
+          # curl passes a newline inside -H straight through to the wire. That
+          # newline ends the header block early, so the header after it — the
+          # Content-Length curl adds for the POST — lands in the request body
+          # instead, and the site rejects it with
+          #   400 {"message":"Unexpected token 'C', \"Content-Le\"... is not valid JSON"}
+          # which names nothing you could act on. Strip it here and say so.
+          token="$(printf '%s' "$ADMIN_TOKEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+          if [ -n "$ADMIN_TOKEN" ] && [ "$token" != "$ADMIN_TOKEN" ]; then
+            echo "::warning::ADMIN_TOKEN has leading/trailing whitespace or a line break; using the trimmed value. Re-save the secret without it — the untrimmed value would corrupt the request, and the Railway variable it is compared against must match the trimmed string."
+          fi
+
           args=(-sS --max-time 60 -o /tmp/refresh.out -w '%{http_code}'
                 -X POST "$SITE/api/cache/refresh"
                 -H 'content-type: application/json' -d '{}')
-          if [ -n "$ADMIN_TOKEN" ]; then
-            args+=(-H "Authorization: Bearer $ADMIN_TOKEN")
+          if [ -n "$token" ]; then
+            args+=(-H "Authorization: Bearer $token")
           else
             echo "::warning::ADMIN_TOKEN is not set as a GitHub secret on this repo; the refresh will be rejected in production."
           fi
@@ -100,6 +112,14 @@ jobs:
               exit 1 ;;
             401)
               echo "::error::401 from /api/cache/refresh: ADMIN_TOKEN is set on the Railway service but does not match the GitHub secret on this repo. They must be the same string."
+              exit 1 ;;
+            400)
+              # The endpoint takes a fixed '{}', so a body the site cannot parse
+              # means the request was corrupted in transit rather than composed
+              # wrongly — a stray character in a header value is how that
+              # happens here.
+              echo "::error::400 from /api/cache/refresh: $body"
+              echo "::error::A JSON parse error here usually means a header value contained a line break and split the request. Check ADMIN_TOKEN for trailing whitespace in the repo's secrets."
               exit 1 ;;
             *)
               echo "::error::Unexpected $code from /api/cache/refresh: $body"
