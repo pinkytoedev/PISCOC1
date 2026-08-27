@@ -32,7 +32,9 @@ export default function CarouselQuotesPage() {
   });
 
   const createQuoteMutation = useMutation({
-    mutationFn: async (quote: InsertCarouselQuote) => {
+    mutationFn: async (
+      quote: InsertCarouselQuote,
+    ): Promise<CarouselQuote & { syncedToAirtable?: boolean }> => {
       const res = await apiRequest(
         editQuote ? "PUT" : "POST",
         editQuote ? `/api/carousel-quotes/${editQuote.id}` : "/api/carousel-quotes",
@@ -40,13 +42,17 @@ export default function CarouselQuotesPage() {
       );
       return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
+      // Saving pushes to Airtable, and the live site reads Airtable — so the
+      // save is only really done once that lands.
+      const synced = data?.syncedToAirtable !== false;
       toast({
         title: editQuote ? "Quote updated" : "Quote created",
-        description: editQuote
-          ? "The quote has been updated successfully."
-          : "The quote has been created successfully.",
+        description: synced
+          ? "Saved and pushed to Airtable — the live site will pick it up."
+          : "Saved to the CMS, but Airtable could not be reached, so the live site still shows the old version. Use Push to Airtable once the connection is back.",
+        variant: synced ? undefined : "destructive",
       });
       handleCloseModal();
     },
@@ -60,14 +66,22 @@ export default function CarouselQuotesPage() {
   });
 
   const deleteQuoteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/carousel-quotes/${id}`);
+    mutationFn: async (id: number): Promise<{ clearedInAirtable?: boolean }> => {
+      const res = await apiRequest("DELETE", `/api/carousel-quotes/${id}`);
+      // Older builds answered 204; treat an empty body as "no detail".
+      return res.status === 204 ? {} : await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/carousel-quotes'] });
+      // The public site reads Airtable, so a quote only really disappears once
+      // its Airtable record is gone.
+      const clearedInAirtable = data?.clearedInAirtable !== false;
       toast({
         title: "Quote deleted",
-        description: "The quote has been deleted successfully.",
+        description: clearedInAirtable
+          ? "The quote has been removed from the CMS and from Airtable."
+          : "Removed from the CMS, but Airtable could not be reached — the live site may still show it. Use Push to Airtable once the connection is back.",
+        variant: clearedInAirtable ? undefined : "destructive",
       });
     },
     onError: (error) => {
@@ -83,6 +97,7 @@ export default function CarouselQuotesPage() {
     resource: "carousel-quotes",
     queryKey: "/api/carousel-quotes",
     label: "quotes",
+    mirrors: true,
   });
 
   // Update a single quote in Airtable
@@ -91,12 +106,13 @@ export default function CarouselQuotesPage() {
       if (!quote.id || !quote.externalId) {
         throw new Error("Cannot update Airtable: Missing quote ID or external ID");
       }
-      // Create a payload with only the fields needed for Airtable
+      // Create a payload with only the fields needed for Airtable. Both
+      // columns must be present — the endpoint overwrites, it does not merge.
       const airtablePayload = {
         id: quote.id,
         externalId: quote.externalId,
-        main: quote.main || quote.carousel,
-        philo: quote.philo || quote.quote
+        main: quote.main ?? "",
+        philo: quote.philo ?? ""
       };
       const res = await apiRequest(
         "POST",
@@ -156,7 +172,7 @@ export default function CarouselQuotesPage() {
   };
 
   const handleDeleteClick = (quote: CarouselQuote) => {
-    if (confirm("Are you sure you want to delete this quote?")) {
+    if (confirm("Delete this quote from the CMS and from Airtable? The live site will stop showing it.")) {
       deleteQuoteMutation.mutate(quote.id);
     }
   };
@@ -172,11 +188,13 @@ export default function CarouselQuotesPage() {
       return;
     }
 
+    // Both columns are always sent: the endpoint overwrites the record, so a
+    // missing one would blank it. `""` is a legitimate value; `null` is not.
     updateAirtableMutation.mutate({
       id: quote.id,
       externalId: quote.externalId,
-      main: quote.main || quote.carousel || null,
-      philo: quote.philo || quote.quote || null
+      main: quote.main || quote.carousel || "",
+      philo: quote.philo || quote.quote || ""
     });
   };
 
@@ -219,7 +237,13 @@ export default function CarouselQuotesPage() {
 
   // Function to push all quotes to Airtable
   const handlePushToAirtable = () => {
-    if (confirm("This will push all quotes to Airtable. Continue?")) {
+    if (
+      confirm(
+        "This makes Airtable match the CMS exactly: every quote here is written over its Airtable record, new ones are added, and any Airtable quote that is not in this list is deleted.\n\n" +
+          "That includes quotes someone added in Airtable directly. Pull from Airtable first if you are not sure this list is up to date.\n\n" +
+          "Continue?",
+      )
+    ) {
       pushMutation.mutate();
     }
   };

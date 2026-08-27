@@ -17,8 +17,8 @@ two kinds of account.
 the team roster and carousel quotes, run an Airtable sync in either direction,
 and issue contributor upload links.
 
-**Admins** can additionally create and edit user accounts, enter the Airtable and
-ImgBB credentials, and switch the public team-profile link on and off. Those are
+**Admins** can additionally create and edit user accounts, enter the Airtable
+credentials, and switch the public team-profile link on and off. Those are
 the only extra powers — the difference is about *configuration and accounts*, not
 about content.
 
@@ -37,7 +37,10 @@ flag, and you cannot delete your own account.
 | **Users & Permissions** (`/users`) | admin | Create accounts, reset passwords, grant or remove admin. |
 | **API Keys** (`/keys`) | admin | A read-only checklist of which credentials are configured, and how to obtain each one. It does not edit anything. |
 | **Airtable** (`/integrations/airtable`) | admin | Credentials, table names, connection test, and the three sync buttons. |
-| **ImgBB** (`/integrations/imgbb`) | admin | The image-hosting API key. |
+
+There is no ImgBB screen. Its API key is the `IMGBB_API_KEY` environment
+variable on the server and cannot be set from in here; the **API Keys** page
+shows whether it is present.
 
 ## The article lifecycle
 

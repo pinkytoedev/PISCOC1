@@ -18,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   SiAirtable,
-  SiCloudinary, // Using Cloudinary's icon for ImgBB since there's no official ImgBB icon
 } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -116,12 +115,9 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps = {}) {
           icon: <SiAirtable className="w-5 h-5" />,
           adminOnly: true,
         },
-        {
-          name: "ImgBB",
-          path: "/integrations/imgbb",
-          icon: <SiCloudinary className="w-5 h-5" />,
-          adminOnly: true,
-        },
+        // No ImgBB entry: its API key is set through IMGBB_API_KEY on the
+        // server, so there is nothing to configure from in here. The Keys page
+        // shows whether it is set.
       ],
     },
     {

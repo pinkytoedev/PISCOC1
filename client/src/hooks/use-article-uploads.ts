@@ -140,15 +140,15 @@ export function useArticleAssetUpload(
   });
 }
 
-interface ImgbbSetting {
-  key: string;
-  value: string;
-  enabled?: boolean;
-}
-
 /**
  * Whether images should be routed through ImgBB. Only fetched while `active` so
- * a closed dialog does not poll settings.
+ * a closed dialog does not poll.
+ *
+ * Asks whether the key is configured rather than reading a settings record: the
+ * key lives in the server's `IMGBB_API_KEY` and is never sent to the browser.
+ * `/api/imgbb/status` is used rather than `/api/integration-status` because the
+ * latter runs live probes against third parties — a slow one would leave this
+ * `false` long enough for an upload to take the direct-to-Airtable path.
  */
 export function useImgbbEnabled(active: boolean): boolean {
   const [enabled, setEnabled] = useState(false);
@@ -158,12 +158,11 @@ export function useImgbbEnabled(active: boolean): boolean {
 
     let cancelled = false;
 
-    fetch("/api/imgbb/settings")
+    fetch("/api/imgbb/status", { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((settings: ImgbbSetting[] | null) => {
+      .then((status: { configured?: boolean } | null) => {
         if (cancelled) return;
-        const apiKey = settings?.find((setting) => setting.key === "api_key");
-        setEnabled(Boolean(apiKey?.value) && apiKey?.enabled !== false);
+        setEnabled(Boolean(status?.configured));
       })
       .catch(() => {
         if (!cancelled) setEnabled(false);

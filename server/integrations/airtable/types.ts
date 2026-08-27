@@ -123,10 +123,12 @@ export type AirtableCarouselQuoteFields = {
 export interface SyncResults {
   created: number;
   updated: number;
+  /** Records removed from the destination; only mirroring pushes set this. */
+  deleted: number;
   errors: number;
   details: string[];
 }
 
 export function emptyResults(): SyncResults {
-  return { created: 0, updated: 0, errors: 0, details: [] };
+  return { created: 0, updated: 0, deleted: 0, errors: 0, details: [] };
 }

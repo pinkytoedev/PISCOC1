@@ -1,9 +1,9 @@
 /**
  * ImgBB integration endpoints.
  *
- * Two things happen here: managing the API key, and the "host the image on
- * ImgBB, then point Airtable at it" flow that the dashboard uses for an
- * article's cover and Instagram images.
+ * One thing happens here: the "host the image on ImgBB, then point Airtable at
+ * it" flow that the dashboard uses for an article's cover and Instagram images.
+ * The API key is not managed here — it comes from `IMGBB_API_KEY`.
  *
  * The Airtable side deliberately writes a *link* field (`MainImageLink` /
  * `InstaPhotoLink`) rather than an attachment field. Attachment fields make
@@ -22,10 +22,8 @@ import type { InsertArticle } from '@shared/schema';
 import { storage } from '../storage';
 import { createLogger } from '../lib/logger';
 import { HttpError, asyncHandler, parseId } from '../lib/httpError';
-import { redactIntegrationSetting } from '../lib/redact';
-import { isAdmin, isAuthenticated } from '../middleware/auth';
+import { isAuthenticated } from '../middleware/auth';
 import { imageUpload, assertFileKind, cleanupUploadedFile as cleanupTempUpload } from '../middleware/upload';
-import { putSetting } from '../services/settings';
 import { recordActivity } from '../services/activity';
 import {
   AirtableWriteError,
@@ -56,12 +54,13 @@ function parseImageField(value: string): ImageField {
 /**
  * Fails fast when ImgBB is unusable.
  *
- * A missing or disabled key is an operator problem, not a server fault, so it
- * stays a 400 — the same status these routes returned before.
+ * A missing key is an operator problem, not a server fault, so it stays a 400 —
+ * the same status these routes returned before. The message names the variable
+ * because it is no longer something the caller can fix from inside the CMS.
  */
-async function requireImgBB(): Promise<void> {
-  if (!(await isImgBBConfigured())) {
-    throw HttpError.badRequest('ImgBB integration is not enabled or not configured properly');
+function requireImgBB(): void {
+  if (!isImgBBConfigured()) {
+    throw HttpError.badRequest('ImgBB is not configured: IMGBB_API_KEY is not set on the server');
   }
 }
 
@@ -125,58 +124,27 @@ async function requireAirtableBackedArticle(articleId: number): Promise<{ extern
 }
 
 export function setupImgBBRoutes(app: Express) {
-  // -------------------------------------------------------------------------
-  // Settings
-  // -------------------------------------------------------------------------
+  // There are no settings routes here. The API key comes from `IMGBB_API_KEY`
+  // and nowhere else, so there is nothing for the CMS to read or write — the
+  // pair of endpoints that used to store it in `integration_settings` are gone
+  // along with the page that called them.
 
+  /**
+   * Whether uploads should be routed through ImgBB.
+   *
+   * Deliberately separate from `/api/integration-status`: that runs live probes
+   * against Airtable and ImgBB with a five-second timeout each, and the article
+   * dialog asks this question every time it opens. A slow third party there
+   * would leave the dialog believing ImgBB is off and silently push the image
+   * into Airtable as an attachment instead. This reads one environment variable.
+   */
   app.get(
-    '/api/imgbb/settings',
+    '/api/imgbb/status',
     isAuthenticated,
-    asyncHandler(async (_req: Request, res: Response) => {
-      const settings = await storage.getIntegrationSettings('imgbb');
-      // The API key never leaves the server in full; the UI only needs to know
-      // that one is configured.
-      res.json(settings.map(redactIntegrationSetting));
-    }),
+    (_req: Request, res: Response) => {
+      res.json({ configured: isImgBBConfigured() });
+    },
   );
-
-  app.post(
-    '/api/imgbb/settings/:key',
-    isAdmin,
-    asyncHandler(async (req: Request, res: Response) => {
-      const { key } = req.params;
-      const { value, enabled } = req.body as { value?: unknown; enabled?: unknown };
-
-      if (typeof value !== 'string') {
-        throw HttpError.badRequest('Value is required');
-      }
-
-      const existing = await storage.getIntegrationSettingByKey('imgbb', key);
-      // An omitted `enabled` must not silently re-enable a disabled key.
-      const nextEnabled = typeof enabled === 'boolean' ? enabled : existing?.enabled ?? true;
-
-      // Goes through the settings service rather than `storage` so the cached
-      // copy is invalidated — the old handler wrote straight to the database and
-      // left uploads using the previous key for up to the cache TTL.
-      const saved = await putSetting('imgbb', key, value, nextEnabled);
-
-      await recordActivity({
-        action: existing ? 'update' : 'create',
-        resource: 'integration_setting',
-        resourceId: saved.id,
-        userId: req.user?.id,
-        details: { service: 'imgbb', key },
-      });
-
-      // Redacted on the way out too: echoing the key back would undo the
-      // masking the GET endpoint applies.
-      res.json(redactIntegrationSetting(saved));
-    }),
-  );
-
-  // -------------------------------------------------------------------------
-  // Upload flows
-  // -------------------------------------------------------------------------
 
   app.post(
     '/api/imgbb/upload-to-airtable/:articleId/:fieldName',
@@ -191,7 +159,7 @@ export function setupImgBBRoutes(app: Express) {
 
       if (!req.file) throw HttpError.badRequest('No file uploaded');
 
-      await requireImgBB();
+      requireImgBB();
 
       // The declared MIME type is client-controlled; check the actual bytes.
       await assertFileKind(req.file.path, 'image');
@@ -228,7 +196,7 @@ export function setupImgBBRoutes(app: Express) {
         throw HttpError.badRequest('Image URL is required');
       }
 
-      await requireImgBB();
+      requireImgBB();
 
       const { externalId } = await requireAirtableBackedArticle(articleId);
 

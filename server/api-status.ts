@@ -10,7 +10,8 @@
 import axios from 'axios';
 import { pgPool } from './db';
 import { createLogger } from './lib/logger';
-import { getImgBBApiKey, getSettingValue } from './services/settings';
+import { env } from './lib/env';
+import { getSettingValue } from './services/settings';
 
 const log = createLogger('api-status');
 
@@ -99,8 +100,8 @@ function checkAirtable(): Promise<ApiStatus> {
  */
 function checkImgBB(): Promise<ApiStatus> {
   return probe('ImgBB', async () => {
-    const apiKey = await getImgBBApiKey();
-    if (!apiKey) return unconfigured('ImgBB', 'API key not configured');
+    const apiKey = env.imgbbApiKey;
+    if (!apiKey) return unconfigured('ImgBB', 'IMGBB_API_KEY is not set');
 
     try {
       await axios.get('https://api.imgbb.com/1/upload', {

@@ -175,7 +175,16 @@ export function systemRouter(): Router {
       res.json(
         statuses.map((status) => ({
           name: status.name.toLowerCase(),
-          configured: status.status === 'online' || status.status === 'unknown',
+          // `unknown` is the probe's way of saying "no credentials at all", so
+          // it is the one status that means *not* configured. It used to be
+          // counted as configured, which showed a green tick on the Keys page
+          // for an integration that had never been set up. `offline` still
+          // counts as configured: the credentials exist, the service just did
+          // not answer — which is why `reachable` is reported separately. A
+          // revoked token is configured but not reachable, and collapsing those
+          // two into one flag makes it indistinguishable from a healthy one.
+          configured: status.status !== 'unknown',
+          reachable: status.status === 'online',
           lastChecked: status.lastChecked.toISOString(),
           error: status.message,
         })),

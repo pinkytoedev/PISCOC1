@@ -1,12 +1,14 @@
 /**
  * Integration settings access.
  *
- * Credentials for Airtable, ImgBB and GitHub live in the
- * `integration_settings` table. Before this module, 93 call sites read them
- * directly — typically three sequential `getIntegrationSettingByKey` awaits to
- * assemble one Airtable config, on every request. That is three round trips per
- * call for values that change perhaps once a month, and it left the
- * "is it configured?" check written slightly differently in each place.
+ * Credentials for Airtable and GitHub live in the `integration_settings`
+ * table. ImgBB is deliberately not here — its key is environment-only.
+ *
+ * Before this module, 93 call sites read them directly — typically three
+ * sequential `getIntegrationSettingByKey` awaits to assemble one Airtable
+ * config, on every request. That is three round trips per call for values that
+ * change perhaps once a month, and it left the "is it configured?" check
+ * written slightly differently in each place.
  *
  * Reads go through a short-lived cache and a typed accessor per integration.
  * Writes invalidate, so a settings change takes effect immediately.
@@ -137,9 +139,8 @@ export async function getAirtableSettings(): Promise<AirtableSettings | null> {
   };
 }
 
-export async function getImgBBApiKey(): Promise<string | undefined> {
-  return getSettingValue('imgbb', 'api_key');
-}
+// ImgBB has no accessor here on purpose: its key comes from `IMGBB_API_KEY`
+// only. See `services/images/host.ts`.
 
 export async function getGitHubToken(): Promise<string | undefined> {
   return getSettingValue('github', 'access_token');

@@ -8,6 +8,10 @@ import { storage } from '../storage';
 import { asyncHandler, HttpError, parseId } from '../lib/httpError';
 import { isAuthenticated } from '../middleware/auth';
 import { recordActivity } from '../services/activity';
+import {
+  deleteCarouselQuoteFromAirtable,
+  syncCarouselQuoteToAirtable,
+} from '../integrations/airtable/push';
 
 export function carouselQuotesRouter(): Router {
   const router = Router();
@@ -37,22 +41,32 @@ export function carouselQuotesRouter(): Router {
     }),
   );
 
+  /**
+   * Creating and saving both push to Airtable.
+   *
+   * The public site reads Airtable, so a quote that only reaches Postgres looks
+   * saved in the CMS while the live page shows nothing (or the old text). The
+   * push is best-effort — the row is stored either way — and the response
+   * carries `syncedToAirtable` so the editor is told when the live site has not
+   * caught up rather than being left to assume it has.
+   */
   router.post(
     '/',
     asyncHandler(async (req, res) => {
-      const quote = await storage.createCarouselQuote(
+      const created = await storage.createCarouselQuote(
         insertCarouselQuoteSchema.parse(req.body),
       );
+      const { quote, syncedToAirtable } = await syncCarouselQuoteToAirtable(created);
 
       await recordActivity({
         action: 'create',
         resource: 'carousel_quote',
         resourceId: quote.id,
         userId: req.user?.id,
-        details: { carousel: quote.carousel },
+        details: { carousel: quote.carousel, syncedToAirtable },
       });
 
-      res.status(201).json(quote);
+      res.status(201).json({ ...quote, syncedToAirtable });
     }),
   );
 
@@ -62,25 +76,46 @@ export function carouselQuotesRouter(): Router {
       const id = parseId(req.params.id);
       const patch = insertCarouselQuoteSchema.partial().parse(req.body);
 
-      const quote = await storage.updateCarouselQuote(id, patch);
-      if (!quote) throw HttpError.notFound('Carousel quote not found');
+      const updated = await storage.updateCarouselQuote(id, patch);
+      if (!updated) throw HttpError.notFound('Carousel quote not found');
+
+      const { quote, syncedToAirtable } = await syncCarouselQuoteToAirtable(updated);
 
       await recordActivity({
         action: 'update',
         resource: 'carousel_quote',
         resourceId: id,
         userId: req.user?.id,
-        details: { fields: Object.keys(patch) },
+        details: { fields: Object.keys(patch), syncedToAirtable },
       });
 
-      res.json(quote);
+      res.json({ ...quote, syncedToAirtable });
     }),
   );
 
+  /**
+   * Deletes the quote from Airtable first, then locally.
+   *
+   * Airtable is the copy the public site reads, so a local-only delete left the
+   * quote on the live page and the next pull re-created the row here.
+   *
+   * Airtable going first is deliberate: it is the only ordering where a failure
+   * is still visible. The local row is then deleted regardless — an editor who
+   * pressed delete should not be left with the quote still in the CMS — and the
+   * response reports whether Airtable was actually cleared, so they know if the
+   * live site needs a push to catch up.
+   */
   router.delete(
     '/:id',
     asyncHandler(async (req, res) => {
       const id = parseId(req.params.id);
+
+      const quote = await storage.getCarouselQuote(id);
+      if (!quote) throw HttpError.notFound('Carousel quote not found');
+
+      const clearedInAirtable = quote.externalId
+        ? await deleteCarouselQuoteFromAirtable(quote.externalId)
+        : true;
 
       if (!(await storage.deleteCarouselQuote(id))) {
         throw HttpError.notFound('Carousel quote not found');
@@ -91,9 +126,12 @@ export function carouselQuotesRouter(): Router {
         resource: 'carousel_quote',
         resourceId: id,
         userId: req.user?.id,
+        details: { externalId: quote.externalId ?? undefined, clearedInAirtable },
       });
 
-      res.status(204).send();
+      // The quote is gone from the CMS either way; the flag tells the editor
+      // whether the live site will still be showing it.
+      res.json({ id, clearedInAirtable });
     }),
   );
 

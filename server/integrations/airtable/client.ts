@@ -81,6 +81,22 @@ export async function requireConfig(target: AirtableTable = 'articles'): Promise
   return { apiKey: settings.apiKey, baseId: settings.baseId, articlesTable: table.name };
 }
 
+/**
+ * Same resolution as `requireConfig`, but answers null instead of throwing.
+ *
+ * Used by paths where Airtable is a mirror rather than the point of the
+ * request — deleting a quote, for instance, must still remove it locally when
+ * the integration is switched off or half-configured.
+ */
+export async function optionalConfig(target: AirtableTable): Promise<AirtableConfig | null> {
+  try {
+    return await requireConfig(target);
+  } catch (error) {
+    if (error instanceof HttpError) return null;
+    throw error;
+  }
+}
+
 async function resolveTable(target: AirtableTable): Promise<{ key: string; name: string } | null> {
   for (const key of TABLE_SETTING_KEYS[target]) {
     const name = await getSettingValue('airtable', key);
@@ -201,6 +217,30 @@ export async function writeRecords<TFields>(
     throw new Error(`Airtable accepts at most ${BATCH_LIMIT} records per write`);
   }
   return send<AirtableListResponse<TFields>>(config, tableUrl(config), method, { records });
+}
+
+/**
+ * Deletes up to `BATCH_LIMIT` records in one call.
+ *
+ * Airtable takes the ids as repeated `records[]` query parameters rather than a
+ * body, which is why this cannot reuse `writeRecords`.
+ */
+export async function deleteRecords(
+  config: AirtableConfig,
+  recordIds: string[],
+): Promise<{ records: Array<{ id: string; deleted: boolean }> }> {
+  if (recordIds.length > BATCH_LIMIT) {
+    throw new Error(`Airtable accepts at most ${BATCH_LIMIT} records per delete`);
+  }
+
+  const search = new URLSearchParams();
+  for (const id of recordIds) search.append('records[]', id);
+
+  return send<{ records: Array<{ id: string; deleted: boolean }> }>(
+    config,
+    tableUrl(config, undefined, search),
+    'DELETE',
+  );
 }
 
 /** Splits a list into Airtable-sized batches. */
