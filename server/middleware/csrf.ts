@@ -38,8 +38,21 @@ const EXEMPT_PATHS = new Set([
 ]);
 
 /**
- * Subtrees where *every* route carries its own authorization independent of the
- * session: an upload token in the URL, or a shared webhook secret.
+ * Subtrees where *no* route derives its authority from the session cookie.
+ *
+ * `/api/public-upload/` holds two things: the contributor-link routes, which
+ * are authorized by the token in the URL, and the token-free submission routes,
+ * which are authorized by the `article_upload.public_link_active` switch. A
+ * CSRF token protects against a request riding a session the browser attaches
+ * automatically — neither of these consults the session at all, so there is no
+ * ambient authority for an attacker's page to borrow, and a forged request
+ * achieves nothing they could not do by calling the endpoint directly.
+ *
+ * `/api/webhooks/` is the same argument with a shared secret in place of a
+ * token.
+ *
+ * The admin switch itself (`POST /api/public/article-upload-status`) is
+ * session-backed and therefore *not* exempt — see the note on EXEMPT_PATHS.
  */
 const EXEMPT_PREFIXES = ['/api/public-upload/', '/api/webhooks/'];
 

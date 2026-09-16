@@ -197,7 +197,7 @@ server/
   services/        domain logic: articles, reupload, uploadTokens, siteRefresh,
                    settings, activity, images/
   integrations/    airtable/, imgbb, contributorUpload, directUpload,
-                   teamPublicUpload, airtableTest
+                   publicArticleUpload, teamPublicUpload, airtableTest
   middleware/      auth, csrf, rateLimit, upload, webhookAuth, staticMiddleware
   lib/             env, logger, httpError, sanitizeHtml, redact, airtableClient
   utils/           zipProcessor, airtableHelpers, apiCache, fileUpload, ...
@@ -213,7 +213,7 @@ services decide; lib has no domain knowledge.
 
 ## Security
 
-The unauthenticated surface is **7 endpoints**, and `npm run verify:guards`
+The unauthenticated surface is **12 endpoints**, and `npm run verify:guards`
 fails if it grows without being documented in the allowlist.
 
 - Session cookies are `HttpOnly`, `Secure` and `SameSite=None` in production,
@@ -222,6 +222,11 @@ fails if it grows without being documented in the allowlist.
   paths are exempt because their callers have no cookie — see `docs/api.md`.
 - Contributor links are 256-bit secrets stored only as SHA-256 hashes, scoped to
   one article and one set of asset types, and expiring.
+- The token-free submission page at `/public-upload` is off by default and
+  behind an admin switch (`article_upload.public_link_active`). While it is on,
+  anyone with the link can submit files for any article the list offers — so it
+  is meant to be opened for a submission window and closed again. Published
+  articles are never on that list and are refused if named directly.
 - Uploads are verified from their leading bytes, not their filename. SVG is
   refused. HTML is sanitized before storage. ZIP expansion is bounded before
   anything is written to disk.

@@ -4,6 +4,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { Header } from "@/components/layout/header";
 import { Sidebar } from "@/components/layout/sidebar";
 import { ArticleTable } from "@/components/dashboard/article-table";
+import { PublicUploadSettings } from "@/components/articles/public-upload-settings";
 import { CreateArticleModal } from "@/components/modals/create-article-modal";
 import { ViewArticleModal } from "@/components/modals/view-article-modal";
 import { Button } from "@/components/ui/button";
@@ -226,8 +227,11 @@ export default function ArticlesPage() {
               </div>
             </div>
 
+            {/* Public submission window */}
+            <PublicUploadSettings />
+
             {/* Articles Table */}
-            <ArticleTable 
+            <ArticleTable
               filter={statusFilter || undefined}
               sort={sortBy}
               onEdit={handleEditClick}

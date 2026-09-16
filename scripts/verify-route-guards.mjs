@@ -25,6 +25,14 @@ const INTENTIONALLY_PUBLIC = new Map([
   ['GET /api/public/team-roles', 'gated at runtime by the team_upload_enabled setting'],
   ['GET /api/public/team-members-list', 'gated at runtime by the team_upload_enabled setting'],
   ['POST /api/public/team-member-update', 'gated at runtime by the team_upload_enabled setting'],
+  // Token-free article submissions. Every one of these except the status read
+  // is refused with 403 unless article_upload.public_link_active is on, and the
+  // upload routes additionally refuse any article the list does not offer.
+  ['GET /api/public/article-upload-status', 'tells the public page whether to render'],
+  ['GET /api/articles/uploadable', 'gated at runtime by the article_upload setting'],
+  ['POST /api/public-upload/image', 'gated at runtime by the article_upload setting'],
+  ['POST /api/public-upload/instagram-image', 'gated at runtime by the article_upload setting'],
+  ['POST /api/public-upload/html-zip', 'gated at runtime by the article_upload setting'],
 ]);
 
 const GUARDS = ['isAuthenticated', 'isAdmin', 'verifyWebhookSecret'];

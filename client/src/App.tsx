@@ -16,6 +16,7 @@ import CarouselQuotesPage from "@/pages/carousel-quotes-page";
 import UserManagementPage from "@/pages/user-management-page";
 import AirtablePage from "@/pages/integrations/airtable-page";
 import ContributorUploadPage from "@/pages/contributor-upload";
+import PublicUploadPage from "@/pages/public-upload";
 import PublicTeamUploadPage from "@/pages/public-team-upload";
 import KeysPage from "@/pages/keys-page";
 import DocsPage from "@/pages/docs-page";
@@ -39,6 +40,9 @@ function Router() {
 
       {/* Contributor routes - authorized by the link, not by a session */}
       <Route path="/upload/:token" component={ContributorUploadPage} />
+
+      {/* Public routes - gated by an admin switch, not by a session */}
+      <Route path="/public-upload" component={PublicUploadPage} />
       <Route path="/team-upload" component={PublicTeamUploadPage} />
 
       <Route component={NotFound} />
