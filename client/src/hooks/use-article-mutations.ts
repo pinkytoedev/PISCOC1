@@ -173,6 +173,13 @@ export function useReuploadSession() {
       });
     },
     onError: (error) => {
+      // Refetch on failure too. A re-upload call can fail after it has already
+      // changed the article — the session state and the row the table is
+      // rendering then disagree, and with staleTime: Infinity and no refetch on
+      // focus, nothing ever corrects it. That is how the dashboard came to show
+      // "finish"/"cancel" buttons for a session the server had already closed,
+      // which answered 409 on every click.
+      invalidateArticles();
       toast({
         title: "Failed to start re-upload",
         description: error.message || "Could not open a re-upload session.",
@@ -191,6 +198,7 @@ export function useReuploadSession() {
       toast({ title: "Published", description: "The article is live again." });
     },
     onError: (error) => {
+      invalidateArticles();
       toast({
         title: "Could not publish",
         description: error.message || "Failed to complete the re-upload.",
@@ -209,6 +217,7 @@ export function useReuploadSession() {
       toast({ title: "Re-upload cancelled", description: "The article was restored." });
     },
     onError: (error) => {
+      invalidateArticles();
       toast({
         title: "Could not cancel",
         description: error.message || "Failed to cancel the re-upload.",

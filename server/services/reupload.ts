@@ -66,17 +66,16 @@ export async function startReuploadSession(
     );
   }
 
-  const updated = await storage.updateArticle(articleId, {
-    status: 'draft',
-    finished: false,
-    isReuploading: true,
-    reuploadStartedAt: new Date(),
-    reuploadStartedBy: userId ?? null,
-    reuploadPreviousStatus: article.status,
-  });
-
-  if (!updated) throw HttpError.internal('Failed to open re-upload session');
-
+  // The link is issued *before* the article is touched.
+  //
+  // Both statements below write to `upload_tokens`. When that table was out of
+  // sync with the schema in production they threw after the article had already
+  // been flipped to draft, which left a session open in the database that no
+  // link could close and that the dashboard could not even see — the mutation's
+  // error path does not refetch, so the table went on showing the old row.
+  // Doing the fallible work first means a failure here leaves the article
+  // exactly as it was.
+  //
   // Any link from an earlier session must stop working now that a new one
   // exists, so an old link cannot write into the current session.
   await revokeArticleTokens(articleId);
@@ -87,6 +86,29 @@ export async function startReuploadSession(
     createdById: userId,
     name: `Re-upload: ${article.title}`,
   });
+
+  let updated: Article | undefined;
+  try {
+    updated = await storage.updateArticle(articleId, {
+      status: 'draft',
+      finished: false,
+      isReuploading: true,
+      reuploadStartedAt: new Date(),
+      reuploadStartedBy: userId ?? null,
+      reuploadPreviousStatus: article.status,
+    });
+  } catch (error) {
+    // The two writes are not in one transaction, so the link has to be undone
+    // by hand — otherwise a failure here leaves a live link pointing at an
+    // article that is still published.
+    await revokeArticleTokens(articleId).catch(() => {});
+    throw error;
+  }
+
+  if (!updated) {
+    await revokeArticleTokens(articleId).catch(() => {});
+    throw HttpError.internal('Failed to open re-upload session');
+  }
 
   // Unpublishing has to reach Airtable too, otherwise the next sync sees
   // Finished=true and flips the article straight back to published.
@@ -137,6 +159,15 @@ export async function completeReuploadSession(
     throw HttpError.badRequest('Cannot publish an article with no content');
   }
 
+  // The link is spent the moment the session closes — and it is revoked
+  // *before* the article is republished.
+  //
+  // This statement is the one that failed in production. Running it after the
+  // flag was cleared meant a failure closed the session anyway: the caller saw
+  // a 500, retried, and got "No re-upload session is open for this article"
+  // forever after. Revoking first makes the failure retryable instead.
+  await revokeArticleTokens(articleId);
+
   const updated = await storage.updateArticle(articleId, {
     status: 'published',
     finished: true,
@@ -150,9 +181,6 @@ export async function completeReuploadSession(
   });
 
   if (!updated) throw HttpError.internal('Failed to complete re-upload session');
-
-  // The link is spent the moment the session closes.
-  await revokeArticleTokens(articleId);
 
   if (isAirtableBacked(updated)) {
     const config = await getAirtableConfig();
@@ -195,6 +223,12 @@ export async function cancelReuploadSession(
   }
 
   const previousStatus = article.reuploadPreviousStatus ?? 'published';
+
+  // Revoked before the article is restored, for the same reason as completion:
+  // a failure here must leave the session open and the call retryable, not
+  // close it and then report an error.
+  await revokeArticleTokens(articleId);
+
   const restored = await storage.updateArticle(articleId, {
     status: previousStatus,
     finished: previousStatus === 'published',
@@ -205,8 +239,6 @@ export async function cancelReuploadSession(
   });
 
   if (!restored) throw HttpError.internal('Failed to cancel re-upload session');
-
-  await revokeArticleTokens(articleId);
 
   if (isAirtableBacked(restored) && previousStatus === 'published') {
     await tryUpdateRecord(
