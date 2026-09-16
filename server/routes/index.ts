@@ -22,6 +22,7 @@ import { setupAirtableRoutes } from '../integrations/airtable';
 import { setupImgBBRoutes } from '../integrations/imgbb';
 import { setupDirectUploadRoutes } from '../integrations/directUpload';
 import { setupContributorUploadRoutes } from '../integrations/contributorUpload';
+import { setupPublicArticleUploadRoutes } from '../integrations/publicArticleUpload';
 import { setupTeamPublicUploadRoutes } from '../integrations/teamPublicUpload';
 import { registerAirtableTestRoutes } from '../integrations/airtableTest';
 
@@ -44,8 +45,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Upload surfaces. Contributor links authenticate themselves via the token in
   // the URL; the others carry their own guards.
+  //
+  // setupPublicArticleUploadRoutes must come before the articles router below:
+  // it registers the literal `/api/articles/uploadable`, and the router's
+  // `/:id` handler would otherwise match "uploadable" and reject it as a
+  // malformed id.
   setupDirectUploadRoutes(app);
   setupContributorUploadRoutes(app);
+  setupPublicArticleUploadRoutes(app);
   setupTeamPublicUploadRoutes(app);
 
   // Resource APIs.

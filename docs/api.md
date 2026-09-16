@@ -56,13 +56,17 @@ Three things are exempt, because their callers have no cookie to send:
 
 - the exact path `POST /api/public/team-member-update` — public, gated instead by
   the team-upload setting and a rate limit;
-- everything under `/api/public-upload/` — authorized by the token in the URL;
+- everything under `/api/public-upload/` — authorized either by the token in the
+  URL or, for the token-free routes, by the `article_upload` setting;
 - everything under `/api/webhooks/` — authorized by the shared secret.
+
+None of these consults the session, so there is no ambient authority for a
+forged cross-site request to borrow.
 
 The match is **exact for the first and by prefix for the other two**. That
 distinction is load-bearing: `/api/public/` is not prefix-exempt, because it also
-hosts the admin-only `POST /api/public/team-upload-status`, which must stay
-protected.
+hosts the admin-only `POST /api/public/team-upload-status` and
+`POST /api/public/article-upload-status`, which must stay protected.
 
 ## Errors
 
@@ -143,6 +147,39 @@ POST   /api/public-upload/:token/instagram-image(token)  multipart, field "file"
 POST   /api/public-upload/:token/html-zip       (token)  multipart, field "file"
 POST   /api/public-upload/:token/complete       (token)  finish a re-upload session
 ```
+
+## Public article uploads
+
+The token-free alternative: one link for everyone, no per-article secret. A
+contributor picks their article from a list and uploads to it.
+
+**The whole surface is behind an admin switch**
+(`article_upload.public_link_active`, off by default). While it is off every
+route below except the status read answers 403. While it is on, anyone with the
+link can replace the images or content of any article on the list, so it is
+meant to be opened for a submission window and closed again.
+
+```
+GET  /api/public/article-upload-status   (public)  { enabled } — readable while off
+POST /api/public/article-upload-status   (admin)   { enabled } — the switch
+
+GET  /api/articles/uploadable            (gated)   [{ id, title, status }]
+POST /api/public-upload/image            (gated)   multipart, fields "file" + "articleId"
+POST /api/public-upload/instagram-image  (gated)   multipart, fields "file" + "articleId"
+POST /api/public-upload/html-zip         (gated)   multipart, fields "file" + "articleId"
+```
+
+These are one path segment after `/api/public-upload/`, where the contributor
+link routes are two (`/:token/image`), so the two sets cannot collide.
+
+`GET /api/articles/uploadable` lists articles whose status is not `published`,
+plus any with an open re-upload session — the same predicate the upload routes
+enforce, so an `articleId` that is not on the list is refused with 403 rather
+than quietly accepted. Only `id`, `title` and `status` are exposed.
+
+`/api/articles/uploadable` is registered before the articles router, otherwise
+that router's `/:id` handler matches `uploadable` and rejects it as a malformed
+id.
 
 `GET /api/public-upload/:token` answers with what the contributor needs to render
 their page:
@@ -383,6 +420,19 @@ Airtable.
 | POST | `/api/upload-links` | auth |
 | GET | `/api/upload-links/:articleId` | auth |
 | DELETE | `/api/upload-links/:id` | auth |
+
+#### Public article uploads
+
+`gated` = refused with 403 unless `article_upload.public_link_active` is on.
+
+| | Endpoint | Access |
+|---|---|---|
+| GET | `/api/public/article-upload-status` | public |
+| POST | `/api/public/article-upload-status` | admin |
+| GET | `/api/articles/uploadable` | gated |
+| POST | `/api/public-upload/html-zip` | gated |
+| POST | `/api/public-upload/image` | gated |
+| POST | `/api/public-upload/instagram-image` | gated |
 
 #### Editor uploads
 

@@ -1,3 +1,22 @@
+/**
+ * Row actions for the desktop article table.
+ *
+ * These used to be up to eight icon buttons laid out in a row: edit, view, two
+ * image uploads, an Airtable push, three re-upload controls and delete. At
+ * roughly 424px that made Actions the widest column in the table and pushed the
+ * total past 1500px, so on any normal laptop the table scrolled sideways and the
+ * actions — the last column — were the part that disappeared off the edge.
+ *
+ * Now it matches what the mobile card has always done: the two everyday actions
+ * stay inline, everything else collapses into a labelled menu. That is ~120px,
+ * and it also replaces eight same-sized icons whose meaning had to be recovered
+ * from a tooltip with a list that says what each item does.
+ *
+ * Re-upload is the one piece of state worth surfacing in the row itself, so
+ * while a session is open "Publish" sits inline and the rest of that flow stays
+ * in the menu.
+ */
+
 import {
   CheckCircle2,
   Edit,
@@ -5,6 +24,7 @@ import {
   Image,
   ImagePlus,
   Loader2,
+  MoreHorizontal,
   RefreshCw,
   RotateCcw,
   Trash2,
@@ -13,6 +33,13 @@ import {
 } from "lucide-react";
 import { Article } from "@shared/schema";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AirtableImageField } from "@/hooks/use-article-uploads";
 
@@ -45,6 +72,7 @@ interface ArticleTableActionsProps {
   pending: ArticlePendingState;
 }
 
+/** Compact icon button with the label in a tooltip. */
 function IconButton({
   label,
   className,
@@ -54,7 +82,7 @@ function IconButton({
   onClick,
 }: {
   label: string;
-  className: string;
+  className?: string;
   disabled?: boolean;
   busy?: boolean;
   icon: React.ReactNode;
@@ -68,7 +96,7 @@ function IconButton({
             variant="ghost"
             size="icon"
             onClick={onClick}
-            className={className}
+            className={`h-8 w-8 ${className ?? ""}`}
             disabled={disabled}
             aria-label={label}
           >
@@ -87,113 +115,133 @@ export function ArticleTableActions({ article, actions, pending }: ArticleTableA
   const linkedToAirtable = article.source === "airtable" && article.externalId;
   const canReupload = (article.status === "published" || article.finished) && !article.isReuploading;
 
+  // Menu items cannot each carry their own spinner, so the trigger reports that
+  // *something* on this row is in flight — the feedback the per-button
+  // spinners used to give.
+  const menuBusy =
+    pending.uploadingField !== null ||
+    pending.isUpdatingAirtable ||
+    pending.isPushingAirtable ||
+    pending.isStartingReupload ||
+    pending.isCancellingReupload;
+
   return (
-    <div className="flex space-x-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => actions.onEdit?.(article)}
-        className="text-primary hover:text-blue-700"
-        aria-label="Edit article"
-      >
-        <Edit className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => actions.onView?.(article)}
-        className="text-gray-500 hover:text-gray-700"
-        aria-label="View article"
-      >
-        <Eye className="h-4 w-4" />
-      </Button>
-
-      <IconButton
-        label="Upload Main Image"
-        className="text-green-600 hover:text-green-800"
-        disabled={pending.uploadingField === "MainImage"}
-        busy={pending.uploadingField === "MainImage"}
-        icon={<Image className="h-4 w-4" />}
-        onClick={() => actions.onUploadImage(article, "MainImage")}
-      />
-
-      <IconButton
-        label="Upload Instagram Image"
-        className="text-pink-500 hover:text-pink-700"
-        disabled={pending.uploadingField === "instaPhoto"}
-        busy={pending.uploadingField === "instaPhoto"}
-        icon={<ImagePlus className="h-4 w-4" />}
-        onClick={() => actions.onUploadImage(article, "instaPhoto")}
-      />
-
-      {linkedToAirtable ? (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => actions.onUpdateAirtable(article)}
-          className="text-blue-600 hover:text-blue-800"
-          disabled={pending.isUpdatingAirtable}
-          title="Update in Airtable"
-          aria-label="Update in Airtable"
-        >
-          {pending.isUpdatingAirtable ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
-        </Button>
-      ) : (
+    <div className="flex items-center justify-end gap-1">
+      {actions.onEdit && (
         <IconButton
-          label="Push to Airtable"
-          className="text-purple-600 hover:text-purple-800"
-          disabled={pending.isPushingAirtable}
-          busy={pending.isPushingAirtable}
-          icon={<Upload className="h-4 w-4" />}
-          onClick={() => actions.onPushToAirtable(article)}
+          label="Edit article"
+          className="text-primary hover:text-blue-700"
+          icon={<Edit className="h-4 w-4" />}
+          onClick={() => actions.onEdit?.(article)}
         />
       )}
 
-      {canReupload && (
+      {actions.onView && (
         <IconButton
-          label="Re-upload content (copies an upload link)"
-          className="text-orange-600 hover:text-orange-800"
-          disabled={pending.isStartingReupload}
-          busy={pending.isStartingReupload}
-          icon={<RotateCcw className="h-4 w-4" />}
-          onClick={() => actions.onStartReupload(article)}
+          label="View article"
+          className="text-gray-500 hover:text-gray-700"
+          icon={<Eye className="h-4 w-4" />}
+          onClick={() => actions.onView?.(article)}
         />
       )}
 
+      {/* An open re-upload session is transient and needs closing, so its
+          primary action stays visible rather than hiding behind the menu. */}
       {article.isReuploading && (
-        <>
-          <IconButton
-            label="Finish re-upload and publish"
-            className="text-emerald-600 hover:text-emerald-800"
-            disabled={pending.isCompletingReupload}
-            busy={pending.isCompletingReupload}
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            onClick={() => actions.onCompleteReupload(article)}
-          />
-          <IconButton
-            label="Cancel re-upload"
-            className="text-muted-foreground hover:text-foreground"
-            disabled={pending.isCancellingReupload}
-            busy={pending.isCancellingReupload}
-            icon={<XCircle className="h-4 w-4" />}
-            onClick={() => actions.onCancelReupload(article)}
-          />
-        </>
+        <IconButton
+          label="Finish re-upload and publish"
+          className="text-emerald-600 hover:text-emerald-800"
+          disabled={pending.isCompletingReupload}
+          busy={pending.isCompletingReupload}
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          onClick={() => actions.onCompleteReupload(article)}
+        />
       )}
 
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => actions.onDelete(article)}
-        className="text-red-500 hover:text-red-700"
-        aria-label="Delete article"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-gray-500 hover:text-gray-700"
+            aria-label="More actions"
+          >
+            {menuBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreHorizontal className="h-4 w-4" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem
+            onClick={() => actions.onUploadImage(article, "MainImage")}
+            disabled={pending.uploadingField === "MainImage"}
+          >
+            <Image className="mr-2 h-4 w-4" />
+            <span>Upload main image</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => actions.onUploadImage(article, "instaPhoto")}
+            disabled={pending.uploadingField === "instaPhoto"}
+          >
+            <ImagePlus className="mr-2 h-4 w-4" />
+            <span>Upload Instagram image</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          {linkedToAirtable ? (
+            <DropdownMenuItem
+              onClick={() => actions.onUpdateAirtable(article)}
+              disabled={pending.isUpdatingAirtable}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              <span>Update in Airtable</span>
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              onClick={() => actions.onPushToAirtable(article)}
+              disabled={pending.isPushingAirtable}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              <span>Push to Airtable</span>
+            </DropdownMenuItem>
+          )}
+
+          {canReupload && (
+            <DropdownMenuItem
+              onClick={() => actions.onStartReupload(article)}
+              disabled={pending.isStartingReupload}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              <span>Re-upload content</span>
+            </DropdownMenuItem>
+          )}
+
+          {article.isReuploading && (
+            <DropdownMenuItem
+              onClick={() => actions.onCancelReupload(article)}
+              disabled={pending.isCancellingReupload}
+            >
+              <XCircle className="mr-2 h-4 w-4" />
+              <span>Cancel re-upload</span>
+            </DropdownMenuItem>
+          )}
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={() => actions.onDelete(article)}
+            className="text-red-500 focus:text-red-500"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            <span>Delete</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

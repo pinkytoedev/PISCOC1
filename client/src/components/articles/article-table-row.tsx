@@ -9,7 +9,7 @@ import {
   type ArticlePendingState,
   type ArticleRowActions,
 } from "./article-table-actions";
-import { formatArticleDate, formatTags, truncateText } from "./article-utils";
+import { formatArticleDate, formatTags } from "./article-utils";
 
 const MAX_VISIBLE_TAGS = 3;
 
@@ -43,25 +43,31 @@ export function ArticleTableRow({
     <tr
       className={`${article.source === "airtable" ? "bg-blue-50/30" : ""} ${isHighlighted ? "discord-highlight" : ""}`}
     >
-      <td className="px-6 py-4">
+      {/*
+        Deliberately the only column with no declared width. Under the
+        `table-fixed` layout set on the table, the sized columns take their
+        widths and this one absorbs everything left over — so the title grows on
+        a wide monitor instead of leaving dead space, and shrinks to an ellipsis
+        on a narrow one instead of forcing the table sideways. `min-w-0` is what
+        lets the text actually shrink: without it a flex child refuses to go
+        below its content width and the truncation never engages.
+      */}
+      <td className="px-4 py-4">
         <div className="flex items-start">
           <div className="h-10 w-10 flex-shrink-0">
             <ArticleThumbnail article={article} className="h-10 w-10 rounded" />
           </div>
-          <div className="ml-4 max-w-xs">
-            <div
-              className="text-sm font-medium text-gray-900 truncate max-w-[200px]"
-              title={article.title.length > 35 ? article.title : undefined}
-            >
-              {truncateText(article.title, 35)}
+          <div className="ml-3 min-w-0 flex-1">
+            <div className="text-sm font-medium text-gray-900 truncate" title={article.title}>
+              {article.title}
             </div>
 
             {article.description && (
               <div
-                className="text-xs text-gray-500 truncate max-w-[200px] mt-1"
-                title={article.description.length > 40 ? article.description : undefined}
+                className="text-xs text-gray-500 truncate mt-1"
+                title={article.description}
               >
-                {truncateText(article.description, 40)}
+                {article.description}
               </div>
             )}
 
@@ -88,32 +94,40 @@ export function ArticleTableRow({
         </div>
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900 truncate max-w-[120px]" title={article.author}>
+      {/*
+        Columns below drop out in priority order as the viewport narrows, rather
+        than every column staying put and the whole table scrolling sideways.
+        Title, Status, Date and Actions always survive; Author and Source return
+        at xl, Photo at 2xl. The breakpoints are deliberately one step
+        conservative because these are viewport-width queries while the table
+        lives inside a layout with a ~256px sidebar.
+      */}
+      <td className="hidden xl:table-cell px-4 py-4 whitespace-nowrap">
+        <div className="text-sm text-gray-900 truncate max-w-[140px]" title={article.author}>
           {article.author}
         </div>
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900 truncate max-w-[120px]" title={article.photo || ""}>
+      <td className="hidden 2xl:table-cell px-4 py-4 whitespace-nowrap">
+        <div className="text-sm text-gray-900 truncate max-w-[140px]" title={article.photo || ""}>
           {article.photo || "—"}
         </div>
         {article.photoCredit && (
-          <div className="text-xs text-gray-500 truncate max-w-[120px]" title={article.photoCredit}>
+          <div className="text-xs text-gray-500 truncate max-w-[140px]" title={article.photoCredit}>
             Credit: {article.photoCredit}
           </div>
         )}
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className="px-4 py-4 whitespace-nowrap">
         <ArticleStatusCell article={article} isPublishing={isPublishing} />
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
         {formatArticleDate(article, showCreationDate, "--")}
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+      <td className="hidden 2xl:table-cell px-4 py-4 whitespace-nowrap text-sm text-gray-500">
         <div className="flex items-center">
           <span className="flex items-center">
             <SourceIcon source={article.source} />
@@ -123,7 +137,7 @@ export function ArticleTableRow({
         </div>
       </td>
 
-      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+      <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
         <ArticleTableActions article={article} actions={actions} pending={pending} />
       </td>
     </tr>

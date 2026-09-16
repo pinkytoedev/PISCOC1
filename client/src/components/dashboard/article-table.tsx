@@ -177,11 +177,17 @@ export function ArticleTable({
       uploadImageMutation.isPending && uploadImageMutation.variables?.articleId === article.id
         ? uploadImageMutation.variables.field
         : null,
-    isUpdatingAirtable: updateAirtableMutation.isPending,
+    // Every one of these is narrowed to the row the mutation was fired from.
+    // Only the push was, so updating Airtable or opening a re-upload session
+    // put a spinner on all fifteen rows at once — which mattered little when it
+    // lit up a button that most rows did not render, and matters a lot now that
+    // each row has an always-present menu trigger to spin.
+    isUpdatingAirtable:
+      updateAirtableMutation.isPending && updateAirtableMutation.variables === article.id,
     isPushingAirtable: pushToAirtableMutation.isPending && pushToAirtableMutation.variables === article.id,
-    isStartingReupload: reupload.start.isPending,
-    isCompletingReupload: reupload.complete.isPending,
-    isCancellingReupload: reupload.cancel.isPending,
+    isStartingReupload: reupload.start.isPending && reupload.start.variables === article.id,
+    isCompletingReupload: reupload.complete.isPending && reupload.complete.variables === article.id,
+    isCancellingReupload: reupload.cancel.isPending && reupload.cancel.variables === article.id,
   });
 
   const sortedAllArticles = useMemo(() => {
@@ -258,36 +264,48 @@ export function ArticleTable({
 
       {/* Desktop Table View */}
       <div className="hidden md:block overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+        {/*
+          `table-fixed` is what makes the truncation work at all. Under the
+          default auto layout a cell's minimum width is its content's, and
+          `truncate` sets `white-space: nowrap`, so a long title forced its
+          column to the full width of the text — 678px in testing — and pushed
+          the table into horizontal scroll no matter what max-widths the inner
+          divs carried. Fixed layout gives the columns below their declared
+          widths, hands the remainder to the unsized Title column, and lets the
+          ellipsis do its job. Total is always 100%, so the table never scrolls.
+        */}
+        <table className="w-full table-fixed divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              {/* Widths and visibility mirror ArticleTableRow exactly; change
+                  one and you must change the other or the columns misalign. */}
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Title
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="hidden xl:table-cell w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Author
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="hidden 2xl:table-cell w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Photo
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Status
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider flex items-center"
+                className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 <button
                   onClick={() => setShowCreationDate(!showCreationDate)}
@@ -304,13 +322,13 @@ export function ArticleTable({
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="hidden 2xl:table-cell w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Source
               </th>
               <th
                 scope="col"
-                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="w-36 px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Actions
               </th>
@@ -319,7 +337,7 @@ export function ArticleTable({
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center">
+                <td colSpan={7} className="px-4 py-4 text-center">
                   Loading articles...
                 </td>
               </tr>
@@ -337,7 +355,7 @@ export function ArticleTable({
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-4 text-center">
+                <td colSpan={7} className="px-4 py-4 text-center">
                   No articles found.
                 </td>
               </tr>
