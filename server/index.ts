@@ -5,7 +5,6 @@ import type { Server } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { setupStaticServing } from "./middleware/staticMiddleware";
-import { setupHTTPS } from "./https-dev";
 import { startPublishScheduler, stopPublishScheduler } from "./scheduler";
 import { issueCsrfToken, verifyCsrfToken } from "./middleware/csrf";
 import { HttpError } from "./lib/httpError";
@@ -140,10 +139,6 @@ function errorHandler() {
   app.use(errorHandler());
 
   const listening = await startServer(server);
-
-  if (env.isDevelopment) {
-    setupHTTPS(app, 3001);
-  }
 
   startPublishScheduler(env.scheduler.intervalMs);
 

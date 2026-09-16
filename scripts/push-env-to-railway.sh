@@ -4,11 +4,9 @@
 #
 # NOT wired to any npm script. Requires the railway CLI and a linked project.
 #
-# Out of date: it pushes FACEBOOK_APP_ID/SECRET and INSTAGRAM_APP_ID/SECRET,
-# none of which exist anywhere in this codebase or in .env.example, and it sets
-# PORT=3001 although Railway injects PORT itself. The `export $(cat .env | xargs)`
-# below also breaks on any value containing a space. Prefer
-# `railway variables --set "KEY=value"` directly.
+# Out of date: it sets PORT=3001 although Railway injects PORT itself. The
+# `export $(cat .env | xargs)` below also breaks on any value containing a
+# space. Prefer `railway variables --set "KEY=value"` directly.
 echo "🚀 Pushing environment variables to Railway..."
 echo ""
 
@@ -50,10 +48,6 @@ echo ""
 echo "Adding integration variables..."
 add_to_railway "AIRTABLE_API_KEY" "$AIRTABLE_API_KEY"
 add_to_railway "AIRTABLE_BASE_ID" "$AIRTABLE_BASE_ID"
-add_to_railway "FACEBOOK_APP_ID" "$FACEBOOK_APP_ID"
-add_to_railway "FACEBOOK_APP_SECRET" "$FACEBOOK_APP_SECRET"
-add_to_railway "INSTAGRAM_APP_ID" "$INSTAGRAM_APP_ID"
-add_to_railway "INSTAGRAM_APP_SECRET" "$INSTAGRAM_APP_SECRET"
 add_to_railway "IMGBB_API_KEY" "$IMGBB_API_KEY"
 
 # Add production-specific variables

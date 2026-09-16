@@ -70,7 +70,7 @@ fi
 
 # Check required directories
 echo -e "\n📁 Checking required directories..."
-DIRS=("uploads" "temp" "certs" "uploads/instagram")
+DIRS=("uploads" "temp")
 for dir in "${DIRS[@]}"; do
     if [ -d "$dir" ]; then
         echo -e "${GREEN}✓${NC} $dir exists"

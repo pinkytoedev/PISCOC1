@@ -46,8 +46,8 @@ The dashboard is on <http://localhost:3000>.
 
 ### On Windows
 
-`npm run dev`, `npm run dev:https` and `npm start` go through `cross-env`, so
-they work in `cmd.exe` and PowerShell as well as in a POSIX shell. Previously
+`npm run dev` and `npm start` go through `cross-env`, so they work in
+`cmd.exe` and PowerShell as well as in a POSIX shell. Previously
 they used a bare `NODE_ENV=... <command>` prefix and failed on Windows with
 `'NODE_ENV' is not recognized`.
 
@@ -251,17 +251,8 @@ that the generator cannot emit. Re-running the generator would delete them.
 Nothing in CI runs either form of this command.
 
 Not wired to npm and worth knowing about: `scripts/createAdmin.js` (broken, see
-above), `scripts/quick-check.sh` and `scripts/push-env-to-railway.sh` — both
-bash-only and both stale, the latter pushing `FACEBOOK_*` / `INSTAGRAM_*`
-variables that exist nowhere in this codebase.
-
-`npm run dev:https` is **byte-for-byte identical** to `npm run dev`; it is not a
-separate mode. The HTTPS listener on port 3001 starts automatically in
-development whenever `certs/localhost-key.pem` and `certs/localhost.pem` exist;
-generate them with `npm run setup:https` (needs `openssl` on PATH). It is
-entirely optional — and note that port 3001 is also in the plain-HTTP fallback
-list above, so if `PORT` is unset and 3000 is taken, HTTP takes 3001 and the
-HTTPS listener's bind failure crashes the process. Set `PORT` explicitly.
+above), and `scripts/quick-check.sh` and `scripts/push-env-to-railway.sh` —
+both bash-only, so neither runs on stock Windows.
 
 ## Layout
 
