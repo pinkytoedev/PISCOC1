@@ -3,8 +3,9 @@
  *
  * Backs the dashboard's "is everything up?" panel. Each probe is a cheap,
  * read-only call against one dependency, and every one of them is bounded by a
- * timeout: the endpoint runs all four concurrently, so without a deadline a
- * single unresponsive third party would hold the whole page open.
+ * timeout: the endpoint runs all three — Airtable, ImgBB and Postgres —
+ * concurrently, so without a deadline a single unresponsive third party would
+ * hold the whole page open.
  */
 
 import axios from 'axios';

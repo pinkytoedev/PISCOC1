@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# Quick environment check script for PISCOC
-# This is a simple bash script for quick checks before running the full Node.js test
+# Quick environment check script for PISCOC.
+#
+# NOT wired to any npm script, and macOS/Linux only (it uses lsof).
+# `npm run test:setup` is the maintained equivalent.
+#
+# Stale behaviour, left as-is: it creates uploads/, uploads/instagram/ and
+# temp/. Uploads now go to the OS temp directory (see server/middleware/upload.ts
+# and .gitignore), and there is no Instagram integration in this codebase.
 
 echo "🚀 PISCOC Quick Environment Check"
 echo "================================"

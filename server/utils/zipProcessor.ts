@@ -18,6 +18,19 @@ import { getAirtableConfig, updateRecord } from '../lib/airtableClient';
 import { uploadImageToImgBB, UploadedFileInfo } from './imgbbUploader';
 import { InsertImageAsset } from '../../shared/schema';
 
+/**
+ * Extensions picked up from an extracted archive and hosted on ImgBB.
+ *
+ * Two things to know. `.svg` is here even though `middleware/upload.ts`
+ * deliberately refuses SVG on every direct upload route, because it is an XML
+ * document that can carry script — so an archive is the one way to get one
+ * hosted and linked from an article body. And unlike the direct routes, images
+ * found in here get no magic-byte check: the MIME type is inferred from the
+ * extension alone.
+ *
+ * `.bmp` appears in MIME_BY_EXTENSION below but not here, so a .bmp in an
+ * archive is never picked up.
+ */
 const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
 
 /** Depth guard for the recursive walk — real archives are nowhere near this. */

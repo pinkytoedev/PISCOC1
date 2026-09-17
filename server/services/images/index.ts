@@ -1,17 +1,19 @@
 /**
  * Public surface for image handling.
  *
- * Two layers live behind this module:
+ * Three modules live behind it:
  *
  *   `host.ts`         — the only code that talks to ImgBB
- *   `fetch.ts`        — the only code that pulls bytes off a remote URL
+ *   `fetch.ts`        — a hardened remote-URL downloader, currently uncalled
  *   `airtableLink.ts` — writing the resulting URL back onto an Airtable record
  *
  * The `uploadImageToImgBB` / `uploadImageUrlToImgBB` wrappers at the bottom are
- * the legacy contract: they swallow the error and return `null`. Every existing
- * caller branches on `if (!result)` — the ZIP processor, for instance, skips a
- * single failed image rather than discarding an otherwise good submission — so
- * that behaviour is preserved deliberately. New code should call the throwing
+ * the legacy contract: they swallow the error and return `null`. Most callers
+ * branch on `if (!result)` — the ZIP processor, for instance, skips a single
+ * failed image rather than discarding an otherwise good submission — so that
+ * behaviour is preserved deliberately. (`airtable/images.ts` is the exception:
+ * it turns the null straight back into a thrown HttpError, which is a sign it
+ * wants the throwing variant.) New code should call the throwing
  * `uploadFileToImgBB` / `uploadUrlToImgBB` and let the error carry the reason.
  */
 

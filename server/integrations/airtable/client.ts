@@ -1,12 +1,18 @@
 /**
  * Airtable transport for this integration.
  *
- * Single-record writes go through `lib/airtableClient`; what lives here is what
- * that module deliberately does not cover — paginated reads, batched writes,
- * and picking which of the three configured tables a call targets.
+ * This module covers what `lib/airtableClient` does not — paginated reads,
+ * batched writes, and picking which of the three configured tables a call
+ * targets. Single-record writes go through `lib/airtableClient`.
  *
- * Every URL is built in one place, so the table name cannot be left unencoded
- * the way it was at several of the old call sites.
+ * There is in fact a third Airtable transport: `services/images/airtableLink`
+ * hand-rolls its own single-record PATCH with its own timeout and its own
+ * error type (`AirtableWriteError`). Worth collapsing into one of these two.
+ *
+ * Error strings differ between the transports and that matters: only the
+ * `Airtable API error: <status> - <text>` format produced here is recognised
+ * by `translateAirtableError` in `routes.ts` and by `recordIsAlreadyGone` in
+ * `push.ts`. `lib/airtableClient` throws a differently shaped message.
  */
 
 import { HttpError } from '../../lib/httpError';

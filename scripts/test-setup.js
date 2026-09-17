@@ -46,10 +46,12 @@ function checkNodeVersion() {
         const nodeVersion = process.version;
         const majorVersion = parseInt(nodeVersion.split('.')[0].substring(1));
 
-        if (majorVersion >= 20) {
-            log.success(`Node.js version ${nodeVersion} (required: 20+)`);
+        // package.json engines requires >=22.12.0 and .nvmrc pins 22, because
+        // Vite 7 will not build on anything older. Keep these in step.
+        if (majorVersion >= 22) {
+            log.success(`Node.js version ${nodeVersion} (required: 22.12+)`);
         } else {
-            log.error(`Node.js version ${nodeVersion} is too old. Please install Node.js 20 or higher.`);
+            log.error(`Node.js version ${nodeVersion} is too old. Please install Node.js 22.12 or higher.`);
             log.info('Visit https://nodejs.org to download the latest version.');
             totalErrors++;
         }

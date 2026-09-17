@@ -1,11 +1,18 @@
 /**
  * Security and re-upload regression checks against a running server.
  *
- *   npm run dev                 # in one shell
- *   npm run verify:security     # in another
+ *   PORT=3999 npm run dev                            # in one shell
+ *   VERIFY_BASE_URL=http://localhost:3999 npm run verify:security   # in another
  *
- * Seeds its own admin account, so it needs only a reachable server and
- * DATABASE_URL. Exits non-zero if any check fails, so it can gate a deploy.
+ * The port matters: VERIFY_BASE_URL defaults to 3999 because that is what CI
+ * uses, whereas `npm run dev` binds 3000 by default. Match them or nothing
+ * will connect.
+ *
+ * Also requires the `zip` CLI on PATH (it builds a test archive with it), so
+ * this does not run on stock Windows.
+ *
+ * Seeds its own admin account, so it otherwise needs only a reachable server
+ * and DATABASE_URL. Exits non-zero if any check fails, so it can gate a deploy.
  * Covers the specific defects this suite was written for:
  *
  *   - contributor-supplied HTML is sanitized before storage

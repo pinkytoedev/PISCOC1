@@ -4,10 +4,12 @@
  * Two things here matter beyond the obvious size limits:
  *
  * 1. Files land in the OS temp directory, not a directory inside the repo, and
- *    are always removed when the response finishes. The old flow wrote into
- *    `./uploads` and only unlinked on the success path, so every rejected
- *    request left its file behind — an anonymous caller could fill the disk by
- *    posting large archives with a bad article id.
+ *    are removed when the response finishes — on the failure path too, so a
+ *    rejected request cannot leave its file behind for an anonymous caller to
+ *    accumulate. That cleanup is per-route wiring, not structural: it happens
+ *    only where `cleanupUploadedFile` is mounted (every current upload route
+ *    does mount it), and `removeTempFile` only ever unlinks `req.file.path`,
+ *    so a future `.array()` or `.fields()` route would leak.
  *
  * 2. Content type is checked against the file's magic bytes after upload, not
  *    just the client-supplied MIME type and extension, both of which are
@@ -46,11 +48,15 @@ const storage = multer.diskStorage({
  *
  * HEIC/HEIF are included because that is what an iPhone camera produces by
  * default — rejecting it would break photo submissions from the most common
- * device. They are transcoded to JPEG after upload (see `normalizeImage`),
- * since ImgBB and browsers do not handle HEIC reliably.
+ * device. Routes that call `normalizeImage` transcode them to JPEG, since
+ * ImgBB and browsers do not handle HEIC reliably. Not every route does:
+ * `integrations/imgbb.ts` and `integrations/airtable/routes.ts` accept the
+ * file and skip normalization, so HEIC bytes reach ImgBB unchanged there.
  *
  * SVG is deliberately absent: it is an XML document that can carry script, and
- * these images are served back to users.
+ * these images are served back to users. Note that `utils/zipProcessor.ts`
+ * does not honour this — `.svg` is in its own IMAGE_EXTENSIONS list, so an SVG
+ * inside a contributor ZIP is hosted and linked from the article body.
  */
 const IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
@@ -105,6 +111,11 @@ export const zipUpload = multer({
  * HEIC/HEIF are ISO base-media files: the first four bytes are a box length,
  * then the literal "ftyp" at offset 4, then a brand. Matching on "ftyp" alone
  * would also accept MP4, so the brand is checked too.
+ *
+ * The WebP entry is loose: it matches the four-byte "RIFF" container header
+ * only, not the "WEBP" tag at offset 8. Any RIFF file — a WAV or an AVI —
+ * therefore passes `assertFileKind(..., 'image')`. Tighten it by also checking
+ * bytes 8..11 if that matters.
  */
 const MAGIC_BYTES: Array<{ kind: 'image' | 'zip'; signature: number[]; offset?: number }> = [
   { kind: 'image', signature: [0xff, 0xd8, 0xff] }, // JPEG

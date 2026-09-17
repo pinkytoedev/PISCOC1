@@ -1,14 +1,13 @@
 /**
  * ImgBB image hosting — the one place the server talks to api.imgbb.com.
  *
- * There used to be four: `utils/imgbbUploader` (file and URL uploads),
- * `utils/imageDownloader` (re-hosting, with an API key hard-coded in the
- * source), `integrations/imgbb` (an inline copy of the URL upload) and the
- * migration script. Each had its own idea of what a failure was — one returned
- * `null`, one threw, one logged and continued — none had a timeout, none
- * retried, and one leaked key material into the log by printing the settings
- * object. Consolidating them means one retry policy, one error type, and one
- * place where the key is read.
+ * Everything that uploads to ImgBB routes through this module, which gives it
+ * one retry policy, one error type, one timeout, and one place where the API
+ * key is read. `utils/imgbbUploader` is a thin re-export kept for its existing
+ * import sites.
+ *
+ * Transport policy: 30s timeout, 3 attempts, 500ms exponential backoff,
+ * retrying only on 429, 5xx, a non-JSON body, or a network/abort error.
  */
 
 import fsp from 'fs/promises';
@@ -228,8 +227,11 @@ export async function uploadFileToImgBB(file: UploadedFileInfo): Promise<ImgBBIm
  * Hands ImgBB a URL and lets it do the fetching.
  *
  * Nothing is downloaded here, so no bytes cross this server — but by the same
- * token there is no content check either. Use `rehostRemoteImage` when the URL
- * came from a user and the result has to be a real image.
+ * token there is no content check, no size cap and no timeout of our own.
+ *
+ * This is the function every user-supplied-URL route actually uses
+ * (`integrations/imgbb.ts`, `integrations/airtable/images.ts`).
+ * `rehostRemoteImage` below is the checked alternative and has no callers.
  */
 export async function uploadUrlToImgBB(imageUrl: string, filename?: string): Promise<ImgBBImage> {
   log.debug('Asking ImgBB to fetch a URL', { filename });
@@ -239,8 +241,10 @@ export async function uploadUrlToImgBB(imageUrl: string, filename?: string): Pro
 /**
  * Downloads a remote image through the SSRF-guarded fetcher and re-hosts it.
  *
- * This is the path for URLs that came from article records: the guard, the size
- * cap and the content-type check all apply before anything is forwarded on.
+ * The guard, the size cap and the content-type check all apply before anything
+ * is forwarded on. UNCALLED: no route uses this today, so `services/images/fetch`
+ * is dead code by extension. Route the user-supplied-URL endpoints here to
+ * change that.
  */
 export async function rehostRemoteImage(imageUrl: string, filename?: string): Promise<ImgBBImage> {
   const image = await fetchRemoteImage(imageUrl);

@@ -1,8 +1,8 @@
 /**
  * Compatibility barrel.
  *
- * The Airtable image write-back moved to `server/services/images/airtableLink`.
- * This path is kept because `integrations/airtable.ts` and
+ * The Airtable image write-back lives in `server/services/images/airtableLink`.
+ * This path is kept because `integrations/airtable/images.ts` and
  * `integrations/airtableTest.ts` import from it; new code should import from
  * `../services/images` directly.
  *

@@ -18,10 +18,12 @@ export { app };
 /**
  * Captures the exact request bytes alongside the parsed body.
  *
- * Meta signs the raw payload of a webhook delivery. Verifying against
- * `JSON.stringify(req.body)` cannot be correct — re-serializing normalizes key
- * order, whitespace and unicode escaping, so the reconstructed string is not
- * the string that was signed. Only routes that verify a signature read this.
+ * Nothing reads `req.rawBody` today. It exists for signature-verified webhooks,
+ * where hashing `JSON.stringify(req.body)` would be wrong — re-serializing
+ * normalizes key order, whitespace and unicode escaping, so the reconstructed
+ * string is not the string that was signed. The one inbound webhook this server
+ * has (`/api/webhooks/article-published`) authenticates with a plaintext shared
+ * secret header instead, so this buffer is currently unused.
  */
 app.use(
   express.json({

@@ -1,14 +1,17 @@
 /**
  * Integration settings access.
  *
- * Credentials for Airtable and GitHub live in the `integration_settings`
- * table. ImgBB is deliberately not here — its key is environment-only.
+ * Airtable credentials live in the `integration_settings` table, entered
+ * through the admin UI rather than set as environment variables. ImgBB is
+ * deliberately not here — its key is environment-only.
  *
- * Before this module, 93 call sites read them directly — typically three
- * sequential `getIntegrationSettingByKey` awaits to assemble one Airtable
- * config, on every request. That is three round trips per call for values that
- * change perhaps once a month, and it left the "is it configured?" check
- * written slightly differently in each place.
+ * (`getGitHubToken` below reads a `github` service row, but nothing calls it
+ * and no GitHub integration exists.)
+ *
+ * Assembling one Airtable config otherwise costs three sequential
+ * `getIntegrationSettingByKey` awaits per request, for values that change
+ * perhaps once a month — hence the short TTL cache and the single
+ * "is it configured?" check in `getAirtableSettings`.
  *
  * Reads go through a short-lived cache and a typed accessor per integration.
  * Writes invalidate, so a settings change takes effect immediately.
@@ -114,7 +117,13 @@ export interface AirtableSettings {
   apiKey: string;
   baseId: string;
   articlesTable: string;
-  /** Optional; the sync routines fall back to defaults when unset. */
+  /**
+   * Optional on this interface, but there are no defaults behind them: the
+   * team-members and quotes routes call `requireConfig`, which throws
+   * `400 Airtable settings are not fully configured` when the matching table
+   * name is unset. Note also that `getAirtableSettings` returns null unless
+   * `articlesTable` is set, so a quotes-only operation still needs it.
+   */
   teamMembersTable?: string;
   carouselQuotesTable?: string;
 }

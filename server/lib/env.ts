@@ -1,10 +1,15 @@
 /**
  * Validated environment configuration.
  *
- * Everything the server needs from `process.env` is read and checked exactly
- * once, here, at import time. Modules import `env` instead of reaching for
- * `process.env` directly so that a missing or malformed variable fails the
- * boot rather than surfacing as a confusing runtime error later.
+ * Most of what the server needs from `process.env` is read and checked here, at
+ * import time, so that a missing or malformed variable fails the boot rather
+ * than surfacing as a confusing runtime error later. Importing this module has
+ * side effects: it loads `.env`, and it throws if validation fails.
+ *
+ * It is not the only reader. Three call sites still go to `process.env`
+ * directly, and their variables are absent from the config object below:
+ * `RAILWAY_GIT_COMMIT_SHA` and `SESSION_SECRET` in `routes/system.ts`, and
+ * `AIRTABLE_API_KEY` in `integrations/airtable/routes.ts`.
  */
 
 import 'dotenv/config';
@@ -62,8 +67,10 @@ export const env = {
 
   /**
    * Trusted TLS certificate authority for the database connection. Managed
-   * Postgres providers that use a private CA expose it here; without it we
-   * still verify, rather than silently accepting any certificate.
+   * Postgres providers that use a private CA expose it here.
+   *
+   * Without it, the production pool still connects over TLS but sets
+   * `rejectUnauthorized: false` — it accepts any certificate. See `db.ts`.
    */
   databaseCa: process.env.DATABASE_CA_CERT,
 
@@ -99,10 +106,9 @@ export const env = {
    * ImgBB API key, used to host images before linking them into Airtable.
    *
    * Optional, so it is read rather than required — the server boots without it
-   * and the image upload routes answer 400 instead. It used to be editable in
-   * the CMS and stored in `integration_settings`, where a stale row silently
-   * took precedence over the deployment's own variable; the settings copy is
-   * gone and this is now the only source.
+   * and the image upload routes fail instead. This is the only source: the key
+   * is not readable from `integration_settings`, and `routes/integrationSettings`
+   * refuses to store it. Read once at boot, so rotating it needs a restart.
    */
   imgbbApiKey: process.env.IMGBB_API_KEY,
 
@@ -111,8 +117,13 @@ export const env = {
    *
    * They write to real Airtable records to prove the integration can write at
    * all, which is genuinely useful when a deployment is misconfigured — and
-   * exactly why they should not be mounted by default in production. On in
-   * development, opt-in elsewhere.
+   * exactly why they are not mounted by default in production.
+   *
+   * Read the condition carefully: outside production these routes are ALWAYS
+   * on and `ENABLE_DIAGNOSTIC_ROUTES=false` does not turn them off. In
+   * production they are off unless the value is the literal string 'true'.
+   * So pointing a development server at a production Airtable base will write
+   * to it.
    */
   enableDiagnosticRoutes:
     process.env.ENABLE_DIAGNOSTIC_ROUTES === 'true' || process.env.NODE_ENV !== 'production',

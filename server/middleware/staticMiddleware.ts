@@ -1,8 +1,12 @@
 /**
- * Static File Serving Middleware
- * 
- * Configures Express to serve static files from various directories
- * Includes special configuration for uploaded article images
+ * Static file serving for the `uploads/` directory.
+ *
+ * One directory, mounted at `/uploads`, unauthenticated. Files with a
+ * jpg/jpeg/png/gif extension get a 24-hour cache and
+ * `Access-Control-Allow-Origin: *` so external services can fetch them.
+ *
+ * The live image pipeline hosts on ImgBB rather than on local disk, so this
+ * directory is usually empty on a fresh deployment.
  */
 
 import express, { Express } from 'express';

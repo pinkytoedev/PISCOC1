@@ -1,23 +1,28 @@
 /**
  * Safe remote image download.
  *
- * Three modules used to pull bytes off a remote URL with bare `fetch(url)` and
- * `await response.arrayBuffer()`. That is unsafe in three separate ways, and
- * every one of them was reachable from a user-supplied value (an article's
- * `imageUrl` / `instagramImageUrl`, or a URL posted to the ImgBB endpoints):
+ * `fetchRemoteImage` resolves the host, refuses non-public addresses,
+ * revalidates on every redirect hop, bounds the transfer in both time and
+ * bytes, and confirms the response actually looks like an image. It exists
+ * because a bare `fetch(url)` + `await response.arrayBuffer()` on a
+ * user-supplied URL is unsafe three ways:
  *
  *   1. SSRF. `fetch` will happily connect to `http://169.254.169.254/`,
- *      `http://127.0.0.1:5432/` or any RFC1918 host, so a URL field became a
+ *      `http://127.0.0.1:5432/` or any RFC1918 host, so a URL field becomes a
  *      probe into the deploy's private network and cloud metadata service.
  *   2. No timeout. A remote host that accepts the connection and then stalls
- *      pinned an Express request — and its DB pool slot — open indefinitely.
+ *      pins an Express request — and its DB pool slot — open indefinitely.
  *   3. No size cap. `arrayBuffer()` buffers whatever arrives, so a URL serving
- *      an endless stream was a one-request OOM.
+ *      an endless stream is a one-request OOM.
  *
- * Everything that reads a remote image now goes through `fetchRemoteImage`,
- * which resolves the host, refuses non-public addresses, revalidates on every
- * redirect hop, bounds the transfer in both time and bytes, and confirms the
- * response actually looks like an image.
+ * IMPORTANT — this module is currently dead code. `fetchRemoteImage` has no
+ * callers outside `services/images`, and its only in-module caller,
+ * `rehostRemoteImage` in `host.ts`, is itself uncalled. The two live routes
+ * that accept an image URL (`integrations/imgbb.ts` and
+ * `integrations/airtable/images.ts`) hand the raw user-supplied URL to ImgBB
+ * and let ImgBB fetch it. That happens to sidestep SSRF against *this* server,
+ * but it also means no timeout, size or content-type checking is applied, and
+ * the guard below protects nothing until something routes through it.
  */
 
 import dns from 'dns/promises';
@@ -416,7 +421,9 @@ export async function fetchRemoteImage(
 }
 
 // ---------------------------------------------------------------------------
-// Disk-backed download
+// Content-type helpers — unreferenced, kept for a disk-backed download path
+// that does not exist yet. (The `fsp`, `path` and `crypto` imports at the top
+// of this file are for the same absent path and are likewise unused.)
 // ---------------------------------------------------------------------------
 
 const EXTENSION_BY_CONTENT_TYPE: Record<string, string> = {

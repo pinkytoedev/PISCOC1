@@ -1,10 +1,18 @@
 /**
  * Single entry point for Airtable REST calls.
  *
- * The codebase previously rebuilt the same request by hand in 19 places: three
- * settings lookups, a template-literal URL, a bearer header and a `fetch`. That
- * duplication is why one call site forgot to URL-encode the table name and why
- * failures were reported inconsistently. Everything now goes through here.
+ * Single-record reads and writes go through here so that the URL is built and
+ * encoded in one place and failures are reported consistently, rather than
+ * each call site repeating the settings lookups, the template-literal URL, the
+ * bearer header and the `fetch`.
+ *
+ * It is not the only Airtable transport. `integrations/airtable/client.ts`
+ * handles paginated reads, batched writes and table selection, and
+ * `services/images/airtableLink.ts` still hand-rolls a third single-record
+ * PATCH. Note that the error message this module throws
+ * (`Airtable <METHOD> failed (<status>): <body>`) is NOT the format that
+ * `translateAirtableError` and `recordIsAlreadyGone` match against — they
+ * expect the one from `integrations/airtable/client.ts`.
  */
 
 import { getAirtableSettings } from '../services/settings';

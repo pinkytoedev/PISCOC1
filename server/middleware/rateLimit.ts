@@ -60,8 +60,14 @@ export const publicApiRateLimit = build({
 });
 
 /**
- * Keys uploads by token rather than IP where a token is present, so several
- * contributors behind one office NAT do not consume each other's budget.
+ * Would key uploads by token rather than IP where a token is present, so that
+ * several contributors behind one office NAT do not consume each other's
+ * budget.
+ *
+ * NOT WIRED UP. No limiter above passes this as `keyGenerator`, so all four
+ * buckets use express-rate-limit's default, which keys on IP. Contributors
+ * sharing an egress address do share a budget. Pass this to `uploadRateLimit`
+ * and `uploadInfoRateLimit` to make the comment above true.
  */
 export function tokenKeyGenerator(req: Request): string {
   const token = req.params?.token;

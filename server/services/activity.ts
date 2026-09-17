@@ -1,13 +1,14 @@
 /**
  * Activity logging.
  *
- * Every mutating endpoint records what happened. That was written out by hand
- * at 69 call sites, with three recurring problems: the whole mutated record was
- * often stored in `details` (so article bodies and, in one case, a user row
- * landed in the log table), a logging failure could reject the request that had
- * already succeeded, and the action/resource strings drifted between callers.
+ * Every mutating endpoint records what happened, and they all go through here
+ * rather than writing the log row by hand. That buys three properties worth
+ * keeping: `details` stays small (storing a whole mutated record puts article
+ * bodies, and potentially a user row, in the log table), a logging failure can
+ * never reject a request that has already succeeded, and the action/resource
+ * strings cannot drift between callers.
  *
- * This module fixes the vocabulary, keeps `details` small, and never throws.
+ * `recordActivity` never throws. `changedFields` does a shallow key-diff.
  */
 
 import { storage } from '../storage';

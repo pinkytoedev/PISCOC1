@@ -47,8 +47,13 @@ const SERVICE_NAME = 'team_upload';
 const SETTING_KEY = 'public_link_active';
 
 /**
- * Roles offered to the member, mirroring the Airtable single-select in
- * server/integrations/airtable.ts.
+ * Roles offered to the member.
+ *
+ * This list is local to this file and is not derived from anything — the
+ * Airtable integration has no role list of its own. Airtable's `Role` is a
+ * multi-select (`types.ts` types it `string[] | string`, and `mappers.ts`
+ * writes it as an array), so a value here that the Airtable field does not
+ * define will be rejected on push. Keep the two in step by hand.
  */
 const AVAILABLE_ROLES = [
   'Special Projects',

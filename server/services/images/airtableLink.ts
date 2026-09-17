@@ -8,12 +8,14 @@
  * refuses `data:` URLs above a modest size — which is why the link-field path
  * exists and is what the ImgBB flow actually uses.
  *
- * All three writers previously repeated the same block: three sequential
- * settings reads, a hand-built URL, a bearer header, and a ~40-line error
- * branch that logged the record id, the field name and the whole payload size
- * on failure. Credentials came from `storage` directly, so a settings change
- * took effect only after a restart. They now share one helper and read through
- * `lib/airtableClient`.
+ * The writers here share one helper and read credentials through
+ * `lib/airtableClient`, so a settings change takes effect without a restart.
+ *
+ * Two caveats. This module still builds its own PATCH request with its own
+ * timeout and its own error type (`AirtableWriteError`) rather than using one
+ * of the two other Airtable transports — worth collapsing. And two of its
+ * exports, `createAirtableAttachmentFromFile` and `uploadImageUrlToAirtable`,
+ * have no callers anywhere in the repo.
  */
 
 import fsp from 'fs/promises';

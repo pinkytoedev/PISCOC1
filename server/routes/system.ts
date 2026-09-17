@@ -94,6 +94,41 @@ export function publicSystemRouter(): Router {
 }
 
 /**
+ * `n` months before `from`, clamped to the target month's length.
+ *
+ * `d.setMonth(d.getMonth() - 1)` alone is wrong on long days: 31 March minus a
+ * month is 31 February, which Date rolls forward to 3 March. Setting the day to
+ * 1 before shifting the month, then clamping, keeps the result inside the month
+ * that was actually asked for.
+ */
+function monthsBefore(from: Date, months: number): Date {
+  const target = new Date(from);
+  target.setDate(1);
+  target.setMonth(target.getMonth() - months);
+
+  const lastDayOfTargetMonth = new Date(
+    target.getFullYear(),
+    target.getMonth() + 1,
+    0,
+  ).getDate();
+
+  target.setDate(Math.min(from.getDate(), lastDayOfTargetMonth));
+  return target;
+}
+
+/**
+ * Growth of a count over a period, as a whole-percent string.
+ *
+ * With no prior baseline there is no meaningful percentage — everything is new,
+ * and dividing by zero would render as `Infinity%` — so that case reports 100%
+ * when anything exists at all and 0% for an empty library.
+ */
+function formatGrowth(added: number, baseline: number): string {
+  if (baseline <= 0) return added > 0 ? '100%' : '0%';
+  return `${Math.round((added / baseline) * 100)}%`;
+}
+
+/**
  * Operational endpoints for signed-in users.
  *
  * The guard is attached per route rather than with `router.use`. This router is
@@ -125,26 +160,41 @@ export function systemRouter(): Router {
       const startOfToday = new Date();
       startOfToday.setHours(0, 0, 0, 0);
 
-      const startOfLastMonth = new Date(startOfToday);
-      startOfLastMonth.setMonth(startOfLastMonth.getMonth() - 1);
+      const startOfLastMonth = monthsBefore(startOfToday, 1);
 
       const publishedToday = allArticles.filter(
         (article) => article.publishedAt && new Date(article.publishedAt) >= startOfToday,
       ).length;
 
+      // Articles first recorded here within the trailing month, today included —
+      // the window has to reach `now`, not `startOfToday`, or an article created
+      // this morning is in neither this bucket nor the prior total.
       const createdLastMonth = allArticles.filter((article) => {
         if (!article.createdAt) return false;
-        const created = new Date(article.createdAt);
-        return created >= startOfLastMonth && created < startOfToday;
+        return new Date(article.createdAt) >= startOfLastMonth;
       }).length;
+
+      const totalBeforeLastMonth = allArticles.length - createdLastMonth;
 
       res.json({
         totalArticles: allArticles.length,
         draftArticles: draftArticles.length,
         publishedToday,
-        // Today's output measured against the trailing month. A rough
-        // indicator for the dashboard tile, not an analytics figure.
-        articleGrowth: `${createdLastMonth > 0 ? Math.round((publishedToday / createdLastMonth) * 100) : 0}%`,
+        /**
+         * How much the library grew over the trailing month, as a percentage of
+         * what it held a month ago. The dashboard renders this beside the Total
+         * Articles count.
+         *
+         * Caveat worth knowing before trusting it: `createdAt` is set by
+         * `storage.createArticle`, so for anything pulled from Airtable it is
+         * the time this CMS first saw the record, not the time it was authored.
+         * A bulk re-sync therefore reads as a spike in growth.
+         *
+         * Non-negative by construction: the count only ever gains rows, so the
+         * dashboard's arrow is always "up". It is a growth figure, not a
+         * change-versus-last-month figure.
+         */
+        articleGrowth: formatGrowth(createdLastMonth, totalBeforeLastMonth),
         migration: getMigrationProgress(),
       });
     }),
@@ -155,8 +205,9 @@ export function systemRouter(): Router {
     res.json(getMigrationProgress());
   });
 
-  // Reports which integrations are reachable and configured — useful to an
-  // operator, and a free reconnaissance map to anyone else.
+  // Reports which integrations are reachable and configured. Authenticated:
+  // the probe results name third-party services and their configuration state,
+  // which is a reconnaissance map rather than something to publish.
   router.get(
     '/status',
     isAuthenticated,
