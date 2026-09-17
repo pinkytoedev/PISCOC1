@@ -126,6 +126,10 @@ export function setupAirtableRoutes(app: Express) {
 
   // Reads one record rather than the base metadata endpoint, which needs a
   // broader scope than most tokens are issued with.
+  //
+  // Note the scope: it resolves the *quotes* table, so a broken articles-table
+  // name still passes this check even though the response says only
+  // "Successfully connected to Airtable".
   app.get(
     '/api/airtable/test-connection',
     isAuthenticated,
@@ -229,7 +233,13 @@ export function setupAirtableRoutes(app: Express) {
     }),
   );
 
-  // Fired by the CMS when an article goes live upstream.
+  // Cache-refresh hook. This server's own siteRefresh posts here when
+  // RAILWAY_PUBLIC_DOMAIN is the only target configured.
+  //
+  // The body is ignored entirely — any call runs a full pull of every article
+  // in the table, which is expensive against the Airtable quota. With
+  // WEBHOOK_SECRET unset, verifyWebhookSecret is a no-op and this is an
+  // anonymous trigger for that full sync.
   app.post(
     '/api/webhooks/article-published',
     verifyWebhookSecret,

@@ -8,6 +8,10 @@ const PROCESSED_RESET_INTERVAL_MS = 600_000;
 /**
  * Only articles scheduled within this window are caught up. Without it an old
  * draft whose scheduled date is long past would be republished on every load.
+ *
+ * This is 2 hours. The server's own window (`server/scheduler.ts`) is 24 hours.
+ * The two publishers do not agree, and the user-facing docs quote the server's
+ * number.
  */
 const CATCH_UP_WINDOW_MS = 2 * 60 * 60 * 1000;
 
@@ -23,6 +27,13 @@ interface AutoPublishOptions {
  * The server has its own publisher; this is the dashboard catching up while a
  * tab is open. Ids that have been handled are remembered so a slow refetch
  * cannot make the same article publish twice.
+ *
+ * It is NOT a mirror of the server's rules, and the differences are
+ * user-visible. The catch-up window here is 2 hours against the server's 24,
+ * and the server skips any article that already has `publishedAt` set whereas
+ * this only checks `status !== 'published'` — so this can republish something
+ * the server would deliberately leave alone. Worth reconciling with
+ * `server/scheduler.ts` rather than trusting either in isolation.
  */
 export function useAutoPublishScheduler({ articles, onPublished }: AutoPublishOptions) {
   const { toast } = useToast();

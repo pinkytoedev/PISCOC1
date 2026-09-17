@@ -20,7 +20,7 @@ try {
     // Check if certificates already exist
     if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
         console.log('✅ HTTPS certificates already exist');
-        console.log('🔒 You can now use: npm run dev:https');
+        console.log('🔒 Start the server normally: npm run dev');
         console.log('🌐 Access your app at: https://localhost:3001');
         process.exit(0);
     }
@@ -53,7 +53,7 @@ extendedKeyUsage=serverAuth`;
     console.log('📁 Certificates saved to:', certsDir);
     console.log('');
     console.log('🚀 Next steps:');
-    console.log('  1. Run: npm run dev:https');
+    console.log('  1. Run: npm run dev  (the HTTPS listener starts automatically in development once these exist)');
     console.log('  2. Visit: https://localhost:3001');
     console.log('  3. Accept the security warning (it\'s safe for localhost)');
 

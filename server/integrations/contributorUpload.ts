@@ -1,18 +1,16 @@
 /**
  * Contributor upload API.
  *
- * Replaces the two overlapping modules this codebase used to carry:
+ * Access is a single capability: a 256-bit random secret in the URL, scoped to
+ * one article and a set of asset types, that an editor generates and sends to
+ * the contributor. No account, no password, one link for the whole submission —
+ * and no ambient authority for anyone who does not have that link. Only the
+ * SHA-256 of the token is stored; the plaintext is returned exactly once, when
+ * the link is created.
  *
- *   - `publicUpload.ts`, a token flow with one endpoint per asset type plus a
- *     unified one, all duplicating the same validate/upload/sync sequence
- *   - `tokenFreePublicUpload.ts`, which had no authentication whatsoever, so
- *     anyone on the internet could enumerate articles and overwrite their
- *     content and images
- *
- * Access is a single capability: a random secret in the URL, scoped to one
- * article and a set of asset types, that the editor generates and sends to the
- * contributor. No account, no password, one link for the whole submission —
- * and no ambient authority for anyone who does not have that link.
+ * Not to be confused with `publicArticleUpload.ts`, which is the token-FREE
+ * surface: it takes no credential at all and is instead gated by an admin
+ * switch in `integration_settings`.
  */
 
 import type { Express, Request, Response } from 'express';
@@ -438,8 +436,15 @@ export function setupContributorUploadRoutes(app: Express) {
   );
 }
 
-/** Exposed for the article deletion path, which must invalidate stale links. */
+/**
+ * Both re-exports below are currently unused — nothing imports them from this
+ * module. Import from `../services/uploadTokens` and `../lib/airtableClient`
+ * instead.
+ *
+ * `revokeArticleTokens` was exposed here for the article deletion path, which
+ * ought to invalidate an article's outstanding links. That path
+ * (`services/articles.deleteArticleEverywhere`) does not call it, so deleting
+ * an article leaves its upload links live until they expire.
+ */
 export { revokeArticleTokens };
-
-/** Kept for callers that need the Airtable config alongside an upload. */
 export { getAirtableConfig };

@@ -4,9 +4,14 @@ import pg from 'pg';
 
 const scrypt = promisify(crypto.scrypt);
 
-// Both are overridable so this can run in CI. The defaults are the local
-// `npm run dev` setup; DATABASE_URL must point at the SAME database the server
-// under test is using, because this script seeds the admin it then logs in as.
+// Both are overridable, and you will need to override them. The default BASE
+// is port 3999, which is what CI uses (.github/workflows/ci.yml sets PORT and
+// VERIFY_BASE_URL to 3999) — NOT what `npm run dev` gives you, which is 3000
+// unless PORT says otherwise. Locally, run the server with PORT=3999 or set
+// VERIFY_BASE_URL to match it.
+//
+// DATABASE_URL must point at the SAME database the server under test is using,
+// because this script seeds the admin it then logs in as.
 const BASE = process.env.VERIFY_BASE_URL ?? 'http://localhost:3999';
 
 if (!process.env.DATABASE_URL) {

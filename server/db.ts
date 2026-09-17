@@ -23,13 +23,16 @@ export const pgPool = new pg.Pool({
  * Verification requires a CA to verify *against*. Railway's managed Postgres
  * terminates TLS with a self-signed certificate, so `rejectUnauthorized: true`
  * with no `ca` fails every query with "self-signed certificate in certificate
- * chain" — it does not fall back, and because /api/health never touches the
- * pool the container still reports healthy while nothing works.
+ * chain" — and it does not fall back.
  *
  * So verification is enabled only when DATABASE_CA_CERT actually supplies the
- * chain to check. Without it we connect over TLS but do not verify the peer,
- * which is what this service did before and is the documented posture for
- * Railway's private network, where traffic never leaves the project.
+ * chain to check. Without it we connect over TLS but DO NOT verify the peer.
+ * That is the documented posture for Railway's private network, where traffic
+ * never leaves the project; it is not a safe posture over the public internet,
+ * so set DATABASE_CA_CERT when the database is reached across one.
+ *
+ * (/api/health does probe the pool with `select 1` and answers 503 when it
+ * fails, so an unusable connection no longer passes the container health check.)
  */
 function productionTls(): { rejectUnauthorized: boolean; ca?: string } {
     if (env.databaseCa) {

@@ -205,8 +205,17 @@ export const adminRequests = pgTable("admin_requests", {
   notes: text("notes"),
 });
 
+/**
+ * NOTE: this does not omit anything, despite appearances.
+ *
+ * The second argument to `createInsertSchema` is a per-field *refinement* map,
+ * not an omit list, and `undefined` refines nothing. `id`, `createdAt` and
+ * `updatedAt` therefore remain accepted properties of this schema, and
+ * `POST /api/admin-requests` spreads `req.body` into it — so a caller can
+ * supply its own `id`. Every other insert schema in this file uses `.omit()`,
+ * which is the correct API and what this one was meant to do.
+ */
 export const insertAdminRequestSchema = createInsertSchema(adminRequests, {
-  // Exclude these fields as they're generated automatically
   id: undefined,
   createdAt: undefined,
   updatedAt: undefined,

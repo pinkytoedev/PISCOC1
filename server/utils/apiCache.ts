@@ -1,8 +1,13 @@
 /**
- * API Cache Utility
- * 
- * Provides in-memory caching for API responses with
- * configurable TTL (time-to-live) to reduce external API calls.
+ * Generic in-memory TTL cache.
+ *
+ * UNUSED. Nothing in the repo imports this module, so it caches nothing and
+ * reduces no external calls. The settings cache that the Airtable path
+ * actually relies on is a separate, private one in `services/settings.ts`.
+ *
+ * If you do wire this up, note two properties: entries expire lazily on read
+ * only (there is no sweeper), and there is no size bound, so keys that are
+ * written and never read again are retained for the life of the process.
  */
 
 interface CacheEntry<T> {

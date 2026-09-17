@@ -1,10 +1,16 @@
 /**
- * Admin switch for the token-free public article upload page.
+ * Switch for the token-free public article upload page.
  *
  * The page at /public-upload lists every article still open for submissions and
  * lets anyone who has the link replace its images or content. That is useful
  * during a submission window and a liability outside one, so it ships off and
- * an admin turns it on deliberately.
+ * is turned on deliberately.
+ *
+ * Note the mismatch: the underlying endpoint
+ * (POST /api/public/article-upload-status) requires admin, but this component
+ * renders on /articles, which is only ProtectedRoute. Any signed-in user sees
+ * the switch and gets a failed request on flipping it. The team-upload switch
+ * on /team-members has the same problem.
  *
  * Mirrors the team-profile equivalent on the team members page; the two are
  * independent settings so opening one does not open the other.

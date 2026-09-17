@@ -1,14 +1,14 @@
 /**
  * Route registration.
  *
- * This file is wiring only — mount order and nothing else. It replaced a
- * 1,249-line module in which 45 handlers, their validation, their Airtable side
- * effects and their activity logging were interleaved.
+ * This file is wiring only — mount order and nothing else. Handlers, their
+ * validation and their side effects live in the individual routers and in
+ * `services/`.
  *
  * Mount order matters in two ways:
  *  - authentication is installed before anything that depends on a session
- *  - within a resource, literal paths precede parameterised ones (each router
- *    handles that internally)
+ *  - literal paths precede parameterised ones, both across routers (see the
+ *    note on `/api/articles/uploadable` below) and within them
  */
 
 import type { Express } from 'express';
@@ -37,8 +37,9 @@ import { publicSystemRouter, systemRouter } from './system';
 const log = createLogger('routes');
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Health and the public pages answer before authentication is wired, so a
-  // probe still succeeds if the session store is degraded.
+  // `/api/health` answers before authentication is wired, so a container probe
+  // still succeeds if the session store is degraded. This router holds only
+  // that one route; the `/api/public/*` surfaces are mounted after setupAuth.
   app.use(publicSystemRouter());
 
   setupAuth(app);

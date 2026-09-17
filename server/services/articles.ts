@@ -5,11 +5,10 @@
  * publication state changes, it may also need to be pushed to Airtable and
  * announced to the live site so caches drop the old copy.
  *
- * All of that used to sit inline in `PUT /api/articles/:id`, roughly 160 lines
- * of nested conditionals and try/catch inside the route handler. That is why
- * the same side effects were missing from every other path that changes
- * publication state — the scheduler and the re-upload flow both bypassed them.
- * Deciding the effects here means every caller gets the same behaviour.
+ * Deciding those effects here rather than inside `PUT /api/articles/:id` is
+ * what keeps them consistent across every path that changes publication state:
+ * the editor, the scheduler and the re-upload flow all come through
+ * `publicationEffects` / `applyPublicationEffects`.
  */
 
 import type { Article, InsertArticle } from '@shared/schema';
@@ -23,7 +22,14 @@ import { deleteAirtableRecord, pushArticleToAirtable } from '../integrations/air
 
 const log = createLogger('articles');
 
-/** What a state change implies, decided once and acted on in order. */
+/**
+ * What a state change implies, decided once and acted on in order.
+ *
+ * The two flags are modelled separately because callers override them
+ * independently — the scheduler passes `pushToAirtable: false` because it has
+ * already pushed. `publicationEffects` itself computes both from the same
+ * expression, so as *derived* values they never differ.
+ */
 interface PublicationEffects {
   /** Mirror the article into Airtable so a later sync does not undo the change. */
   pushToAirtable: boolean;
@@ -104,11 +110,16 @@ export function applyRepublishedFlag(
 }
 
 /**
- * Deletes an article locally, removing its Airtable record first.
+ * Deletes an article locally, attempting to remove its Airtable record first.
  *
- * Airtable is cleared first so a failure leaves the two stores consistent: the
- * article still exists in both. Doing it the other way round can orphan a
- * record that the next sync would then re-import.
+ * Airtable goes first so that the common case — both deletes succeed — cannot
+ * leave a record the next sync would re-import. It is not transactional: if
+ * the Airtable delete fails the local delete still proceeds (see the catch
+ * below), leaving the article gone locally and orphaned in Airtable.
+ *
+ * Known gap: this does not revoke the article's outstanding contributor upload
+ * links. `revokeArticleTokens` in `services/uploadTokens` exists for that and
+ * is not called here.
  */
 export async function deleteArticleEverywhere(
   articleId: number,

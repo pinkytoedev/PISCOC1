@@ -4,10 +4,17 @@
  *   npx tsx scripts/generate-api-docs.mjs          # rewrite the tables
  *   npx tsx scripts/generate-api-docs.mjs --check  # fail if they are stale
  *
- * The prose in `docs/api.md` is hand-written and is never touched; only the
- * block between the GENERATED markers is replaced. That block is derived by
- * walking Express's router the same way `list-routes.mjs` does, so the endpoint
- * inventory cannot drift from the server the way a hand-maintained table does —
+ * WARNING: the block in `docs/api.md` has been hand-edited since it was last
+ * generated. It now carries a "Public article uploads" group and a `gated`
+ * access level, neither of which this script can emit, so `--check` fails and
+ * a rewrite would silently delete them. Reconcile before running without
+ * `--check`.
+ *
+ * The prose in `docs/api.md` outside the markers is hand-written and is never
+ * touched; only the block between the GENERATED markers is replaced. That block
+ * is derived by walking Express's router the same way `list-routes.mjs` does,
+ * so the endpoint inventory need not drift from the server the way a
+ * hand-maintained table does —
  * which is exactly how the previous version of that document ended up missing a
  * quarter of the routes and still describing an integration that had been
  * deleted.

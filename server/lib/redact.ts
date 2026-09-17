@@ -1,11 +1,13 @@
 /**
  * Masks secret values in integration settings before they leave the server.
  *
- * `integration_settings` rows store Airtable and ImgBB API keys as plaintext,
- * and the settings endpoints returned those rows verbatim to any signed-in
- * user. The management UI only needs to know
- * whether a credential is present and to recognise which one it is, so it gets
- * the last four characters and nothing more.
+ * `integration_settings` rows store the Airtable API key as plaintext, and the
+ * settings endpoints would otherwise return those rows verbatim. The management
+ * UI only needs to know whether a credential is present and to recognise which
+ * one it is, so it gets the last four characters and nothing more.
+ *
+ * ImgBB's key is never stored here — `routes/integrationSettings.ts` refuses
+ * the service outright, and it is read from IMGBB_API_KEY only.
  */
 
 export interface RedactedSetting {

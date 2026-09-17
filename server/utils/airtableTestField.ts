@@ -42,9 +42,14 @@ export interface MigrationOutcome {
 /**
  * Runs the check over one article or the whole library.
  *
- * `testOnly` stops after the first article's main image, which is the point of
- * the endpoints that call it: prove the write works without touching the rest
- * of the base.
+ * `testOnly` is meant to stop after the first article's main image — the point
+ * of the endpoints that call it is to prove the write works without touching
+ * the rest of the base. It only half does: the early exit sits inside the
+ * `imageUrl` branch, so a candidate that has an `instagramImageUrl` but no
+ * `imageUrl` falls through and the loop continues to the next article.
+ *
+ * Despite the name, this writes only the scratch `Test` column. It never
+ * touches `MainImageLink` or `InstaPhotoLink`.
  */
 export async function migrateArticleImagesToLinks(
   articleId?: number,

@@ -40,8 +40,12 @@ function webhookTarget(): { url: string; isSelf: boolean } | null {
 /**
  * Notifies the live site that an article changed.
  *
- * Never throws and never blocks the caller's response: a refresh failure should
- * not fail the write that triggered it. The outcome is logged instead.
+ * Never throws: a refresh failure should not fail the write that triggered it.
+ * The outcome is logged instead.
+ *
+ * It does, however, block. Every caller awaits it, and the POST carries a 10s
+ * timeout, so an unresponsive webhook target adds up to 10 seconds to the
+ * request that triggered it.
  */
 export async function notifyArticleChanged(
   article: Article,
@@ -51,7 +55,7 @@ export async function notifyArticleChanged(
 
   if (!target) {
     log(
-      `No webhook target configured (set PRODUCTION_WEBHOOK_URL); skipping refresh for article ${article.id}`,
+      `No webhook target configured (set PRODUCTION_WEBHOOK_URL, or RAILWAY_PUBLIC_DOMAIN to fall back to this server); skipping refresh for article ${article.id}`,
       'webhook',
     );
     return;

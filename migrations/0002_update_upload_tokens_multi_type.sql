@@ -4,13 +4,19 @@
 -- Idempotent throughout, matching 0003 and 0004: this project applies
 -- migrations by hand and they are not recorded in the drizzle journal (which
 -- still lists only 0000), so a statement may be replayed against a database
--- that already has the change — and, as happened in production, a file may be
--- skipped entirely while later ones are applied. Re-running the whole
--- directory must therefore be safe.
+-- that already has the change, and a file may be skipped entirely while later
+-- ones are applied.
 --
--- This file is ordered before 0004 but does not depend on it: it touches only
--- upload_type/upload_types, while 0004 touches token/token_hash. Either order
--- produces the same table.
+-- Caveat: 0002, 0003 and 0004 are individually safe to replay, but the
+-- directory as a whole is NOT. 0000 is drizzle-generated with bare CREATE
+-- TABLEs, and 0001 ends in an unguarded ALTER TABLE ... ADD CONSTRAINT
+-- session_pkey. Both fail on a second run.
+--
+-- This file is ordered before 0004 and does not depend on it for its DDL: it
+-- touches only upload_type/upload_types, while 0004 touches token/token_hash.
+-- The final table shape is the same either way. The order does affect data,
+-- though: 0004 deletes rows that 0002 would otherwise have had to backfill
+-- before its SET NOT NULL.
 
 -- Step 1: Add the new column
 ALTER TABLE "upload_tokens" ADD COLUMN IF NOT EXISTS "upload_types" jsonb;

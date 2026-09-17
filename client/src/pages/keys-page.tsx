@@ -136,7 +136,11 @@ export default function KeysPage() {
       envVar: "SESSION_SECRET",
       description: "Secret key for secure session management and authentication",
       required: true,
-      configured: true, // Always assume configured since it's generated
+      // Hard-coded true: /api/integration-status does not report on
+      // SESSION_SECRET, so this card is always a green tick and tells you
+      // nothing. Nothing generates this value — the server refuses to boot in
+      // production without it, so a production deploy you can reach has it set.
+      configured: true,
       setupUrl: "#",
       icon: <Shield className="h-5 w-5" />,
       category: "security",

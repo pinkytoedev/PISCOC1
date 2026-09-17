@@ -2,15 +2,17 @@
  * Scheduled publication.
  *
  * A draft that carries a `Scheduled` date goes live on its own once that date
- * passes. One pass per minute, drafts only, processed one at a time.
+ * passes. Drafts only, processed one at a time, once per SCHEDULER_INTERVAL_MS
+ * (default 60s), starting 5 seconds after boot.
  *
- * The interesting part is what publishing *means*. This loop used to write
- * `status = published` locally, PATCH a hand-built payload into Airtable and
- * push to Airtable — and nothing else. It never told the live site to drop its
- * cached copy, so a scheduled article kept serving as a draft until something
- * else happened to refresh it. Publication side effects now come from
- * `services/articles`, the same code the editor's Publish button runs, so the
- * two paths cannot drift apart again.
+ * Publication side effects come from `services/articles` — the same code the
+ * editor's Publish button runs — so the two paths cannot drift apart. Per
+ * article that means: mark published locally, push to Airtable, suppress the
+ * next sync's draft-revert, POST the site-refresh webhook, and log the activity.
+ *
+ * Only `server/index.ts` starts this, there is no flag to disable it, and it is
+ * stopped on SIGTERM/SIGINT. It holds no distributed lock, so running more than
+ * one instance would publish every due article once per instance.
  */
 
 import type { Article } from '@shared/schema';

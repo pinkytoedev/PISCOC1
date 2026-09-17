@@ -1,6 +1,14 @@
 #!/bin/bash
 
-# Script to push environment variables to Railway
+# Script to push environment variables to Railway.
+#
+# NOT wired to any npm script. Requires the railway CLI and a linked project.
+#
+# Out of date: it pushes FACEBOOK_APP_ID/SECRET and INSTAGRAM_APP_ID/SECRET,
+# none of which exist anywhere in this codebase or in .env.example, and it sets
+# PORT=3001 although Railway injects PORT itself. The `export $(cat .env | xargs)`
+# below also breaks on any value containing a space. Prefer
+# `railway variables --set "KEY=value"` directly.
 echo "🚀 Pushing environment variables to Railway..."
 echo ""
 

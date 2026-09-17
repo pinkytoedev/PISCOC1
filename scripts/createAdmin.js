@@ -1,3 +1,35 @@
+/**
+ * Creates the initial admin user, reading its credentials from an Airtable
+ * record.
+ *
+ * BROKEN — this file does not run at all. Verified with `node --check`.
+ *
+ *  1. `fetchAdminCredentialsFromAirtable` is declared twice below. package.json
+ *     sets "type": "module", so this loads as ESM, where every module is strict
+ *     and a duplicate top-level declaration is an EARLY error:
+ *
+ *       SyntaxError: Identifier 'fetchAdminCredentialsFromAirtable'
+ *                    has already been declared
+ *
+ *     The module never evaluates. Nothing connects, and the `DELETE FROM users`
+ *     further down is unreachable — so the file is inert rather than dangerous.
+ *     The two definitions also expect different environment variables.
+ *  2. Behind that, the INSERT is missing a comma between its two argument
+ *     arrays, so JS parses `[...][...]` as an index expression and
+ *     `client.query` would receive `undefined` for its parameters. Fixing (1)
+ *     alone therefore still leaves a script that cannot insert a user.
+ *
+ * It is also not wired to any npm script, and the INSERT hard-codes the
+ * username 'admin' rather than using the one it just fetched.
+ *
+ * See the README for the manual SQL that does work.
+ *
+ * Needs: AIRTABLE_API_KEY, AIRTABLE_BASE_ID, ADMIN_CREDENTIALS_RECORD_ID,
+ * DATABASE_URL. Optional: ADMIN_CREDENTIALS_TABLE (default 'AdminCredentials'),
+ * ADMIN_CREDENTIALS_USERNAME_FIELD (default 'Username'),
+ * ADMIN_CREDENTIALS_PASSWORD_FIELD (default 'Password').
+ */
+
 import { scrypt, randomBytes } from 'crypto';
 import { promisify } from 'util';
 import pg from 'pg';
