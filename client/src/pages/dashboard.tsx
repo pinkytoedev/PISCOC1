@@ -185,11 +185,16 @@ export default function Dashboard() {
                     icon={<Newspaper />}
                     iconBgColor="bg-blue-100"
                     iconColor="text-primary"
+                    // articleGrowth is how much the library grew over the
+                    // trailing month, relative to what it held a month ago. It
+                    // cannot go negative — the count only gains rows — so the
+                    // arrow is always "up" and the note says "added", not
+                    // "from last month", which would read as a comparison.
                     trend={{
                       value: metrics?.articleGrowth || "0%",
-                      isPositive: !(metrics?.articleGrowth || "0%").includes('-')
+                      isPositive: true
                     }}
-                    note="from last month"
+                    note="added in the last month"
                   />
                   
                   <StatusCard
