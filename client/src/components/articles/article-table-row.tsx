@@ -102,18 +102,24 @@ export function ArticleTableRow({
         conservative because these are viewport-width queries while the table
         lives inside a layout with a ~256px sidebar.
       */}
+      {/*
+        No max-width on the text here. Under `table-fixed` the column's declared
+        width already bounds the cell, so a max-w- on the inner div only fought
+        it — truncating a name like "M. Delacroix-Whitfield" at 140px while the
+        rest of the column sat empty.
+      */}
       <td className="hidden xl:table-cell px-4 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900 truncate max-w-[140px]" title={article.author}>
+        <div className="text-sm text-gray-900 truncate" title={article.author}>
           {article.author}
         </div>
       </td>
 
       <td className="hidden 2xl:table-cell px-4 py-4 whitespace-nowrap">
-        <div className="text-sm text-gray-900 truncate max-w-[140px]" title={article.photo || ""}>
+        <div className="text-sm text-gray-900 truncate" title={article.photo || ""}>
           {article.photo || "—"}
         </div>
         {article.photoCredit && (
-          <div className="text-xs text-gray-500 truncate max-w-[140px]" title={article.photoCredit}>
+          <div className="text-xs text-gray-500 truncate" title={article.photoCredit}>
             Credit: {article.photoCredit}
           </div>
         )}

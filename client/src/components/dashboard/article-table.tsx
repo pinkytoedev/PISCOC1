@@ -287,25 +287,25 @@ export function ArticleTable({
               </th>
               <th
                 scope="col"
-                className="hidden xl:table-cell w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="hidden xl:table-cell w-40 2xl:w-52 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Author
               </th>
               <th
                 scope="col"
-                className="hidden 2xl:table-cell w-40 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="hidden 2xl:table-cell w-52 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Photo
               </th>
               <th
                 scope="col"
-                className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="w-32 2xl:w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Status
               </th>
               <th
                 scope="col"
-                className="w-32 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="w-32 2xl:w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 <button
                   onClick={() => setShowCreationDate(!showCreationDate)}
@@ -322,7 +322,7 @@ export function ArticleTable({
               </th>
               <th
                 scope="col"
-                className="hidden 2xl:table-cell w-36 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                className="hidden 2xl:table-cell w-44 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >
                 Source
               </th>
