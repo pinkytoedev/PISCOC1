@@ -118,7 +118,8 @@ Everything else is optional:
 | `PORT` | — | Set: bound authoritatively, failure is fatal. Unset: tries 3000, **3001**, 3002, 3003, 3004, 5000, 5001, 5002 in order. |
 | `BASE_URL` / `RAILWAY_PUBLIC_DOMAIN` | — | Used to build contributor upload links. **Unset in production means every link points at localhost.** |
 | `PRODUCTION_WEBHOOK_URL` | — | Where to tell the live site to drop its cache. Unset, it falls back to `https://$RAILWAY_PUBLIC_DOMAIN/api/webhooks/article-published`; with no public domain either, refreshes are skipped and logged. |
-| `WEBHOOK_SECRET` | — | Leaves `/api/webhooks/article-published` **open** — a free full-Airtable-sync trigger. Set it in production. Note it is only ever *sent* on the self-URL fallback; an external `PRODUCTION_WEBHOOK_URL` never receives it. |
+| `WEBHOOK_SECRET` | — | Leaves `/api/webhooks/article-published` **open** — a free full-Airtable-sync trigger. Set it in production. Note it is only ever *sent* on the self-URL fallback; an external `PRODUCTION_WEBHOOK_URL` receives `SITE_WEBHOOK_SECRET` instead. |
+| `SITE_WEBHOOK_SECRET` | — | Sent as `x-webhook-secret` to `PRODUCTION_WEBHOOK_URL`. Must equal the live site's `WEBHOOK_SECRET`; without it the site rejects every refresh (401, or 503 if the site's secret is unset). |
 | `DATABASE_CA_CERT` | — | Production connects over TLS but **does not verify the peer certificate**. Supply the CA when the database is reached over the public internet. |
 | `ENABLE_DIAGNOSTIC_ROUTES` | on outside production | Mounts Airtable routes that **write to real records**. See the warning below. |
 | `SCHEDULER_INTERVAL_MS` | 60000 | Auto-publish check frequency. |
