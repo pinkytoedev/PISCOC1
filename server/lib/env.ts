@@ -103,6 +103,15 @@ export const env = {
   webhookSecret: process.env.WEBHOOK_SECRET,
 
   /**
+   * Shared secret for *outbound* refresh calls to an external
+   * `PRODUCTION_WEBHOOK_URL`, sent as `x-webhook-secret`. Must equal the live
+   * site's `WEBHOOK_SECRET`; the site rejects unauthenticated refreshes in
+   * production. Kept separate from `webhookSecret` so this server's inbound
+   * secret never leaves it.
+   */
+  siteWebhookSecret: process.env.SITE_WEBHOOK_SECRET,
+
+  /**
    * ImgBB API key, used to host images before linking them into Airtable.
    *
    * Optional, so it is read rather than required — the server boots without it

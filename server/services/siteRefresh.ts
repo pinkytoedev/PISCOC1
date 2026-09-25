@@ -61,13 +61,20 @@ export async function notifyArticleChanged(
     return;
   }
 
-  // The fallback target is this server's own `/api/webhooks/article-published`,
-  // which `verifyWebhookSecret` rejects without the header — so setting
-  // WEBHOOK_SECRET used to silently 401 every refresh it was meant to protect.
-  // The secret is only ever sent to ourselves; an external PRODUCTION_WEBHOOK_URL
-  // is a third-party host and must not receive our inbound secret.
-  const headers =
-    target.isSelf && env.webhookSecret ? { 'x-webhook-secret': env.webhookSecret } : undefined;
+  // Each target gets the secret it expects. The fallback target is this
+  // server's own `/api/webhooks/article-published`, which `verifyWebhookSecret`
+  // checks against WEBHOOK_SECRET. An external PRODUCTION_WEBHOOK_URL (the live
+  // site) gets its own SITE_WEBHOOK_SECRET instead, so our inbound secret never
+  // leaves this server. The site rejects unauthenticated refreshes in
+  // production, so without it every refresh used to fail with a 401/503.
+  const secret = target.isSelf ? env.webhookSecret : env.siteWebhookSecret;
+  if (!target.isSelf && !secret) {
+    log(
+      `SITE_WEBHOOK_SECRET is not set; the live site will likely reject the refresh for article ${article.id}`,
+      'webhook',
+    );
+  }
+  const headers = secret ? { 'x-webhook-secret': secret } : undefined;
 
   try {
     const response = await axios.post(

@@ -74,13 +74,7 @@ requires **admin** on the repo. An org owner has to do it.
   (`cache/*.json` plus `cache/locks/*.lock`). A single POST invalidates only whichever
   replica answers it. If the service ever scales past one instance, this refresh is
   partial.
-- **The runtime refresh contract between the two repos is broken or unauthenticated,
-  with no third option, and this workflow does not fix it.** PISCOC1 sends the secret as
-  an `x-webhook-secret` **header**, and only to itself (`siteRefresh.ts` sets
-  `target.isSelf` to false whenever `PRODUCTION_WEBHOOK_URL` is set). The site reads it
-  from the request **body** (`req.body.webhookSecret`), and PISCOC1's outbound body is
-  `{articleId, status, reason, source}` with no such field. So it works today only
-  because the site's `WEBHOOK_SECRET` is presumably unset and the endpoint fails open. If
-  anyone sets it, every refresh silently 401s — and `notifyArticleChanged` swallows the
-  error, so the editor sees success. After PR #16 it becomes 503 (unset, in production)
-  or 401 (set). This is a runtime bug worth fixing separately.
+- **Runtime refresh contract.** PISCOC1's `siteRefresh.ts` sends `SITE_WEBHOOK_SECRET` as
+  an `x-webhook-secret` header to `PRODUCTION_WEBHOOK_URL`; the site checks it against its
+  own `WEBHOOK_SECRET` (header preferred, body field also accepted). The two values must
+  match, or every refresh fails with a 401 (or 503 when the site's secret is unset).
