@@ -109,7 +109,15 @@ export async function updateArticleInAirtable(article: Article): Promise<void> {
   await updateRecord(config, article.externalId, fields);
 }
 
-/** Pushes every team member, creating the ones Airtable has never seen. */
+/**
+ * Pushes every team member, creating the ones Airtable has never seen.
+ *
+ * The table is read first so a stale `externalId` — a record deleted in
+ * Airtable directly — becomes a create rather than a PATCH that 422s with
+ * ROW_DOES_NOT_EXIST and takes its whole batch of nine other members down with
+ * it. Unlike quotes this is not a mirror: Airtable rows with no local member
+ * are left alone.
+ */
 export async function pushTeamMembersToAirtable(
   config: AirtableConfig,
   userId?: number,
@@ -117,8 +125,19 @@ export async function pushTeamMembersToAirtable(
   const members = await storage.getTeamMembers();
   const results = emptyResults();
 
-  const toUpdate = members.filter((member) => member.externalId);
-  const toCreate = members.filter((member) => !member.externalId);
+  const remote = await listRecords<AirtableTeamMemberFields>(config);
+  const remoteIds = new Set(remote.records.map((record) => record.id));
+
+  const toUpdate = members.filter((member) => member.externalId && remoteIds.has(member.externalId));
+  const toCreate = members.filter((member) => !member.externalId || !remoteIds.has(member.externalId));
+
+  const stale = members.filter((member) => member.externalId && !remoteIds.has(member.externalId));
+  if (stale.length > 0) {
+    log.warn('Recreating team members whose Airtable record no longer exists', {
+      count: stale.length,
+      externalIds: stale.map((member) => member.externalId),
+    });
+  }
 
   await runBatches(
     config,
