@@ -33,6 +33,8 @@ const INTENTIONALLY_PUBLIC = new Map([
   ['POST /api/public-upload/image', 'gated at runtime by the article_upload setting'],
   ['POST /api/public-upload/instagram-image', 'gated at runtime by the article_upload setting'],
   ['POST /api/public-upload/html-zip', 'gated at runtime by the article_upload setting'],
+  ['GET /api/public/article-upload-team-members', 'gated at runtime by the article_upload setting'],
+  ['POST /api/public-upload/photo-credit', 'gated at runtime by the article_upload setting'],
 ]);
 
 const GUARDS = ['isAuthenticated', 'isAdmin', 'verifyWebhookSecret'];
