@@ -141,8 +141,17 @@ export default function PublicUploadPage() {
       return;
     }
 
+    if (!selectedMemberId) {
+      toast({
+        title: "Select your name",
+        description: "Photo credit is required before you can submit.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const pending = attached.filter((type) => slots[type].status !== "done");
-    if (!pending.length && !(selectedMemberId && photoCreditStatus !== "done")) return;
+    if (!pending.length && photoCreditStatus === "done") return;
 
     setIsUploading(true);
 
@@ -327,9 +336,9 @@ export default function PublicUploadPage() {
           {selectedArticleId && (
             <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
               <CardHeader className="bg-gradient-to-r from-pink-400 to-pink-600 text-white pb-6">
-                <CardTitle className="text-xl font-bold">Photo credit</CardTitle>
+                <CardTitle className="text-xl font-bold">Photo credit (required)</CardTitle>
                 <CardDescription className="text-pink-100">
-                  If you're the photographer, select your name so you're credited.
+                  Select your name so you're credited. You can't submit without it.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-6">
@@ -343,7 +352,7 @@ export default function PublicUploadPage() {
                 >
                   <SelectTrigger className="h-12 text-lg border-2 border-gray-200 hover:border-pink-300 transition-colors rounded-xl bg-white">
                     <SelectValue
-                      placeholder={loadingTeamMembers ? "Loading names..." : "Select your name (optional)"}
+                      placeholder={loadingTeamMembers ? "Loading names..." : "Select your name"}
                     />
                   </SelectTrigger>
                   <SelectContent>
@@ -436,7 +445,8 @@ export default function PublicUploadPage() {
                   onClick={submit}
                   disabled={
                     isUploading ||
-                    (attached.length === 0 && !(selectedMemberId && photoCreditStatus !== "done"))
+                    !selectedMemberId ||
+                    (attached.length === 0 && photoCreditStatus === "done")
                   }
                   className="w-full h-14 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-semibold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all"
                 >
@@ -448,11 +458,11 @@ export default function PublicUploadPage() {
                   ) : (
                     <>
                       <Upload className="mr-3 h-5 w-5" />
-                      {attached.length === 0
-                        ? selectedMemberId
+                      {!selectedMemberId
+                        ? "Select your name to continue"
+                        : attached.length === 0
                           ? "Save photo credit"
-                          : "Attach a file to continue"
-                        : `Submit ${attached.length} file${attached.length === 1 ? "" : "s"}`}
+                          : `Submit ${attached.length} file${attached.length === 1 ? "" : "s"}`}
                     </>
                   )}
                 </Button>
