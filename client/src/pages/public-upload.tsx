@@ -45,6 +45,11 @@ interface UploadableArticle {
   status: string;
 }
 
+interface UploadTeamMember {
+  id: number;
+  name: string;
+}
+
 type SlotStatus = "idle" | "uploading" | "done" | "error";
 
 interface Slot {
@@ -94,6 +99,8 @@ function formatBytes(bytes: number): string {
 export default function PublicUploadPage() {
   const { toast } = useToast();
   const [selectedArticleId, setSelectedArticleId] = useState<string>("");
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("");
+  const [photoCreditStatus, setPhotoCreditStatus] = useState<SlotStatus>("idle");
   const [slots, setSlots] = useState<Record<AssetType, Slot>>(EMPTY_SLOTS);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -104,6 +111,12 @@ export default function PublicUploadPage() {
 
   const { data: articles, isLoading: loadingArticles } = useQuery<UploadableArticle[]>({
     queryKey: ["/api/articles/uploadable"],
+    enabled: Boolean(status?.enabled),
+    retry: false,
+  });
+
+  const { data: teamMembers, isLoading: loadingTeamMembers } = useQuery<UploadTeamMember[]>({
+    queryKey: ["/api/public/article-upload-team-members"],
     enabled: Boolean(status?.enabled),
     retry: false,
   });
@@ -129,9 +142,32 @@ export default function PublicUploadPage() {
     }
 
     const pending = attached.filter((type) => slots[type].status !== "done");
-    if (!pending.length) return;
+    if (!pending.length && !(selectedMemberId && photoCreditStatus !== "done")) return;
 
     setIsUploading(true);
+
+    if (selectedMemberId && photoCreditStatus !== "done") {
+      setPhotoCreditStatus("uploading");
+      try {
+        const response = await fetch("/api/public-upload/photo-credit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ articleId: selectedArticleId, teamMemberId: selectedMemberId }),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.message || "Failed to set photo credit");
+
+        setPhotoCreditStatus("done");
+      } catch (error) {
+        setPhotoCreditStatus("error");
+        toast({
+          title: "Photo credit not saved",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
 
     for (const type of pending) {
       const file = slots[type].file;
@@ -164,9 +200,11 @@ export default function PublicUploadPage() {
     setIsUploading(false);
   };
 
-  // Everything landed, and at least one file was sent.
+  // Everything landed, and at least one file or the photo credit was sent.
   const allDone =
-    attached.length > 0 && attached.every((type) => slots[type].status === "done");
+    attached.length > 0
+      ? attached.every((type) => slots[type].status === "done")
+      : Boolean(selectedMemberId) && photoCreditStatus === "done";
 
   if (loadingStatus) {
     return (
@@ -216,6 +254,8 @@ export default function PublicUploadPage() {
               onClick={() => {
                 setSlots(EMPTY_SLOTS);
                 setSelectedArticleId("");
+                setSelectedMemberId("");
+                setPhotoCreditStatus("idle");
               }}
               className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-12 px-8"
             >
@@ -283,6 +323,45 @@ export default function PublicUploadPage() {
               )}
             </CardContent>
           </Card>
+
+          {selectedArticleId && (
+            <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <CardHeader className="bg-gradient-to-r from-pink-400 to-pink-600 text-white pb-6">
+                <CardTitle className="text-xl font-bold">Photo credit</CardTitle>
+                <CardDescription className="text-pink-100">
+                  If you're the photographer, select your name so you're credited.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-6">
+                <Select
+                  value={selectedMemberId}
+                  onValueChange={(value) => {
+                    setSelectedMemberId(value);
+                    setPhotoCreditStatus("idle");
+                  }}
+                  disabled={loadingTeamMembers || photoCreditStatus === "uploading"}
+                >
+                  <SelectTrigger className="h-12 text-lg border-2 border-gray-200 hover:border-pink-300 transition-colors rounded-xl bg-white">
+                    <SelectValue
+                      placeholder={loadingTeamMembers ? "Loading names..." : "Select your name (optional)"}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {teamMembers?.map((member) => (
+                      <SelectItem key={member.id} value={member.id.toString()} className="text-lg py-3 cursor-pointer">
+                        {member.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {photoCreditStatus === "done" && (
+                  <p className="mt-3 flex items-center gap-2 text-sm text-emerald-600">
+                    <CheckCircle className="h-4 w-4" /> Photo credit saved
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {selectedArticleId && (
             <Card className="bg-white/90 backdrop-blur-sm border-0 shadow-xl rounded-3xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -355,7 +434,10 @@ export default function PublicUploadPage() {
 
                 <Button
                   onClick={submit}
-                  disabled={isUploading || attached.length === 0}
+                  disabled={
+                    isUploading ||
+                    (attached.length === 0 && !(selectedMemberId && photoCreditStatus !== "done"))
+                  }
                   className="w-full h-14 bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-semibold text-lg rounded-2xl shadow-lg hover:shadow-xl transition-all"
                 >
                   {isUploading ? (
@@ -367,7 +449,9 @@ export default function PublicUploadPage() {
                     <>
                       <Upload className="mr-3 h-5 w-5" />
                       {attached.length === 0
-                        ? "Attach a file to continue"
+                        ? selectedMemberId
+                          ? "Save photo credit"
+                          : "Attach a file to continue"
                         : `Submit ${attached.length} file${attached.length === 1 ? "" : "s"}`}
                     </>
                   )}

@@ -161,6 +161,45 @@ async function handleImageUpload(
   });
 }
 
+/**
+ * Attaches photo credit to the article: the contributor picks their own name
+ * rather than typing it, so the value always matches a real team member and
+ * the Airtable `Photo` link (resolved from that name in `mappers.ts`) resolves
+ * on the next push instead of silently landing on no one.
+ */
+async function handlePhotoCreditSubmit(req: Request, res: Response): Promise<void> {
+  const article = await requireUploadableArticle(req);
+  const teamMemberId = parseId(req.body?.teamMemberId, 'team member ID');
+
+  const member = await storage.getTeamMember(teamMemberId);
+  if (!member) throw HttpError.notFound('Team member not found');
+
+  const updated = await storage.updateArticle(article.id, { photo: member.name });
+  if (!updated) throw HttpError.internal('Failed to attach photo credit to the article');
+
+  // Best-effort, like the image patches above: the local write already
+  // succeeded, and a member who has never been pushed to Airtable (no
+  // externalId yet) is not a failure here, just nothing to mirror yet.
+  if (article.source === 'airtable' && article.externalId && member.externalId) {
+    await tryUpdateRecord(
+      article.externalId,
+      { Photo: [member.externalId] },
+      `sync photo credit for article ${article.id}`,
+    );
+  }
+
+  await recordActivity({
+    action: 'update',
+    resource: 'article',
+    resourceId: article.id,
+    details: { field: 'photo', value: member.name, source: 'public-article-link' },
+  });
+
+  log.info('Photo credit set via public link', { articleId: article.id, teamMemberId: member.id });
+
+  res.json({ success: true, message: `Photo credit set to ${member.name}`, photo: member.name });
+}
+
 export function setupPublicArticleUploadRoutes(app: Express) {
   // -------------------------------------------------------------------------
   // The switch
@@ -233,6 +272,31 @@ export function setupPublicArticleUploadRoutes(app: Express) {
         })),
       );
     }),
+  );
+
+  /**
+   * Names the contributor can pick from for photo credit.
+   *
+   * Scoped to this feature's own toggle rather than reusing
+   * `/api/public/team-members-list` (which is gated by the unrelated
+   * team-upload switch) — enabling article submissions must not depend on
+   * whether team-profile self-editing happens to also be turned on.
+   */
+  app.get(
+    '/api/public/article-upload-team-members',
+    publicApiRateLimit,
+    requirePublicUploadEnabled,
+    asyncHandler(async (_req, res) => {
+      const members = await storage.getTeamMembers();
+      res.json(members.map((member) => ({ id: member.id, name: member.name })));
+    }),
+  );
+
+  app.post(
+    '/api/public-upload/photo-credit',
+    uploadRateLimit,
+    requirePublicUploadEnabled,
+    asyncHandler(handlePhotoCreditSubmit),
   );
 
   app.post(
