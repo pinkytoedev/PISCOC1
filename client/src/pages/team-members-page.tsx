@@ -8,10 +8,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAirtableSync } from "@/hooks/use-airtable-sync";
 import { apiRequest, apiUpload, queryClient } from "@/lib/queryClient";
 import { TeamMember, InsertTeamMember } from "@shared/schema";
+import { TEAM_MEMBER_ROLES } from "@shared/teamRoles";
 import { Switch } from "@/components/ui/switch";
 import { Plus, Edit, Trash2, Loader2, AlertCircle, Download, Upload, Copy, Check, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -259,6 +261,14 @@ export default function TeamMembersPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.role) {
+      toast({
+        title: "Role required",
+        description: "Please select a role for this team member.",
+        variant: "destructive",
+      });
+      return;
+    }
     createMemberMutation.mutate(formData as InsertTeamMember);
   };
 
@@ -501,14 +511,21 @@ export default function TeamMembersPage() {
                     
                     <div>
                       <Label htmlFor="role">Role/Position</Label>
-                      <Input
-                        id="role"
-                        name="role"
-                        value={formData.role}
-                        onChange={handleInputChange}
-                        placeholder="e.g. Software Engineer, Designer, etc."
-                        required
-                      />
+                      <Select
+                        value={formData.role || undefined}
+                        onValueChange={(value) => setFormData((prev) => ({ ...prev, role: value }))}
+                      >
+                        <SelectTrigger id="role">
+                          <SelectValue placeholder="Select a role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TEAM_MEMBER_ROLES.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div>

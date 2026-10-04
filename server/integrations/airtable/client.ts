@@ -222,7 +222,14 @@ export async function writeRecords<TFields>(
   if (records.length > BATCH_LIMIT) {
     throw new Error(`Airtable accepts at most ${BATCH_LIMIT} records per write`);
   }
-  return send<AirtableListResponse<TFields>>(config, tableUrl(config), method, { records });
+  // Without this, a select field (team members' `Role`) rejects the entire
+  // batch the moment one record's value isn't an exactly-matching existing
+  // option — e.g. "writer" typed where the base has "Writer" — and a
+  // selectively-typed-in value never gets a chance to become a new option.
+  return send<AirtableListResponse<TFields>>(config, tableUrl(config), method, {
+    records,
+    typecast: true,
+  });
 }
 
 /**

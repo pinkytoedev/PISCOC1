@@ -29,6 +29,7 @@
 import type { Express } from 'express';
 import { z } from 'zod';
 import type { InsertTeamMember, TeamMember } from '@shared/schema';
+import { TEAM_MEMBER_ROLES } from '@shared/teamRoles';
 import { storage } from '../storage';
 import { HttpError, asyncHandler, parseId } from '../lib/httpError';
 import { createLogger } from '../lib/logger';
@@ -45,23 +46,6 @@ const log = createLogger('upload:team-public');
 
 const SERVICE_NAME = 'team_upload';
 const SETTING_KEY = 'public_link_active';
-
-/**
- * Roles offered to the member.
- *
- * This list is local to this file and is not derived from anything — the
- * Airtable integration has no role list of its own. Airtable's `Role` is a
- * multi-select (`types.ts` types it `string[] | string`, and `mappers.ts`
- * writes it as an array), so a value here that the Airtable field does not
- * define will be rejected on push. Keep the two in step by hand.
- */
-const AVAILABLE_ROLES = [
-  'Special Projects',
-  'Photo',
-  'Dev',
-  'E-Board',
-  'Writer',
-] as const;
 
 /** Text a member may edit, bounded because this endpoint takes no credentials. */
 const profileSchema = z.object({
@@ -116,7 +100,7 @@ export function setupTeamPublicUploadRoutes(app: Express) {
     publicApiRateLimit,
     requirePublicUploadEnabled,
     (_req, res) => {
-      res.json([...AVAILABLE_ROLES]);
+      res.json([...TEAM_MEMBER_ROLES]);
     },
   );
 
